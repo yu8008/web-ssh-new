@@ -384,6 +384,7 @@ export function useTerminalSocket({
     let handleTerminalMouseMove: ((event: MouseEvent) => void) | null = null;
     let selectionScrollTimer: number | null = null;
     const shiftDragPoint = { x: 0, y: 0 };
+    let pendingMouseDown: MouseEvent | null = null;
     let handleTerminalMouseUp: ((event: MouseEvent) => void) | null = null;
     let handleResize: (() => void) | null = null;
     let selectionDisposable: { dispose: () => void } | null = null;
@@ -542,42 +543,74 @@ export function useTerminalSocket({
       };
 
       terminalContainer.addEventListener("wheel", handleTerminalWheel, { capture: true, passive: false });
-      // 应用开启鼠标上报（如 Codex）时，普通点击/拖动交给远端程序；
-      // 按住 Shift/Alt 拖动才进入本地选区，保证 TUI 里的按钮、链接可点。
+      // 应用开启鼠标上报（如 Codex）时：单击仍发给远端（TUI 按钮可点），
+      // 按下后拖动超过阈值再转成本地选区，并支持拖到边缘自动滚动。
+      const startEdgeScroll = () => {
+        if (selectionScrollTimer !== null) {
+          return;
+        }
+        selectionScrollTimer = window.setInterval(() => {
+          const host = terminalRef.current;
+          if (!host || !term || !suppressMouseReportRef.current) {
+            return;
+          }
+          const rect = host.getBoundingClientRect();
+          if (shiftDragPoint.y < rect.top + 8) {
+            term.scrollLines(-1);
+          } else if (shiftDragPoint.y > rect.bottom - 8) {
+            term.scrollLines(1);
+          }
+        }, 45);
+      };
+
+      const beginLocalSelection = (origin: MouseEvent) => {
+        suppressMouseReportRef.current = true;
+        shiftDragPoint.x = origin.clientX;
+        shiftDragPoint.y = origin.clientY;
+        const selectionService = (term as unknown as {
+          _core?: { _selectionService?: { enable?: () => void; handleMouseDown?: (event: MouseEvent) => void } };
+        })._core?._selectionService;
+        if (selectionService?.enable && selectionService?.handleMouseDown) {
+          selectionService.enable();
+          selectionService.handleMouseDown(origin);
+        }
+        startEdgeScroll();
+      };
+
       handleTerminalMouseDown = (event: MouseEvent) => {
         if (!term || term.modes.mouseTrackingMode === "none") {
           return;
         }
-        if (event.button === 0 && (event.shiftKey || event.altKey)) {
-          suppressMouseReportRef.current = true;
-          shiftDragPoint.x = event.clientX;
-          shiftDragPoint.y = event.clientY;
-          if (selectionScrollTimer === null) {
-            selectionScrollTimer = window.setInterval(() => {
-              const host = terminalRef.current;
-              if (!host || !term || !suppressMouseReportRef.current) {
-                return;
-              }
-              const rect = host.getBoundingClientRect();
-              if (shiftDragPoint.y < rect.top + 8) {
-                term.scrollLines(-1);
-              } else if (shiftDragPoint.y > rect.bottom - 8) {
-                term.scrollLines(1);
-              }
-            }, 45);
-          }
-          return;
-        }
         if (event.button === 2) {
           suppressMouseReportRef.current = true;
-        }
-      };
-      handleTerminalMouseMove = (event: MouseEvent) => {
-        if (!suppressMouseReportRef.current) {
           return;
         }
-        shiftDragPoint.x = event.clientX;
-        shiftDragPoint.y = event.clientY;
+        if (event.button !== 0) {
+          return;
+        }
+        if (event.shiftKey || event.altKey) {
+          pendingMouseDown = null;
+          beginLocalSelection(event);
+          return;
+        }
+        // 先放行给远端：单击就是点应用里的按钮；拖动再切换为选区。
+        pendingMouseDown = event;
+      };
+
+      handleTerminalMouseMove = (event: MouseEvent) => {
+        if (pendingMouseDown && (event.buttons & 1) === 1) {
+          const dx = event.clientX - pendingMouseDown.clientX;
+          const dy = event.clientY - pendingMouseDown.clientY;
+          if (dx * dx + dy * dy > 16) {
+            const origin = pendingMouseDown;
+            pendingMouseDown = null;
+            beginLocalSelection(origin);
+          }
+        }
+        if (suppressMouseReportRef.current) {
+          shiftDragPoint.x = event.clientX;
+          shiftDragPoint.y = event.clientY;
+        }
       };
       document.addEventListener("mousemove", handleTerminalMouseMove, { capture: true });
 
