@@ -1,9 +1,13 @@
 import React from "react";
-import { Copy } from "lucide-react";
+import { ArrowLeft, Copy, Moon, RefreshCw, Sun } from "lucide-react";
 import { Button } from "../../components/Button";
 import { FileViewer } from "../../components/FileViewer";
 import type { FileInfo } from "../../lib/api";
 import type { TerminalSessionState } from "./useTerminalSession";
+
+function cx(...values: Array<string | false | null | undefined>): string {
+  return values.filter(Boolean).join(" ");
+}
 
 const FileBrowser = React.lazy(() =>
   import("../../components/FileBrowser").then((module) => ({ default: module.FileBrowser }))
@@ -94,87 +98,91 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
   }, [sidebarWidth, syncTerminalSize, terminalInstance]);
 
   return (
-    <div className={`flex h-screen flex-col overflow-hidden transition-colors duration-300 supports-[height:100dvh]:h-dvh ${state.isDark ? "bg-slate-950 text-slate-100 dark-scrollbar" : "bg-gray-100 text-slate-900 light-scrollbar"}`}>
-      <div className={`border-b px-4 py-3 ${state.isDark ? "border-slate-800" : "border-slate-200 bg-white"}`}>
-        <div className="flex items-center justify-between">
-          <div className="flex flex-col">
-            <div className="flex items-center gap-3">
-              <span className={`text-sm font-medium ${state.isDark ? "text-slate-200" : "text-slate-700"}`}>
-                {state.sessionInfo?.name || state.t("会话", "Session")} | {state.sessionInfo ? new Date(state.sessionInfo.started_at).toLocaleString() : ""}
-              </span>
-              <span className={`text-xs ${state.connectionTone}`}>
-                {state.reconnectCountdown !== null ? state.t(`重连中 (${state.reconnectCountdown}s)`, `Reconnecting (${state.reconnectCountdown}s)`) : state.connectionLabel}
-              </span>
-              <span className={`text-xs ${state.networkProfileTone}`}>{state.networkProfileLabel}</span>
-              {state.targetLatencyMs !== null ? (
-                <div className="flex items-center gap-1">
-                  <span className={`text-xs ${state.isDark ? "text-slate-500" : "text-slate-400"}`}>{state.targetLatencyMs}ms</span>
-                  <div
-                    className={`flex h-4 w-[100px] items-end gap-px rounded px-1 ${state.isDark ? "bg-slate-900/60" : "bg-slate-200/70"}`}
-                    title={state.t("近30次网络延迟波动", "Latency trend (last 30 samples)")}
-                    aria-label={state.t("近30次网络延迟波动", "Latency trend (last 30 samples)")}
-                  >
-                    {state.latencyBarHeights.map((height, index) => (
-                      <span
-                        key={index}
-                        className={`flex-1 rounded-sm ${height > 0 ? (state.isDark ? "bg-cyan-400/80" : "bg-cyan-600/80") : "bg-transparent"}`}
-                        style={height > 0 ? { height: `${height}px` } : undefined}
-                      />
-                    ))}
-                  </div>
-                  {state.latencyHistoryMaxMs !== null ? (
-                    <span
-                      className={`text-[10px] whitespace-nowrap ${state.isDark ? "text-slate-500" : "text-slate-400"}`}
-                      title={state.t("近30次最大延迟", "Max latency in last 30 samples")}
-                    >
-                      {state.t("最大", "Max")} {state.latencyHistoryMaxMs}ms
-                    </span>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
-            {state.sessionInfo?.note ? (
-              <span className={`text-xs mt-1 ${state.isDark ? "text-slate-500" : "text-slate-400"}`}>{state.sessionInfo.note}</span>
-            ) : null}
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" lightMode={!state.isDark} onClick={state.toggleLanguage}>
-              {state.language === "en-US" ? "中文" : "EN"}
-            </Button>
-            <Button variant="secondary" lightMode={!state.isDark} onClick={onBack}>
-              {state.t("返回会话管理", "Back to Sessions")}
-            </Button>
-            <Button variant="ghost" lightMode={!state.isDark} onClick={state.toggleTheme}>
-              {state.isDark ? state.t("浅色", "Light") : state.t("深色", "Dark")}
-            </Button>
-            <Button variant="ghost" lightMode={!state.isDark} onClick={state.handleClear}>
-              {state.t("清屏", "Clear")}
-            </Button>
-            <Button variant="ghost" lightMode={!state.isDark} onClick={state.handleSelectAll}>
-              {state.t("全选", "Select all")}
-            </Button>
-            {state.connectionState === "closed" && state.reconnectCountdown !== null ? (
-              <Button variant="ghost" lightMode={!state.isDark} onClick={state.handleCancelReconnect}>
-                {state.t("取消重连", "Cancel reconnect")}
-              </Button>
-            ) : null}
-            {state.connectionState === "closed" && state.reconnectCountdown === null ? (
-              <Button variant="secondary" lightMode={!state.isDark} onClick={state.handleReconnect}>
-                {state.t("重连", "Reconnect")}
-              </Button>
-            ) : null}
-            <Button variant="secondary" lightMode={!state.isDark} onClick={state.handleCopySelection}>
-              {state.t("复制", "Copy")}
-            </Button>
-          </div>
+    <div className="flex h-screen flex-col overflow-hidden bg-canvas text-ink transition-colors duration-300 supports-[height:100dvh]:h-dvh">
+      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line bg-chrome px-3 sm:px-4">
+        <Button variant="ghost" size="icon" onClick={onBack} aria-label={state.t("返回会话管理", "Back")} title={state.t("返回会话管理", "Back")}>
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="truncate text-sm font-medium">{state.sessionInfo?.name || state.t("会话", "Session")}</span>
+          <span
+            className={cx(
+              "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-2xs font-medium",
+              state.connectionState === "open"
+                ? "border-ok/30 bg-ok/10 text-ok"
+                : state.connectionState === "connecting"
+                  ? "border-warn/30 bg-warn/10 text-warn"
+                  : "border-danger/30 bg-danger/10 text-danger"
+            )}
+          >
+            <span className="h-1.5 w-1.5 rounded-full bg-current" />
+            {state.reconnectCountdown !== null
+              ? state.t("重连中 " + state.reconnectCountdown + "s", "Reconnecting " + state.reconnectCountdown + "s")
+              : state.connectionLabel}
+          </span>
+          {state.sessionInfo?.enhanced_enabled ? (
+            <span className="hidden rounded border border-brand/25 bg-brand/8 px-1.5 py-px text-[10px] font-medium text-brand sm:inline">
+              {state.t("持久", "Persistent")}
+            </span>
+          ) : null}
         </div>
-      </div>
+        <div className="hidden min-w-0 items-center gap-2 text-2xs text-muted md:flex">
+          <span className="font-mono">{state.sessionInfo ? new Date(state.sessionInfo.started_at).toLocaleString() : ""}</span>
+          <span aria-hidden="true">·</span>
+          <span>{state.networkProfileLabel}</span>
+          {state.targetLatencyMs !== null ? <span className="font-mono">{state.targetLatencyMs}ms</span> : null}
+        </div>
+        <div className="ml-auto flex items-center gap-1">
+          {state.targetLatencyMs !== null ? (
+            <div
+              className="mr-1 hidden h-5 w-[84px] items-end gap-px rounded bg-elevated px-1 py-1 lg:flex"
+              title={state.t("近30次网络延迟波动", "Latency trend (last 30 samples)")}
+              aria-label={state.t("近30次网络延迟波动", "Latency trend (last 30 samples)")}
+            >
+              {state.latencyBarHeights.map((height, index) => (
+                <span
+                  key={index}
+                  className={cx("flex-1 rounded-sm", height > 0 ? "bg-brand/70" : "bg-transparent")}
+                  style={height > 0 ? { height: Math.max(2, height) + "px" } : undefined}
+                />
+              ))}
+            </div>
+          ) : null}
+          {state.connectionState === "closed" && state.reconnectCountdown !== null ? (
+            <Button variant="ghost" size="sm" onClick={state.handleCancelReconnect}>
+              {state.t("取消重连", "Cancel")}
+            </Button>
+          ) : null}
+          {state.connectionState === "closed" && state.reconnectCountdown === null ? (
+            <Button variant="secondary" size="sm" onClick={state.handleReconnect}>
+              <RefreshCw className="h-3.5 w-3.5" />
+              {state.t("重连", "Reconnect")}
+            </Button>
+          ) : null}
+          <Button variant="ghost" size="sm" onClick={state.handleSelectAll} title={state.t("全选", "Select all")}>
+            {state.t("全选", "Select all")}
+          </Button>
+          <Button variant="ghost" size="sm" onClick={state.handleClear} title={state.t("清屏", "Clear")}>
+            {state.t("清屏", "Clear")}
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => void state.handleCopySelection()}>
+            <Copy className="h-3.5 w-3.5" />
+            {state.t("复制", "Copy")}
+          </Button>
+          <Button variant="ghost" size="icon" onClick={state.toggleTheme} aria-label={state.t("切换主题", "Toggle theme")} title={state.t("切换主题", "Toggle theme")}>
+            {state.isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          </Button>
+          <Button variant="ghost" size="sm" onClick={state.toggleLanguage} className="hidden sm:inline-flex">
+            {state.language === "en-US" ? "中" : "EN"}
+          </Button>
+        </div>
+      </header>
       <div ref={containerRef} className="flex min-h-0 flex-1 overflow-hidden">
         <div className="flex-1 flex flex-col min-w-0">
-          <div className="relative flex-1 p-4 min-h-0">
+          <div className="relative min-h-0 flex-1 p-3 sm:p-4">
             <div
               ref={state.terminalRef}
-              className={`h-full w-full rounded-lg border ${state.isDark ? "border-slate-800" : "border-slate-300 xterm-light"} ${state.sessionInfo?.enhanced_enabled ? "xterm-tmux-enhanced" : ""}`}
+              className={cx("h-full w-full overflow-hidden rounded-lg border border-line", !state.isDark && "xterm-light", state.sessionInfo?.enhanced_enabled && "xterm-tmux-enhanced")}
               tabIndex={-1}
               onClick={() => state.terminalInstance.current?.focus()}
             />
@@ -218,7 +226,7 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
         />
         <div
           style={{ width: sidebarWidth }}
-          className={`hidden min-h-0 flex-shrink-0 flex-col gap-3 overflow-hidden p-3 md:flex ${state.isDark ? "bg-slate-900/50 dark-scrollbar" : "bg-white border-l border-slate-200 light-scrollbar"}`}
+          className="hidden min-h-0 flex-shrink-0 flex-col gap-3 overflow-hidden border-l border-line bg-chrome p-3 md:flex"
         >
           <div className="max-h-[42%] shrink-0 overflow-y-auto pr-1">
             {state.sessionId ? (
@@ -231,7 +239,7 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
               </React.Suspense>
             ) : null}
           </div>
-          <div className={`flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border p-3 ${state.isDark ? "border-slate-800 bg-slate-950/40" : "border-slate-200 bg-white"}`}>
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-line bg-content p-3">
             {state.sessionId ? (
               <React.Suspense fallback={<TerminalPanelFallback isDark={state.isDark} />}>
                 <FileBrowser
@@ -257,7 +265,7 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
       ) : null}
       {isDragging ? <div className="fixed inset-0 z-50 cursor-col-resize" /> : null}
       {state.sessionDisconnected?.disconnected && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-canvas">
           <div className="text-center">
             <div className="text-2xl mb-4 text-rose-400">{state.t("会话已断开", "Session disconnected")}</div>
             <div className="text-sm text-slate-400">{state.t("断开时间", "Disconnected at")}: {state.sessionDisconnected.time}</div>

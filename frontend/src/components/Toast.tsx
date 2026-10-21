@@ -23,23 +23,30 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     [createId]
   );
 
-  const dismiss = React.useCallback(
-    (id: string) => {
-      setToasts((prev) => prev.filter((item) => item.id !== id));
-    },
-    []
-  );
+  const dismiss = React.useCallback((id: string) => {
+    setToasts((prev) => prev.filter((item) => item.id !== id));
+  }, []);
 
   const value = useMemo<ToastContextValue>(() => ({ toasts, push, dismiss }), [toasts, push, dismiss]);
 
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div className="fixed right-6 top-6 z-50 space-y-2">
+      <div
+        className="pointer-events-none fixed bottom-4 right-4 z-[200] flex w-[min(380px,calc(100vw-2rem))] flex-col gap-2"
+        role="status"
+        aria-live="polite"
+      >
         {toasts.map((toast) => (
-          <div key={toast.id} className="rounded-md bg-slate-800 px-4 py-3 text-sm text-slate-100 shadow">
-            {toast.message}
-          </div>
+          <button
+            key={toast.id}
+            type="button"
+            onClick={() => dismiss(toast.id)}
+            className="animate-rise-in pointer-events-auto flex items-start gap-2.5 rounded-lg border border-line bg-surface px-3 py-2.5 text-left text-xs leading-relaxed text-ink shadow-panel transition hover:border-line-strong"
+          >
+            <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-brand" aria-hidden="true" />
+            <span className="min-w-0 flex-1">{toast.message}</span>
+          </button>
         ))}
       </div>
     </ToastContext.Provider>

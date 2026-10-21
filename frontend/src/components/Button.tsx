@@ -2,39 +2,39 @@ import React from "react";
 import { cn } from "../lib/utils";
 
 export type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: "primary" | "secondary" | "ghost" | "danger";
+  variant?: "primary" | "secondary" | "ghost" | "danger" | "quiet";
+  size?: "sm" | "md" | "lg" | "icon";
   loading?: boolean;
-  /** @deprecated 使用 ThemeAwareButton 或让组件自动检测主题 */
+  /** @deprecated 主题已由设计令牌接管，无需手动指定 */
   lightMode?: boolean;
 };
 
-const darkVariants: Record<string, string> = {
-  primary: "bg-indigo-500 text-white hover:bg-indigo-400 shadow-sm",
-  secondary: "bg-slate-700 text-slate-100 hover:bg-slate-600 shadow-sm border border-slate-600",
-  ghost: "bg-slate-800/50 text-slate-200 hover:bg-slate-700 border border-slate-600 shadow-sm",
-  danger: "bg-rose-600 text-white hover:bg-rose-500 shadow-sm"
+const variants: Record<string, string> = {
+  primary:
+    "bg-brand text-brand-ink shadow-[0_1px_0_rgb(255_255_255/0.18)_inset] hover:brightness-110 active:brightness-95 border border-transparent",
+  secondary:
+    "bg-surface text-ink border border-line hover:border-line-strong hover:bg-elevated active:bg-elevated",
+  ghost:
+    "bg-transparent text-ink-soft border border-transparent hover:bg-elevated hover:text-ink active:bg-elevated",
+  quiet:
+    "bg-elevated text-ink border border-transparent hover:bg-surface hover:border-line",
+  danger:
+    "bg-danger/12 text-danger border border-danger/30 hover:bg-danger/18 active:bg-danger/25"
 };
 
-const lightVariants: Record<string, string> = {
-  primary: "bg-indigo-500 text-white hover:bg-indigo-400 shadow-sm",
-  secondary: "bg-white text-slate-700 border border-slate-300 hover:bg-slate-100 shadow-sm",
-  ghost: "bg-white text-slate-700 hover:bg-slate-100 border border-slate-300 shadow-sm",
-  danger: "bg-rose-600 text-white hover:bg-rose-500 shadow-sm"
+const sizes: Record<string, string> = {
+  sm: "h-8 px-2.5 text-xs gap-1.5 rounded-md",
+  md: "h-9 px-3 text-sm gap-2 rounded-md",
+  lg: "h-10 px-4 text-sm gap-2 rounded-md",
+  icon: "h-9 w-9 p-0 rounded-md"
 };
 
 function LoadingSpinner() {
   return (
-    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-      <circle
-        className="opacity-25"
-        cx="12"
-        cy="12"
-        r="10"
-        stroke="currentColor"
-        strokeWidth="4"
-      />
+    <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
       <path
-        className="opacity-75"
+        className="opacity-90"
         fill="currentColor"
         d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
       />
@@ -42,24 +42,27 @@ function LoadingSpinner() {
   );
 }
 
-// 基础按钮（需要手动指定 lightMode）
 export function Button({
   variant = "primary",
+  size = "md",
   loading = false,
-  lightMode = false,
+  lightMode: _lightMode,
   className,
   disabled,
   children,
+  type = "button",
   ...props
 }: ButtonProps) {
-  const variantStyles = lightMode ? lightVariants : darkVariants;
-
   return (
     <button
+      type={type}
       className={cn(
-        "rounded-md px-4 py-2 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 inline-flex items-center justify-center gap-2",
-        variantStyles[variant],
-        (loading || disabled) && "opacity-60 cursor-not-allowed",
+        "inline-flex select-none items-center justify-center whitespace-nowrap font-medium",
+        "transition-[background-color,border-color,color,box-shadow,filter] duration-150 ease-out",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/60 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas",
+        variants[variant],
+        sizes[size],
+        (loading || disabled) && "pointer-events-none opacity-50",
         className
       )}
       disabled={loading || disabled}
@@ -71,36 +74,11 @@ export function Button({
   );
 }
 
-// 自动感知主题的按钮组件
 export type ThemeAwareButtonProps = Omit<ButtonProps, "lightMode"> & {
   isDark: boolean;
 };
 
-export function ThemeAwareButton({
-  variant = "primary",
-  loading = false,
-  isDark,
-  className,
-  disabled,
-  children,
-  ...props
-}: ThemeAwareButtonProps) {
-  const variantStyles = isDark ? darkVariants : lightVariants;
-
-  return (
-    <button
-      className={cn(
-        "rounded-md px-4 py-2 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 inline-flex items-center justify-center gap-2",
-        variantStyles[variant],
-        (loading || disabled) && "opacity-60 cursor-not-allowed",
-        className
-      )}
-      disabled={loading || disabled}
-      {...props}
-    >
-      {loading ? <LoadingSpinner /> : null}
-      {children}
-    </button>
-  );
+export function ThemeAwareButton({ isDark: _isDark, ...rest }: ThemeAwareButtonProps) {
+  void _isDark;
+  return <Button {...rest} />;
 }
-

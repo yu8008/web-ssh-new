@@ -53,7 +53,7 @@ function ProgressBar({ percent, isDark, label, color = "blue" }: ProgressBarProp
 
   return (
     <div
-      className={`h-2 w-full rounded-full ${isDark ? "bg-slate-700" : "bg-slate-200"}`}
+      className={`h-2 w-full rounded-full ${isDark ? "bg-elevated" : "bg-slate-200"}`}
       role="progressbar"
       aria-label={label}
       aria-valuemin={0}
@@ -165,7 +165,7 @@ export function SystemMonitor({ sessionId, isDark, networkProfile, compact }: Sy
   const renderSectionHeader = (key: keyof typeof collapsedSections, title: string) => {
     if (!isCompact) {
       return (
-        <h3 className={`text-sm font-semibold mb-3 ${isDark ? "text-slate-200" : "text-slate-700"}`}>
+        <h3 className={`text-sm font-semibold mb-3 ${isDark ? "text-ink" : "text-slate-700"}`}>
           {title}
         </h3>
       );
@@ -175,11 +175,11 @@ export function SystemMonitor({ sessionId, isDark, networkProfile, compact }: Sy
         type="button"
         onClick={() => toggleSection(key)}
         className={`w-full flex items-center justify-between text-sm font-semibold mb-2 ${
-          isDark ? "text-slate-200" : "text-slate-700"
+          isDark ? "text-ink" : "text-slate-700"
         }`}
       >
         <span>{title}</span>
-        <span className={`text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+        <span className={`text-xs ${isDark ? "text-muted" : "text-muted"}`}>
           {collapsedSections[key] ? t("展开", "Expand") : t("收起", "Collapse")}
         </span>
       </button>
@@ -205,7 +205,7 @@ export function SystemMonitor({ sessionId, isDark, networkProfile, compact }: Sy
 
   if (loading) {
     return (
-        <div className={`text-xs ${isDark ? "text-slate-500" : "text-slate-400"}`}>
+        <div className={`text-xs ${isDark ? "text-muted" : "text-muted"}`}>
         {t("加载中...", "Loading...")}
       </div>
     );
@@ -231,10 +231,10 @@ export function SystemMonitor({ sessionId, isDark, networkProfile, compact }: Sy
             {/* CPU */}
             <div className="mb-3">
               <div className="flex justify-between items-center mb-1">
-                <span className={`text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                <span className={`text-xs ${isDark ? "text-muted" : "text-muted"}`}>
                   {t(`CPU (${stats.cpu.count} 核)`, `CPU (${stats.cpu.count} Cores)`)}
                 </span>
-                <span className={`text-xs font-medium ${isDark ? "text-slate-300" : "text-slate-600"}`}>
+                <span className={`text-xs font-medium ${isDark ? "text-ink-soft" : "text-slate-600"}`}>
                   {stats.cpu.percent.toFixed(1)}%
                 </span>
               </div>
@@ -249,10 +249,10 @@ export function SystemMonitor({ sessionId, isDark, networkProfile, compact }: Sy
             {/* 内存 */}
             <div className="mb-3">
               <div className="flex justify-between items-center mb-1">
-                <span className={`text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                <span className={`text-xs ${isDark ? "text-muted" : "text-muted"}`}>
                   {t("内存", "Memory")}
                 </span>
-                <span className={`text-xs font-medium ${isDark ? "text-slate-300" : "text-slate-600"}`}>
+                <span className={`text-xs font-medium ${isDark ? "text-ink-soft" : "text-slate-600"}`}>
                   {stats.memory.percent.toFixed(1)}% ({formatBytes(stats.memory.used)} / {formatBytes(stats.memory.total)})
                 </span>
               </div>
@@ -267,10 +267,10 @@ export function SystemMonitor({ sessionId, isDark, networkProfile, compact }: Sy
             {/* 交换区 */}
             <div className="mb-3">
               <div className="flex justify-between items-center mb-1">
-                <span className={`text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                <span className={`text-xs ${isDark ? "text-muted" : "text-muted"}`}>
                   {t("交换区", "Swap")}
                 </span>
-                <span className={`text-xs font-medium ${isDark ? "text-slate-300" : "text-slate-600"}`}>
+                <span className={`text-xs font-medium ${isDark ? "text-ink-soft" : "text-slate-600"}`}>
                   {stats.swap.total > 0
                     ? `${stats.swap.percent.toFixed(1)}% (${formatBytes(stats.swap.used)} / ${formatBytes(stats.swap.total)})`
                     : t("未启用", "Disabled")
@@ -288,9 +288,9 @@ export function SystemMonitor({ sessionId, isDark, networkProfile, compact }: Sy
             </div>
 
             {/* 网络速度 */}
-            <div className={`pt-3 mt-3 ${isDark ? "border-t border-slate-700" : "border-t border-slate-200"}`}>
+            <div className={`pt-3 mt-3 ${isDark ? "border-t border-line" : "border-t border-line"}`}>
               <div className="flex justify-between items-center">
-                <span className={`text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                <span className={`text-xs ${isDark ? "text-muted" : "text-muted"}`}>
                   {t("网络", "Network")}
                 </span>
                 <div className="flex items-center gap-3">
@@ -308,13 +308,13 @@ export function SystemMonitor({ sessionId, isDark, networkProfile, compact }: Sy
       </div>
 
       {/* 进程列表 */}
-      <div className={`pt-4 ${isDark ? "border-t border-slate-700" : "border-t border-slate-200"}`}>
+      <div className={`pt-4 ${isDark ? "border-t border-line" : "border-t border-line"}`}>
         {renderSectionHeader("processes", t("进程 TOP 5", "Top 5 Processes"))}
 
         {!isCompact || !collapsedSections.processes ? (
           <>
             {/* 表头 */}
-            <div className={`flex text-xs mb-2 ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+            <div className={`flex text-xs mb-2 ${isDark ? "text-muted" : "text-muted"}`}>
               <div className="flex-1">{t("进程名", "Process")}</div>
               <button
                 type="button"
@@ -341,22 +341,22 @@ export function SystemMonitor({ sessionId, isDark, networkProfile, compact }: Sy
               {sortedProcesses.map((proc) => (
                 <div
                   key={proc.pid}
-                  className={`flex text-xs py-1 rounded px-1 ${isDark ? "hover:bg-slate-800" : "hover:bg-slate-100"} group relative`}
+                  className={`flex text-xs py-1 rounded px-1 ${isDark ? "hover:bg-elevated" : "hover:bg-slate-100"} group relative`}
                   title={proc.command}
                 >
-                  <div className={`flex-1 truncate ${isDark ? "text-slate-300" : "text-slate-600"}`}>
+                  <div className={`flex-1 truncate ${isDark ? "text-ink-soft" : "text-slate-600"}`}>
                     {proc.name}
                   </div>
-                  <div className={`w-16 text-right ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                  <div className={`w-16 text-right ${isDark ? "text-muted" : "text-muted"}`}>
                     {proc.cpu_percent.toFixed(1)}%
                   </div>
-                  <div className={`w-20 text-right ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                  <div className={`w-20 text-right ${isDark ? "text-muted" : "text-muted"}`}>
                     {formatBytes(proc.memory_bytes)}
                   </div>
                 </div>
               ))}
               {sortedProcesses.length === 0 && (
-                <div className={`text-xs ${isDark ? "text-slate-500" : "text-slate-400"}`}>
+                <div className={`text-xs ${isDark ? "text-muted" : "text-muted"}`}>
                   {t("暂无数据", "No data")}
                 </div>
               )}
@@ -366,17 +366,17 @@ export function SystemMonitor({ sessionId, isDark, networkProfile, compact }: Sy
       </div>
 
       {/* 磁盘信息 */}
-      <div className={`pt-4 ${isDark ? "border-t border-slate-700" : "border-t border-slate-200"}`}>
+      <div className={`pt-4 ${isDark ? "border-t border-line" : "border-t border-line"}`}>
         {renderSectionHeader("disks", t("磁盘挂载", "Disk Mounts"))}
         {!isCompact || !collapsedSections.disks ? (
           <div className="space-y-2">
             {disks.map((disk) => (
               <div key={disk.mount}>
                 <div className="flex justify-between items-center mb-1">
-                  <span className={`text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                  <span className={`text-xs ${isDark ? "text-muted" : "text-muted"}`}>
                     {disk.mount}
                   </span>
-                  <span className={`text-xs font-medium ${isDark ? "text-slate-300" : "text-slate-600"}`}>
+                  <span className={`text-xs font-medium ${isDark ? "text-ink-soft" : "text-slate-600"}`}>
                     {disk.percent.toFixed(1)}% ({formatBytes(disk.used)} / {formatBytes(disk.total)})
                   </span>
                 </div>

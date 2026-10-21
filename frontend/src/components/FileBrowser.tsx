@@ -1094,7 +1094,7 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
           className={`flex items-center gap-1 ${isCompact ? "py-1 text-sm" : "py-0.5 text-xs"} px-1 rounded cursor-pointer truncate focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
             isSelected
               ? (isDark ? "bg-indigo-600/50 text-white" : "bg-indigo-100 text-indigo-700")
-              : (isDark ? "hover:bg-slate-700 text-slate-300" : "hover:bg-slate-100 text-slate-600")
+              : (isDark ? "hover:bg-elevated text-ink-soft" : "hover:bg-slate-100 text-slate-600")
           }`}
           style={{ paddingLeft: `${depth * 12 + 4}px` }}
           onClick={() => {
@@ -1161,7 +1161,7 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
   return (
     <div className={`space-y-2 h-full flex flex-col ${isCompact ? "text-sm" : ""}`}>
       <div className="flex items-center gap-2">
-        <h3 className={`text-sm font-semibold ${isDark ? "text-slate-200" : "text-slate-700"}`}>
+        <h3 className={`text-sm font-semibold ${isDark ? "text-ink" : "text-slate-700"}`}>
           {t("文件浏览", "File Browser")}
         </h3>
       </div>
@@ -1176,8 +1176,8 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
           placeholder={t("输入路径，按回车跳转", "Input path and press Enter")}
           className={`flex-1 px-2 ${isCompact ? "py-2 text-sm" : "py-1 text-xs"} rounded border ${
             isDark
-              ? "bg-slate-800 border-slate-600 text-slate-200 placeholder:text-slate-500 focus:border-indigo-500"
-              : "bg-white border-slate-300 text-slate-700 placeholder:text-slate-400 focus:border-indigo-400"
+              ? "bg-elevated border-line-strong text-ink placeholder:text-muted focus:border-indigo-500"
+              : "bg-white border-slate-300 text-slate-700 placeholder:text-muted focus:border-indigo-400"
           } focus:outline-none`}
         />
         <div className={`flex items-center gap-2 ${isCompact ? "flex-wrap" : ""}`}>
@@ -1186,7 +1186,7 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
             disabled={refreshing}
             className={`px-2 ${isCompact ? "py-2 text-sm" : "py-1 text-xs"} rounded border ${
               isDark
-                ? "bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600"
+                ? "bg-elevated border-line-strong text-ink hover:bg-slate-600"
                 : "bg-slate-100 border-slate-300 text-slate-600 hover:bg-slate-200"
             } ${refreshing ? "opacity-50 cursor-not-allowed" : ""}`}
             title={t("刷新", "Refresh")}
@@ -1195,7 +1195,7 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
           </button>
           <label className={`flex items-center gap-1 px-2 ${isCompact ? "py-2 text-sm" : "py-1 text-xs"} rounded border cursor-pointer ${
             isDark
-              ? "bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600"
+              ? "bg-elevated border-line-strong text-ink hover:bg-slate-600"
               : "bg-slate-100 border-slate-300 text-slate-600 hover:bg-slate-200"
           }`}>
             <input
@@ -1211,13 +1211,13 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
 
       {isCompact ? (
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className={`rounded-full px-2 py-1 ${isDark ? "bg-slate-800 text-slate-300" : "bg-slate-200 text-slate-600"}`}>
+          <span className={`rounded-full px-2 py-1 ${isDark ? "bg-elevated text-ink-soft" : "bg-slate-200 text-slate-600"}`}>
             {t("已选", "Selected")} {selectedCount}
           </span>
           <button
             type="button"
             onClick={() => handleActionForFiles("mkdir", [])}
-            className={`rounded-full px-3 py-2 ${isDark ? "bg-slate-800 text-slate-200" : "bg-white text-slate-700 border border-slate-200"}`}
+            className={`rounded-full px-3 py-2 ${isDark ? "bg-elevated text-ink" : "bg-surface text-ink border border-line"}`}
           >
             {t("新建文件夹", "New folder")}
           </button>
@@ -1225,14 +1225,14 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
-            className={`rounded-full px-3 py-2 ${uploading ? "opacity-50 cursor-not-allowed" : ""} ${isDark ? "bg-slate-800 text-slate-200" : "bg-white text-slate-700 border border-slate-200"}`}
+            className={`rounded-full px-3 py-2 ${uploading ? "opacity-50 cursor-not-allowed" : ""} ${isDark ? "bg-elevated text-ink" : "bg-surface text-ink border border-line"}`}
           >
             {t("上传文件", "Upload")}
           </button>
           <button
             type="button"
             onClick={() => handleActionForFiles("touch", [])}
-            className={`rounded-full px-3 py-2 ${isDark ? "bg-slate-800 text-slate-200" : "bg-white text-slate-700 border border-slate-200"}`}
+            className={`rounded-full px-3 py-2 ${isDark ? "bg-elevated text-ink" : "bg-surface text-ink border border-line"}`}
           >
             {t("新建文件", "New file")}
           </button>
@@ -1240,7 +1240,7 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
             type="button"
             onClick={() => handleActionForFiles("rename", selectedItems)}
             disabled={!canRename}
-            className={`rounded-full px-3 py-2 ${canRename ? "" : "opacity-40 cursor-not-allowed"} ${isDark ? "bg-slate-800 text-slate-200" : "bg-white text-slate-700 border border-slate-200"}`}
+            className={`rounded-full px-3 py-2 ${canRename ? "" : "opacity-40 cursor-not-allowed"} ${isDark ? "bg-elevated text-ink" : "bg-surface text-ink border border-line"}`}
           >
             {t("重命名", "Rename")}
           </button>
@@ -1248,7 +1248,7 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
             type="button"
             onClick={() => handleActionForFiles("chmod", selectedItems)}
             disabled={!hasSelection}
-            className={`rounded-full px-3 py-2 ${hasSelection ? "" : "opacity-40 cursor-not-allowed"} ${isDark ? "bg-slate-800 text-slate-200" : "bg-white text-slate-700 border border-slate-200"}`}
+            className={`rounded-full px-3 py-2 ${hasSelection ? "" : "opacity-40 cursor-not-allowed"} ${isDark ? "bg-elevated text-ink" : "bg-surface text-ink border border-line"}`}
           >
             {t("权限", "Permissions")}
           </button>
@@ -1262,7 +1262,7 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
                 }
               }}
               disabled={!hasSelection || selectedItems.every((file) => file.is_dir)}
-              className={`rounded-full px-3 py-2 ${hasSelection ? "" : "opacity-40 cursor-not-allowed"} ${isDark ? "bg-slate-800 text-slate-200" : "bg-white text-slate-700 border border-slate-200"}`}
+              className={`rounded-full px-3 py-2 ${hasSelection ? "" : "opacity-40 cursor-not-allowed"} ${isDark ? "bg-elevated text-ink" : "bg-surface text-ink border border-line"}`}
             >
               {t("打开", "Open")}
             </button>
@@ -1271,7 +1271,7 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
             type="button"
             onClick={() => handleActionForFiles("download", selectedItems)}
             disabled={!hasSelection}
-            className={`rounded-full px-3 py-2 ${hasSelection ? "" : "opacity-40 cursor-not-allowed"} ${isDark ? "bg-slate-800 text-slate-200" : "bg-white text-slate-700 border border-slate-200"}`}
+            className={`rounded-full px-3 py-2 ${hasSelection ? "" : "opacity-40 cursor-not-allowed"} ${isDark ? "bg-elevated text-ink" : "bg-surface text-ink border border-line"}`}
           >
             {t("下载", "Download")}
           </button>
@@ -1279,7 +1279,7 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
             type="button"
             onClick={() => handleActionForFiles("delete", selectedItems)}
             disabled={!hasSelection}
-            className={`rounded-full px-3 py-2 ${hasSelection ? "" : "opacity-40 cursor-not-allowed"} ${isDark ? "bg-rose-900/60 text-rose-200" : "bg-rose-50 text-rose-600 border border-rose-200"}`}
+            className={`rounded-full px-3 py-2 ${hasSelection ? "" : "opacity-40 cursor-not-allowed"} ${isDark ? "bg-danger/10 text-danger" : "bg-danger/10 text-danger border border-danger/30"}`}
           >
             {t("删除", "Delete")}
           </button>
@@ -1287,7 +1287,7 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
             type="button"
             onClick={handleClearSelection}
             disabled={!hasSelection}
-            className={`rounded-full px-3 py-2 ${hasSelection ? "" : "opacity-40 cursor-not-allowed"} ${isDark ? "bg-slate-800 text-slate-200" : "bg-white text-slate-700 border border-slate-200"}`}
+            className={`rounded-full px-3 py-2 ${hasSelection ? "" : "opacity-40 cursor-not-allowed"} ${isDark ? "bg-elevated text-ink" : "bg-surface text-ink border border-line"}`}
           >
             {t("取消选择", "Clear")}
           </button>
@@ -1302,17 +1302,17 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
       ) : null}
 
       <div
-        className={`flex rounded border flex-1 min-h-0 ${isCompact ? "flex-col" : ""} ${isDark ? "border-slate-700" : "border-slate-200"} ${(uploading || downloading) ? "opacity-50" : ""} relative`}
+        className={`flex rounded border flex-1 min-h-0 ${isCompact ? "flex-col" : ""} ${isDark ? "border-line" : "border-line"} ${(uploading || downloading) ? "opacity-50" : ""} relative`}
         onDrop={handleDrop}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
       >
         {/* 拖拽遮罩 */}
         {isDragging && (
-          <div className={`absolute inset-0 z-10 flex items-center justify-center ${isDark ? "bg-slate-800/90" : "bg-slate-100/90"} border-2 border-dashed ${isDark ? "border-slate-500" : "border-slate-400"}`}>
+          <div className={`absolute inset-0 z-10 flex items-center justify-center ${isDark ? "bg-elevated/90" : "bg-slate-100/90"} border-2 border-dashed ${isDark ? "border-slate-500" : "border-slate-400"}`}>
             <div className="text-center">
-              <Upload className={`mx-auto mb-2 h-6 w-6 ${isDark ? "text-slate-300" : "text-slate-600"}`} aria-hidden="true" />
-              <div className={`text-sm font-medium ${isDark ? "text-slate-200" : "text-slate-700"}`}>
+              <Upload className={`mx-auto mb-2 h-6 w-6 ${isDark ? "text-ink-soft" : "text-slate-600"}`} aria-hidden="true" />
+              <div className={`text-sm font-medium ${isDark ? "text-ink" : "text-slate-700"}`}>
                 {t("拖至此处上传到当前文件夹", "Drop here to upload into current folder")}
               </div>
             </div>
@@ -1320,30 +1320,30 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
         )}
         {/* 上传进度遮罩 */}
         {uploading && (
-          <div className={`absolute inset-0 z-10 flex items-center justify-center ${isDark ? "bg-slate-900/95" : "bg-white/95"}`}>
+          <div className={`absolute inset-0 z-10 flex items-center justify-center ${isDark ? "bg-surface/95" : "bg-white/95"}`}>
             <div className="w-full max-w-md px-4">
-              <div className={`text-center mb-2 text-sm font-medium ${isDark ? "text-slate-200" : "text-slate-700"}`}>
+              <div className={`text-center mb-2 text-sm font-medium ${isDark ? "text-ink" : "text-slate-700"}`}>
                 {uploadStatusText}
               </div>
               {uploadStats.totalBytes > 0 && (
                 <div className="mb-3">
                   <div className="flex justify-between text-xs mb-1">
-                    <span className={isDark ? "text-slate-400" : "text-slate-600"}>
+                    <span className={isDark ? "text-muted" : "text-slate-600"}>
                       {uploadPhaseText}
                     </span>
-                    <span className={isDark ? "text-slate-400" : "text-slate-600"}>
+                    <span className={isDark ? "text-muted" : "text-slate-600"}>
                       {Math.round(uploadPercent)}%
                     </span>
                   </div>
                   <div className="flex justify-between text-[11px] mb-1">
-                    <span className={isDark ? "text-slate-500" : "text-slate-500"}>
+                    <span className={isDark ? "text-muted" : "text-muted"}>
                       {formatFileSize(uploadStats.uploadedBytes)} / {formatFileSize(uploadStats.totalBytes)}
                     </span>
-                    <span className={isDark ? "text-slate-500" : "text-slate-500"}>
+                    <span className={isDark ? "text-muted" : "text-muted"}>
                       {uploadStats.current} / {uploadStats.total}
                     </span>
                   </div>
-                  <div className={`h-2 rounded-full ${isDark ? "bg-slate-700" : "bg-slate-200"}`}>
+                  <div className={`h-2 rounded-full ${isDark ? "bg-elevated" : "bg-slate-200"}`}>
                     <div
                       className="h-2 rounded-full bg-indigo-500 transition-all"
                       style={{ width: `${uploadPercent}%` }}
@@ -1351,9 +1351,9 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
                   </div>
                 </div>
               )}
-              <div className={`max-h-24 overflow-y-auto rounded border mb-2 ${isDark ? "border-slate-700 bg-slate-800" : "border-slate-200 bg-slate-50"}`}>
+              <div className={`max-h-24 overflow-y-auto rounded border mb-2 ${isDark ? "border-line bg-elevated" : "border-line bg-slate-50"}`}>
                 {uploadProgress.slice(-3).map((msg, i) => (
-                  <div key={i} className={`px-2 py-0.5 text-[11px] ${isDark ? "text-slate-400" : "text-slate-600"} border-b ${isDark ? "border-slate-700" : "border-slate-200"} last:border-b-0`}>
+                  <div key={i} className={`px-2 py-0.5 text-[11px] ${isDark ? "text-muted" : "text-slate-600"} border-b ${isDark ? "border-line" : "border-line"} last:border-b-0`}>
                     {msg}
                   </div>
                 ))}
@@ -1369,29 +1369,29 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
         )}
 
         {downloading && downloadStats && (
-          <div className={`absolute inset-0 z-10 flex items-center justify-center ${isDark ? "bg-slate-900/95" : "bg-white/95"}`}>
+          <div className={`absolute inset-0 z-10 flex items-center justify-center ${isDark ? "bg-surface/95" : "bg-white/95"}`}>
             <div className="w-full max-w-md px-4">
-              <div className={`text-center mb-2 text-sm font-medium ${isDark ? "text-slate-200" : "text-slate-700"}`}>
+              <div className={`text-center mb-2 text-sm font-medium ${isDark ? "text-ink" : "text-slate-700"}`}>
                 {downloadStats.phase === "compressing" ? t("正在服务端压缩...", "Compressing on server...") : t("正在下载...", "Downloading...")}
               </div>
-              <div className={`text-center mb-3 text-xs ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+              <div className={`text-center mb-3 text-xs ${isDark ? "text-muted" : "text-slate-600"}`}>
                 {downloadStats.current} / {downloadStats.total} · {downloadStats.targetName}
               </div>
               <div className="mb-3">
                 <div className="flex justify-between text-xs mb-1">
-                  <span className={isDark ? "text-slate-400" : "text-slate-600"}>
+                  <span className={isDark ? "text-muted" : "text-slate-600"}>
                     {downloadStats.phase === "compressing" ? t("压缩进度", "Compression Progress") : t("传输进度", "Transfer Progress")}
                   </span>
-                  <span className={isDark ? "text-slate-400" : "text-slate-600"}>
+                  <span className={isDark ? "text-muted" : "text-slate-600"}>
                     {downloadPercent === null ? t("计算中...", "Calculating...") : `${Math.round(downloadPercent)}%`}
                   </span>
                 </div>
                 <div className="flex justify-between text-[11px] mb-1">
-                  <span className={isDark ? "text-slate-500" : "text-slate-500"}>
+                  <span className={isDark ? "text-muted" : "text-muted"}>
                     {formatFileSize(downloadStats.loadedBytes)} / {downloadStats.totalBytes > 0 ? formatFileSize(downloadStats.totalBytes) : t("未知大小", "Unknown size")}
                   </span>
                 </div>
-                <div className={`h-2 rounded-full overflow-hidden ${isDark ? "bg-slate-700" : "bg-slate-200"}`}>
+                <div className={`h-2 rounded-full overflow-hidden ${isDark ? "bg-elevated" : "bg-slate-200"}`}>
                   {downloadPercent === null ? (
                     <div className={`h-2 w-1/3 rounded-full animate-pulse ${isDark ? "bg-indigo-400/80" : "bg-indigo-500/70"}`} />
                   ) : (
@@ -1407,7 +1407,7 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
         )}
 
         {!uploading && lastUploadFailures.length > 0 && (
-          <div className={`absolute top-2 right-2 z-20 px-3 py-2 rounded border text-xs ${isDark ? "bg-slate-800 border-slate-700 text-slate-200" : "bg-white border-slate-200 text-slate-700"}`}>
+          <div className={`absolute top-2 right-2 z-20 px-3 py-2 rounded border text-xs ${isDark ? "bg-elevated border-line text-ink" : "bg-white border-line text-slate-700"}`}>
             <div className="mb-2">{t(`上次上传失败 ${lastUploadFailures.length} 个文件`, `${lastUploadFailures.length} files failed in last upload`)}</div>
             <button
               onClick={handleRetryFailedUploads}
@@ -1420,9 +1420,9 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
 
         {/* chmod 加载遮罩 */}
         {chmodLoading && (
-          <div className={`absolute inset-0 z-10 flex items-center justify-center ${isDark ? "bg-slate-900/95" : "bg-white/95"}`}>
+          <div className={`absolute inset-0 z-10 flex items-center justify-center ${isDark ? "bg-surface/95" : "bg-white/95"}`}>
             <div className="text-center">
-              <div className={`text-sm font-medium mb-2 ${isDark ? "text-slate-200" : "text-slate-700"}`}>
+              <div className={`text-sm font-medium mb-2 ${isDark ? "text-ink" : "text-slate-700"}`}>
                 {chmodRecursive ? t("正在递归修改权限，请稍候...", "Applying permissions recursively...") : t("正在修改权限...", "Applying permissions...")}
               </div>
               <div className="animate-spin text-2xl">⟳</div>
@@ -1430,7 +1430,7 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
           </div>
         )}
         {/* 左侧树形目录 */}
-        <div className={`${isCompact ? "w-full max-h-40 border-b" : "w-1/3 border-r"} overflow-auto ${isDark ? "border-slate-700 bg-slate-800/50 dark-scrollbar" : "border-slate-200 bg-slate-50 light-scrollbar"}`}>
+        <div className={`${isCompact ? "w-full max-h-40 border-b" : "w-1/3 border-r"} overflow-auto ${isDark ? "border-line bg-elevated/50 dark-scrollbar" : "border-line bg-slate-50 light-scrollbar"}`}>
           <div className="p-1" role="tree" aria-label={t("目录树", "Directory tree")}>
             {tree.map(node => renderTreeNode(node))}
           </div>
@@ -1438,7 +1438,7 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
 
         {/* 右侧文件列表 */}
         <div
-          className={`flex-1 overflow-auto ${isDark ? "bg-slate-900/30 dark-scrollbar" : "bg-white light-scrollbar"}`}
+          className={`flex-1 overflow-auto ${isDark ? "bg-surface/30 dark-scrollbar" : "bg-white light-scrollbar"}`}
           onContextMenu={(e) => handleContextMenu(e)}
           onClick={(e) => {
             if (e.target === e.currentTarget) {
@@ -1447,7 +1447,7 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
           }}
         >
           {filesLoading ? (
-            <div className={`flex items-center justify-center h-full text-xs ${isDark ? "text-slate-500" : "text-slate-400"}`}>
+            <div className={`flex items-center justify-center h-full text-xs ${isDark ? "text-muted" : "text-muted"}`}>
               <span className="animate-spin mr-2">⟳</span> {t("加载中...", "Loading...")}
             </div>
           ) : error ? (
@@ -1456,8 +1456,8 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
             </div>
           ) : (
             <table className={`w-full ${rowTextClass}`}>
-              <thead className={`sticky top-0 ${isDark ? "bg-slate-800" : "bg-slate-100"}`}>
-                <tr className={isDark ? "text-slate-400" : "text-slate-500"}>
+              <thead className={`sticky top-0 ${isDark ? "bg-elevated" : "bg-slate-100"}`}>
+                <tr className={isDark ? "text-muted" : "text-muted"}>
                   <th className={`text-left ${rowPaddingClass} px-2 font-medium`}>{t("名称", "Name")}</th>
                   <th className={`text-right ${rowPaddingClass} px-2 font-medium relative`} style={{ width: colWidths.size }}>
                     {t("大小", "Size")}
@@ -1487,7 +1487,7 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
                     role="button"
                     tabIndex={0}
                     aria-label={t(`返回上一级: ${parentPath}`, `Go to parent: ${parentPath}`)}
-                    className={`cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 ${isDark ? "hover:bg-slate-800 text-slate-300" : "hover:bg-slate-50 text-slate-600"}`}
+                    className={`cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 ${isDark ? "hover:bg-elevated text-ink-soft" : "hover:bg-slate-50 text-slate-600"}`}
                     onClick={handleParentItemClick}
                     onDoubleClick={handleNavigateToParent}
                     onKeyDown={handleParentRowKeyDown}
@@ -1496,12 +1496,12 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
                       <span className="mr-1">📁</span>
                       ...
                     </td>
-                    <td className={`${rowPaddingClass} px-2 text-right ${isDark ? "text-slate-400" : "text-slate-500"}`}>-</td>
+                    <td className={`${rowPaddingClass} px-2 text-right ${isDark ? "text-muted" : "text-muted"}`}>-</td>
                     {!isCompact ? (
                       <>
-                        <td className={`${rowPaddingClass} px-2 font-mono ${isDark ? "text-slate-400" : "text-slate-500"}`}>-</td>
-                        <td className={`${rowPaddingClass} px-2 truncate ${isDark ? "text-slate-400" : "text-slate-500"}`}>-</td>
-                        <td className={`${rowPaddingClass} px-2 ${isDark ? "text-slate-400" : "text-slate-500"}`}>{t("返回上一级", "Go to parent")}</td>
+                        <td className={`${rowPaddingClass} px-2 font-mono ${isDark ? "text-muted" : "text-muted"}`}>-</td>
+                        <td className={`${rowPaddingClass} px-2 truncate ${isDark ? "text-muted" : "text-muted"}`}>-</td>
+                        <td className={`${rowPaddingClass} px-2 ${isDark ? "text-muted" : "text-muted"}`}>{t("返回上一级", "Go to parent")}</td>
                       </>
                     ) : null}
                   </tr>
@@ -1516,7 +1516,7 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
                     className={`cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 ${
                       selectedFiles.has(file.path)
                         ? (isDark ? "bg-indigo-600/30" : "bg-indigo-100")
-                        : (isDark ? "hover:bg-slate-800 text-slate-300" : "hover:bg-slate-50 text-slate-600")
+                        : (isDark ? "hover:bg-elevated text-ink-soft" : "hover:bg-slate-50 text-slate-600")
                     }`}
                     onClick={(e) => handleFileClick(file, e.ctrlKey || e.metaKey)}
                     onContextMenu={(e) => {
@@ -1529,18 +1529,18 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
                       <span className="mr-1">{file.is_dir ? "📁" : "📄"}</span>
                       {file.name}
                     </td>
-                    <td className={`${rowPaddingClass} px-2 text-right ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                    <td className={`${rowPaddingClass} px-2 text-right ${isDark ? "text-muted" : "text-muted"}`}>
                       {file.is_dir ? "-" : formatFileSize(file.size)}
                     </td>
                     {!isCompact ? (
                       <>
-                        <td className={`${rowPaddingClass} px-2 font-mono ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                        <td className={`${rowPaddingClass} px-2 font-mono ${isDark ? "text-muted" : "text-muted"}`}>
                           {file.permissions}
                         </td>
-                        <td className={`${rowPaddingClass} px-2 truncate ${isDark ? "text-slate-400" : "text-slate-500"}`} title={`${file.owner}:${file.group}`}>
+                        <td className={`${rowPaddingClass} px-2 truncate ${isDark ? "text-muted" : "text-muted"}`} title={`${file.owner}:${file.group}`}>
                           {file.owner}
                         </td>
-                        <td className={`${rowPaddingClass} px-2 ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                        <td className={`${rowPaddingClass} px-2 ${isDark ? "text-muted" : "text-muted"}`}>
                           {file.modified}
                         </td>
                       </>
@@ -1549,7 +1549,7 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
                 ))}
                 {files.length === 0 && !filesLoading && (
                   <tr>
-                    <td colSpan={tableColSpan} className={`py-4 text-center ${isDark ? "text-slate-500" : "text-slate-400"}`}>
+                    <td colSpan={tableColSpan} className={`py-4 text-center ${isDark ? "text-muted" : "text-muted"}`}>
                       {t("空目录", "Empty directory")}
                     </td>
                   </tr>
@@ -1563,28 +1563,28 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
       {/* 右键菜单 */}
       {contextMenu && (
         <div
-          className={`fixed z-50 rounded shadow-lg border ${isDark ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200"}`}
+          className={`fixed z-50 rounded shadow-lg border ${isDark ? "bg-elevated border-line" : "bg-white border-line"}`}
           style={{ left: contextMenu.x, top: contextMenu.y }}
         >
           {contextMenu.type === 'blank' && (
             <>
-              <button onClick={() => handleContextAction("mkdir")} className={`w-full px-4 py-2 text-left text-sm ${isDark ? "hover:bg-slate-700 text-slate-200" : "hover:bg-slate-100 text-slate-700"}`}>
+              <button onClick={() => handleContextAction("mkdir")} className={`w-full px-4 py-2 text-left text-sm ${isDark ? "hover:bg-elevated text-ink" : "hover:bg-slate-100 text-slate-700"}`}>
                 {t("新建文件夹", "New Folder")}
               </button>
-              <button onClick={() => handleContextAction("touch")} className={`w-full px-4 py-2 text-left text-sm ${isDark ? "hover:bg-slate-700 text-slate-200" : "hover:bg-slate-100 text-slate-700"}`}>
+              <button onClick={() => handleContextAction("touch")} className={`w-full px-4 py-2 text-left text-sm ${isDark ? "hover:bg-elevated text-ink" : "hover:bg-slate-100 text-slate-700"}`}>
                 {t("新建文件", "New File")}
               </button>
             </>
           )}
           {contextMenu.type === 'multiple' && (
             <>
-              <button onClick={() => handleContextAction("download")} className={`w-full px-4 py-2 text-left text-sm ${isDark ? "hover:bg-slate-700 text-slate-200" : "hover:bg-slate-100 text-slate-700"}`}>
+              <button onClick={() => handleContextAction("download")} className={`w-full px-4 py-2 text-left text-sm ${isDark ? "hover:bg-elevated text-ink" : "hover:bg-slate-100 text-slate-700"}`}>
                 {t("下载", "Download")}
               </button>
-              <button onClick={() => handleContextAction("chmod")} className={`w-full px-4 py-2 text-left text-sm ${isDark ? "hover:bg-slate-700 text-slate-200" : "hover:bg-slate-100 text-slate-700"}`}>
+              <button onClick={() => handleContextAction("chmod")} className={`w-full px-4 py-2 text-left text-sm ${isDark ? "hover:bg-elevated text-ink" : "hover:bg-slate-100 text-slate-700"}`}>
                 {t("修改权限", "Change Permissions")}
               </button>
-              <button onClick={() => handleContextAction("delete")} className={`w-full px-4 py-2 text-left text-sm ${isDark ? "hover:bg-slate-700 text-rose-400" : "hover:bg-slate-100 text-rose-600"}`}>
+              <button onClick={() => handleContextAction("delete")} className={`w-full px-4 py-2 text-left text-sm ${isDark ? "hover:bg-elevated text-rose-400" : "hover:bg-slate-100 text-rose-600"}`}>
                 {t("删除", "Delete")}
               </button>
             </>
@@ -1598,28 +1598,28 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
                     setContextMenu(null);
                     onOpenFile(target);
                   }}
-                  className={`w-full px-4 py-2 text-left text-sm ${isDark ? "hover:bg-slate-700 text-slate-200" : "hover:bg-slate-100 text-slate-700"}`}
+                  className={`w-full px-4 py-2 text-left text-sm ${isDark ? "hover:bg-elevated text-ink" : "hover:bg-slate-100 text-slate-700"}`}
                 >
                   {t("打开", "Open")}
                 </button>
               ) : null}
-              <button onClick={() => handleContextAction("download")} className={`w-full px-4 py-2 text-left text-sm ${isDark ? "hover:bg-slate-700 text-slate-200" : "hover:bg-slate-100 text-slate-700"}`}>
+              <button onClick={() => handleContextAction("download")} className={`w-full px-4 py-2 text-left text-sm ${isDark ? "hover:bg-elevated text-ink" : "hover:bg-slate-100 text-slate-700"}`}>
                 {t("下载", "Download")}
               </button>
-              <button onClick={() => handleContextAction("rename")} className={`w-full px-4 py-2 text-left text-sm ${isDark ? "hover:bg-slate-700 text-slate-200" : "hover:bg-slate-100 text-slate-700"}`}>
+              <button onClick={() => handleContextAction("rename")} className={`w-full px-4 py-2 text-left text-sm ${isDark ? "hover:bg-elevated text-ink" : "hover:bg-slate-100 text-slate-700"}`}>
                 {t("重命名", "Rename")}
               </button>
-              <button onClick={() => handleContextAction("chmod")} className={`w-full px-4 py-2 text-left text-sm ${isDark ? "hover:bg-slate-700 text-slate-200" : "hover:bg-slate-100 text-slate-700"}`}>
+              <button onClick={() => handleContextAction("chmod")} className={`w-full px-4 py-2 text-left text-sm ${isDark ? "hover:bg-elevated text-ink" : "hover:bg-slate-100 text-slate-700"}`}>
                 {t("修改权限", "Change Permissions")}
               </button>
-              <button onClick={() => handleContextAction("delete")} className={`w-full px-4 py-2 text-left text-sm ${isDark ? "hover:bg-slate-700 text-rose-400" : "hover:bg-slate-100 text-rose-600"}`}>
+              <button onClick={() => handleContextAction("delete")} className={`w-full px-4 py-2 text-left text-sm ${isDark ? "hover:bg-elevated text-rose-400" : "hover:bg-slate-100 text-rose-600"}`}>
                 {t("删除", "Delete")}
               </button>
-              <div className={`border-t ${isDark ? "border-slate-700" : "border-slate-200"}`} />
-              <button onClick={() => handleContextAction("mkdir")} className={`w-full px-4 py-2 text-left text-sm ${isDark ? "hover:bg-slate-700 text-slate-200" : "hover:bg-slate-100 text-slate-700"}`}>
+              <div className={`border-t ${isDark ? "border-line" : "border-line"}`} />
+              <button onClick={() => handleContextAction("mkdir")} className={`w-full px-4 py-2 text-left text-sm ${isDark ? "hover:bg-elevated text-ink" : "hover:bg-slate-100 text-slate-700"}`}>
                 {t("新建文件夹", "New Folder")}
               </button>
-              <button onClick={() => handleContextAction("touch")} className={`w-full px-4 py-2 text-left text-sm ${isDark ? "hover:bg-slate-700 text-slate-200" : "hover:bg-slate-100 text-slate-700"}`}>
+              <button onClick={() => handleContextAction("touch")} className={`w-full px-4 py-2 text-left text-sm ${isDark ? "hover:bg-elevated text-ink" : "hover:bg-slate-100 text-slate-700"}`}>
                 {t("新建文件", "New File")}
               </button>
             </>
@@ -1630,12 +1630,12 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
       {/* 对话框 */}
       {dialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className={`rounded-lg shadow-xl p-4 w-80 ${isDark ? "bg-slate-800" : "bg-white"}`}>
-            <h3 className={`text-sm font-medium mb-3 ${isDark ? "text-slate-200" : "text-slate-700"}`}>
+          <div className={`rounded-lg shadow-xl p-4 w-80 ${isDark ? "bg-elevated" : "bg-white"}`}>
+            <h3 className={`text-sm font-medium mb-3 ${isDark ? "text-ink" : "text-slate-700"}`}>
               {dialog.type === "mkdir" ? t("新建文件夹", "New Folder") : dialog.type === "touch" ? t("新建文件", "New File") : dialog.type === "rename" ? t("重命名", "Rename") : t("修改权限", "Change Permissions")}
             </h3>
             {dialog.type === "chmod" && dialog.files && dialog.files.length > 0 && (
-              <div className={`text-xs mb-2 ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+              <div className={`text-xs mb-2 ${isDark ? "text-muted" : "text-muted"}`}>
                 {dialog.files.length === 1 ? dialog.files[0].name : t(`已选择 ${dialog.files.length} 个项目`, `${dialog.files.length} item(s) selected`)}
               </div>
             )}
@@ -1646,13 +1646,13 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
                 onChange={(e) => setDialogInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleDialogSubmit()}
                 placeholder={dialog.type === "chmod" ? t("例如: 755", "e.g. 755") : t("输入名称", "Input name")}
-                className={`w-full px-3 py-2 text-sm rounded border ${isDark ? "bg-slate-900 border-slate-700 text-slate-200" : "bg-white border-slate-300 text-slate-700"}`}
+                className={`w-full px-3 py-2 text-sm rounded border ${isDark ? "bg-surface border-line text-ink" : "bg-white border-slate-300 text-slate-700"}`}
                 autoFocus
               />
               {dialog.type === "chmod" && (
                 <div className="absolute right-2 top-1/2 -translate-y-1/2 group">
-                  <span className={`cursor-help text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}>?</span>
-                  <div className={`hidden group-hover:block absolute right-0 top-6 w-64 p-3 rounded shadow-lg border text-xs z-10 ${isDark ? "bg-slate-800 border-slate-700 text-slate-300" : "bg-white border-slate-300 text-slate-700"}`}>
+                  <span className={`cursor-help text-xs ${isDark ? "text-muted" : "text-muted"}`}>?</span>
+                  <div className={`hidden group-hover:block absolute right-0 top-6 w-64 p-3 rounded shadow-lg border text-xs z-10 ${isDark ? "bg-elevated border-line text-ink-soft" : "bg-white border-slate-300 text-slate-700"}`}>
                     <div className="space-y-1">
                       <div><strong>755</strong> - {t("所有者可读写执行，其他人可读执行", "Owner can read/write/execute; others can read/execute")}</div>
                       <div><strong>644</strong> - {t("所有者可读写，其他人只读", "Owner can read/write; others read only")}</div>
@@ -1665,7 +1665,7 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
               )}
             </div>
             {dialog.type === "chmod" && dialog.files?.some(f => f.is_dir) && (
-              <label className={`flex items-center gap-2 mb-3 text-sm ${isDark ? "text-slate-300" : "text-slate-600"}`}>
+              <label className={`flex items-center gap-2 mb-3 text-sm ${isDark ? "text-ink-soft" : "text-slate-600"}`}>
                 <input
                   type="checkbox"
                   checked={chmodRecursive}
@@ -1676,7 +1676,7 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
               </label>
             )}
             <div className="flex gap-2">
-              <button onClick={() => setDialog(null)} className={`flex-1 px-3 py-2 text-sm rounded ${isDark ? "bg-slate-700 hover:bg-slate-600 text-slate-200" : "bg-slate-200 hover:bg-slate-300 text-slate-700"}`}>
+              <button onClick={() => setDialog(null)} className={`flex-1 px-3 py-2 text-sm rounded ${isDark ? "bg-elevated hover:bg-slate-600 text-ink" : "bg-slate-200 hover:bg-slate-300 text-slate-700"}`}>
                 {t("取消", "Cancel")}
               </button>
               <button onClick={handleDialogSubmit} className="flex-1 px-3 py-2 text-sm rounded bg-indigo-600 hover:bg-indigo-500 text-white">

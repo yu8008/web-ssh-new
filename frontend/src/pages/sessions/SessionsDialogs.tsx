@@ -75,7 +75,8 @@ export function SessionsDialogs({ state }: SessionsDialogsProps) {
   const passwordSavingRef = React.useRef(state.passwordSaving);
   const closeEnhanceDialogRef = React.useRef(() => state.setEnhancePrompt(null));
   const passwordDialogOpen = state.passwordDialogOpen;
-  const enhanceDialogOpen = Boolean(state.enhancePrompt?.open);
+  const enhancePrompt = state.enhancePrompt;
+  const enhanceDialogOpen = Boolean(enhancePrompt?.open);
   const fieldLabelClassName = `mb-1 block text-xs font-medium ${state.isDark ? "text-slate-300" : "text-slate-700"}`;
 
   closePasswordDialogRef.current = state.handleClosePasswordDialog;
@@ -274,14 +275,14 @@ export function SessionsDialogs({ state }: SessionsDialogsProps) {
             <h3 id={enhanceTitleId} className="text-lg font-semibold mb-2">{state.t("是否开启增强持久化连接", "Enable enhanced persistent connection?")}</h3>
             <p id={enhanceDescriptionId} className={`text-sm ${state.isDark ? "text-slate-400" : "text-slate-500"}`}>
               {state.t(
-                `检测到远端系统为 ${state.enhancePrompt.remoteOs || "unknown"} (${state.enhancePrompt.remoteArch || "unknown"})，建议开启增强持久化连接以提高稳定性。`,
-                `Detected remote system ${state.enhancePrompt.remoteOs || "unknown"} (${state.enhancePrompt.remoteArch || "unknown"}). Enable enhanced persistence for better stability.`
+                `检测到远端系统为 ${enhancePrompt?.remoteOs || "unknown"} (${enhancePrompt?.remoteArch || "unknown"})，建议开启增强持久化连接以提高稳定性。`,
+                `Detected remote system ${enhancePrompt?.remoteOs || "unknown"} (${enhancePrompt?.remoteArch || "unknown"}). Enable enhanced persistence for better stability.`
               )}
             </p>
             <label className={`mt-4 flex items-center gap-2 rounded-md border px-3 py-2 text-sm ${state.isDark ? "border-slate-700 bg-slate-800/60" : "border-slate-200 bg-slate-50"}`}>
               <input
                 type="checkbox"
-                checked={state.enhancePrompt.checked}
+                checked={enhancePrompt?.checked ?? false}
                 onChange={(event) => state.setEnhancePrompt((prev) => (prev ? { ...prev, checked: event.target.checked } : prev))}
               />
               <span>{state.t("开启增强持久化连接", "Enable enhanced persistent connection")}</span>

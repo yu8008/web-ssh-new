@@ -86,6 +86,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     networkProfile === "poor" ? 25000 : networkProfile === "degraded" ? 15000 : 10000;
   const authenticatedUserId = user?.id ?? null;
 
+  React.useEffect(() => {
+    if (typeof document !== "undefined") {
+      document.documentElement.setAttribute("data-theme", theme);
+    }
+  }, [theme]);
+
   const setTheme = React.useCallback((newTheme: Theme) => {
     setThemeState(newTheme);
     localStorage.setItem("theme", newTheme);

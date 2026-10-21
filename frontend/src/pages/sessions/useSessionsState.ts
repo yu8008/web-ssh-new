@@ -49,6 +49,7 @@ export function useSessionsState() {
     return readSessionViewMode(getBrowserLocalStorage());
   });
   const [loading, setLoading] = React.useState(true);
+  const [loadError, setLoadError] = React.useState<string | null>(null);
   const [form, setForm] = React.useState({
     name: "",
     host: "",
@@ -117,6 +118,7 @@ export function useSessionsState() {
       const [connectionList, sessionList] = await Promise.all([listConnections(), listSessions()]);
       setConnections(connectionList);
       setSessions(preserveOrderIfDragging(sessionList));
+      setLoadError(null);
       setNoteDrafts((prev) => {
         const next = { ...prev };
         sessionList.forEach((session) => {
@@ -127,7 +129,9 @@ export function useSessionsState() {
         return next;
       });
     } catch (error) {
-      push(error instanceof Error ? error.message : t("加载失败", "Failed to load data"));
+      const message = error instanceof Error ? error.message : t("加载失败", "Failed to load data");
+      setLoadError(message);
+      push(message);
     } finally {
       setLoading(false);
     }
@@ -184,9 +188,11 @@ export function useSessionsState() {
   }, [filter, orderedSessions, search]);
   const enhancedRetryMaxAttempts = systemSettings?.enhanced_retry_max_attempts ?? 5;
   const showSessionStatusSummary = systemSettings?.show_session_status_summary ?? true;
+  // 工作台的会话行不展示系统摘要，关闭轮询避免每个活跃会话都白跑一次 SSH 采集。
+  // 需要恢复时把第三个参数换成 showSessionStatusSummary 即可。
   const sessionStatusEntries = useSessionStatusSummary(
     filteredSessions,
-    showSessionStatusSummary,
+    false,
     (systemSettings?.session_status_refresh_interval_seconds ?? 3) * 1000
   );
 
@@ -554,6 +560,8 @@ export function useSessionsState() {
     viewMode,
     setViewMode,
     loading,
+    loadError,
+    reload: loadData,
     form,
     setForm,
     showCreateForm,

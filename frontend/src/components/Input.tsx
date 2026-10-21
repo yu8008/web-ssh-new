@@ -3,14 +3,24 @@ import { cn } from "../lib/utils";
 
 export type InputProps = React.InputHTMLAttributes<HTMLInputElement>;
 
-export function Input({ className, ...props }: InputProps) {
+export const Input = React.forwardRef<HTMLInputElement, InputProps>(function Input(
+  { className, type = "text", ...props },
+  ref
+) {
   return (
     <input
+      ref={ref}
+      type={type}
       className={cn(
-        "w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-400",
+        "h-9 w-full rounded-md border border-line bg-surface px-3 text-sm text-ink",
+        "placeholder:text-muted/80",
+        "transition-colors duration-150",
+        "hover:border-line-strong",
+        "focus:border-brand/70 focus:outline-none focus:ring-2 focus:ring-brand/25",
+        "disabled:cursor-not-allowed disabled:opacity-60",
         className
       )}
       {...props}
     />
   );
-}
+});

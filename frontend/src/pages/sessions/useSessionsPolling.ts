@@ -81,6 +81,7 @@ export function useSessionsPolling({
       window.location.href = "/";
       return;
     }
+    let intentionalClose = false;
     const socket = openSessionSocket(Number(userId));
     socket.onmessage = (event) => {
       try {
@@ -123,6 +124,9 @@ export function useSessionsPolling({
         reportNetworkHint("poor", 25000);
       }
     };
-    return () => socket.close();
+    return () => {
+      intentionalClose = true;
+      socket.close();
+    };
   }, [push, reportNetworkHint, setSessions, setNoteDrafts, t]);
 }
