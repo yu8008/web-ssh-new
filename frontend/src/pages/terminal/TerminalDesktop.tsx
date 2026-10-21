@@ -1,5 +1,5 @@
 import React from "react";
-import { ArrowLeft, Copy, Moon, RefreshCw, Sun } from "lucide-react";
+import { ArrowLeft, Copy, Folder, Moon, RefreshCw, Sun, X } from "lucide-react";
 import { Button } from "../../components/Button";
 import { FileViewer } from "../../components/FileViewer";
 import type { FileInfo } from "../../lib/api";
@@ -37,8 +37,22 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
     return Number.isFinite(saved) && saved > 0 ? Math.max(320, saved) : 380;
   });
   const [isDragging, setIsDragging] = React.useState(false);
+  const [filesOpen, setFilesOpen] = React.useState(false);
   const [openedFile, setOpenedFile] = React.useState<FileInfo | null>(null);
   const closeViewer = React.useCallback(() => setOpenedFile(null), []);
+
+  React.useEffect(() => {
+    if (!filesOpen) {
+      return;
+    }
+    const handler = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setFilesOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [filesOpen]);
   const containerRef = React.useRef<HTMLDivElement | null>(null);
 
   const { selectionText, selectionAnchor, handleCopySelection } = state;
@@ -186,6 +200,59 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
               tabIndex={-1}
               onClick={() => state.terminalInstance.current?.focus()}
             />
+            <button
+              type="button"
+              onClick={() => setFilesOpen((open) => !open)}
+              aria-expanded={filesOpen}
+              aria-label={state.t("文件", "Files")}
+              title={state.t("文件", "Files")}
+              className={cx(
+                "absolute right-6 top-6 z-20 grid h-8 w-8 place-items-center rounded-md border text-ink-soft shadow-sm backdrop-blur transition",
+                filesOpen
+                  ? "border-brand/40 bg-brand/12 text-brand"
+                  : "border-line bg-surface/90 hover:border-line-strong hover:text-ink"
+              )}
+            >
+              <Folder className="h-4 w-4" />
+            </button>
+
+            {filesOpen ? (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setFilesOpen(false)} />
+                <div
+                  className="animate-pop-in absolute right-6 top-16 z-20 flex h-[min(560px,calc(100%-5rem))] w-[min(430px,calc(100%-3rem))] origin-top-right flex-col overflow-hidden rounded-lg border border-line bg-surface p-3 shadow-panel"
+                  role="dialog"
+                  aria-label={state.t("文件", "Files")}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setFilesOpen(false)}
+                    aria-label={state.t("关闭文件面板", "Close files")}
+                    className="absolute right-2 top-2 z-10 grid h-6 w-6 place-items-center rounded text-muted transition hover:bg-elevated hover:text-ink"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                  <div className="min-h-0 flex-1 overflow-hidden pt-1">
+                    {state.sessionId ? (
+                      <React.Suspense fallback={<TerminalPanelFallback isDark={state.isDark} />}>
+                        <FileBrowser
+                          sessionId={state.sessionId}
+                          isDark={state.isDark}
+                          currentDir={state.currentDir}
+                          onOpenFile={(file) => {
+                            setFilesOpen(false);
+                            setOpenedFile(file);
+                          }}
+                          networkProfile={state.sessionNetworkProfile}
+                          compact
+                        />
+                      </React.Suspense>
+                    ) : null}
+                  </div>
+                </div>
+              </>
+            ) : null}
+
             {state.selectionText && selectionAnchor ? (
               <div
                 data-wsg-overlay="true"
@@ -218,17 +285,16 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
         </div>
         <div
           onMouseDown={handleMouseDown}
-          className={`w-1 cursor-col-resize transition-colors hidden md:block ${
-            isDragging
-              ? (state.isDark ? "bg-indigo-500" : "bg-indigo-400")
-              : (state.isDark ? "bg-slate-800 hover:bg-slate-700" : "bg-slate-200 hover:bg-slate-300")
-          }`}
+          className={cx(
+            "hidden w-1 cursor-col-resize transition-colors md:block",
+            isDragging ? "bg-brand/60" : "bg-line hover:bg-line-strong"
+          )}
         />
         <div
           style={{ width: sidebarWidth }}
-          className="hidden min-h-0 flex-shrink-0 flex-col gap-3 overflow-hidden border-l border-line bg-chrome p-3 md:flex"
+          className="hidden min-h-0 flex-shrink-0 flex-col overflow-hidden border-l border-line bg-chrome p-3 md:flex"
         >
-          <div className="max-h-[42%] shrink-0 overflow-y-auto pr-1">
+          <div className="min-h-0 flex-1 overflow-y-auto pr-1">
             {state.sessionId ? (
               <React.Suspense fallback={<TerminalPanelFallback isDark={state.isDark} />}>
                 <SystemMonitor
@@ -239,22 +305,9 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
               </React.Suspense>
             ) : null}
           </div>
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-line bg-content p-3">
-            {state.sessionId ? (
-              <React.Suspense fallback={<TerminalPanelFallback isDark={state.isDark} />}>
-                <FileBrowser
-                  sessionId={state.sessionId}
-                  isDark={state.isDark}
-                  currentDir={state.currentDir}
-                  onOpenFile={setOpenedFile}
-                  networkProfile={state.sessionNetworkProfile}
-                  compact
-                />
-              </React.Suspense>
-            ) : null}
-          </div>
         </div>
       </div>
+
       {openedFile && state.sessionId ? (
         <FileViewer
           sessionId={state.sessionId}
