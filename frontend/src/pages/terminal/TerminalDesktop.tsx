@@ -196,9 +196,9 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
           <div className="relative min-h-0 flex-1 p-3 sm:p-4">
             <div
               className="h-full w-full overflow-hidden rounded-lg border border-line"
-              style={{ backgroundColor: "#020617" }}
+              style={{ backgroundColor: state.isDark ? "#020617" : "#ffffff" }}
             >
-              <div className={cx("h-full w-full p-3", !state.isDark && "xterm-light", state.sessionInfo?.enhanced_enabled && "xterm-tmux-enhanced")}>
+              <div className={cx("h-full w-full p-3", !state.isDark && "xterm-light", !state.isDark && "xterm-light", state.sessionInfo?.enhanced_enabled && "xterm-tmux-enhanced")}>
                 <div
                   ref={state.terminalRef}
                   className="h-full w-full"

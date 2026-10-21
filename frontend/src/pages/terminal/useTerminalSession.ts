@@ -2,7 +2,7 @@ import React from "react";
 import { useToast } from "../../components/ToastContext";
 import { useApp } from "../../context/AppContextCore";
 import { copyTextToClipboard } from "./clipboardUtils";
-import { darkTerminalTheme, resolveCopyText } from "./terminalUtils";
+import { darkTerminalTheme, lightTerminalTheme, resolveCopyText } from "./terminalUtils";
 import { useTerminalSocket } from "./useTerminalSocket";
 import { useTerminalSessionInfo } from "./useTerminalSessionInfo";
 
@@ -68,17 +68,25 @@ export function useTerminalSession(sessionId?: string) {
   }, [sessionId]);
 
   const { terminalInstance: terminalInstanceRef, announceThemeColors } = socketState;
+  const announcedThemeRef = React.useRef(isDark);
 
   React.useEffect(() => {
     const term = terminalInstanceRef.current;
     if (!term) return;
-    // 终端画布固定深色：Codex 等 TUI 只在启动时探测一次配色，
-    // 跟着页面主题切换会出现「白底深色输入框」这类错配。
-    term.options.theme = darkTerminalTheme;
+    term.options.theme = isDark ? darkTerminalTheme : lightTerminalTheme;
     term.refresh(0, term.rows - 1);
     // 主题切换后同步给 tmux，避免 TUI（如 Codex）继续按旧配色绘制输入框。
     announceThemeColors(isDark);
-  }, [isDark, terminalInstanceRef, announceThemeColors]);
+    if (announcedThemeRef.current !== isDark) {
+      announcedThemeRef.current = isDark;
+      push(
+        t(
+          "终端配色已切换；Codex 等 TUI 需要重启程序才会重新取色",
+          "Terminal colors switched. TUI apps like Codex need a restart to re-detect colors."
+        )
+      );
+    }
+  }, [isDark, terminalInstanceRef, announceThemeColors, push, t]);
 
   const handleClear = React.useCallback(() => {
     const term = socketState.terminalInstance.current;
