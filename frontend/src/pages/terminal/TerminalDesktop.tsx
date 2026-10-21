@@ -90,7 +90,7 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
   }, [sidebarWidth, syncTerminalSize, terminalInstance]);
 
   return (
-    <div className={`flex min-h-screen flex-col transition-colors duration-300 ${state.isDark ? "bg-slate-950 text-slate-100 dark-scrollbar" : "bg-gray-100 text-slate-900 light-scrollbar"}`}>
+    <div className={`flex h-screen flex-col overflow-hidden transition-colors duration-300 supports-[height:100dvh]:h-dvh ${state.isDark ? "bg-slate-950 text-slate-100 dark-scrollbar" : "bg-gray-100 text-slate-900 light-scrollbar"}`}>
       <div className={`border-b px-4 py-3 ${state.isDark ? "border-slate-800" : "border-slate-200 bg-white"}`}>
         <div className="flex items-center justify-between">
           <div className="flex flex-col">
@@ -165,7 +165,7 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
           </div>
         </div>
       </div>
-      <div ref={containerRef} className="flex flex-1 overflow-hidden">
+      <div ref={containerRef} className="flex min-h-0 flex-1 overflow-hidden">
         <div className="flex-1 flex flex-col min-w-0">
           <div className="relative flex-1 p-4 min-h-0">
             <div
@@ -228,7 +228,7 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
               </React.Suspense>
             ) : null}
           </div>
-          <div className={`flex min-h-0 flex-1 flex-col rounded-lg border p-3 ${state.isDark ? "border-slate-800 bg-slate-950/40" : "border-slate-200 bg-white"}`}>
+          <div className={`flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border p-3 ${state.isDark ? "border-slate-800 bg-slate-950/40" : "border-slate-200 bg-white"}`}>
             {state.sessionId ? (
               <React.Suspense fallback={<TerminalPanelFallback isDark={state.isDark} />}>
                 <FileBrowser
