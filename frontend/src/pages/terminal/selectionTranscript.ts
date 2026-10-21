@@ -1,21 +1,22 @@
-import type { IBufferLine, Terminal } from "xterm";
+import type { IBufferCell, IBufferLine, Terminal } from "xterm";
 
 export type SelectionPoint = { row: number; col: number };
 export type SelectionRow = { text: string; wrapped: boolean; offsets: number[] };
 
 export function captureSelectionRows(term: Terminal): SelectionRow[] {
   const buffer = term.buffer.active;
+  const cell = buffer.getNullCell();
   return Array.from({ length: term.rows }, (_, index) => {
     const line = buffer.getLine(buffer.viewportY + index);
-    return captureRow(line, term.cols);
+    return captureRow(line, term.cols, cell);
   });
 }
 
-function captureRow(line: IBufferLine | undefined, cols: number): SelectionRow {
+function captureRow(line: IBufferLine | undefined, cols: number, reusableCell: IBufferCell): SelectionRow {
   let text = "";
   const offsets = [0];
   for (let col = 0; col < cols; col += 1) {
-    const cell = line?.getCell(col);
+    const cell = line?.getCell(col, reusableCell);
     offsets[col] = text.length;
     if (cell?.getWidth() !== 0) {
       text += cell?.getChars() || " ";
@@ -96,16 +97,39 @@ export class SelectionTranscript {
   private frame: SelectionRow[];
   private anchor: { row: SelectionRow; col: number };
   private end: { row: SelectionRow; col: number };
+  private positions: Map<SelectionRow, number>;
+  private cachedText: string | undefined;
+  private cachedHasSelection: boolean | undefined;
 
   constructor(frame: SelectionRow[], point: SelectionPoint, private readonly columnMode = false) {
     this.rows = [...frame];
     this.frame = [...frame];
     this.anchor = { row: frame[point.row], col: point.col };
     this.end = { ...this.anchor };
+    this.positions = new Map(this.rows.map((row, index) => [row, index]));
   }
 
   move(point: SelectionPoint): void {
+    if (this.end.row === this.frame[point.row] && this.end.col === point.col) return;
     this.end = { row: this.frame[point.row], col: point.col };
+    this.cachedText = undefined;
+    this.cachedHasSelection = undefined;
+  }
+
+  hasSelection(): boolean {
+    if (this.cachedHasSelection !== undefined) return this.cachedHasSelection;
+    const { start, end } = this.range();
+    const left = Math.min(this.anchor.col, this.end.col);
+    const right = Math.max(this.anchor.col, this.end.col);
+    for (let index = start.row; index <= end.row; index += 1) {
+      const row = this.rows[index];
+      if (index > start.row && (this.columnMode || !row.wrapped)) return this.cachedHasSelection = true;
+      const first = this.columnMode ? left : index === start.row ? start.col : 0;
+      const last = this.columnMode ? right : index === end.row ? end.col : row.offsets.length - 1;
+      if (Math.min(row.offsets[last] ?? row.text.length, row.text.length) >
+          Math.min(row.offsets[first] ?? row.text.length, row.text.length)) return this.cachedHasSelection = true;
+    }
+    return this.cachedHasSelection = false;
   }
 
   scroll(next: SelectionRow[], direction: -1 | 1): "moved" | "unchanged" | "unmatched" | "limit" {
@@ -155,27 +179,32 @@ export class SelectionTranscript {
     }
     this.rows = document;
     this.frame = mapped;
+    this.positions = new Map(document.map((row, index) => [row, index]));
+    this.cachedText = undefined;
+    this.cachedHasSelection = undefined;
     return "moved";
   }
 
   private range() {
-    const anchor = { row: this.rows.indexOf(this.anchor.row), col: this.anchor.col };
-    const end = { row: this.rows.indexOf(this.end.row), col: this.end.col };
+    const anchor = { row: this.positions.get(this.anchor.row)!, col: this.anchor.col };
+    const end = { row: this.positions.get(this.end.row)!, col: this.end.col };
     return anchor.row < end.row || (anchor.row === end.row && anchor.col <= end.col)
       ? { start: anchor, end } : { start: end, end: anchor };
   }
 
   getText(): string {
+    if (this.cachedText !== undefined) return this.cachedText;
     const { start, end } = this.range();
     const selected = this.rows.slice(start.row, end.row + 1);
     const left = Math.min(this.anchor.col, this.end.col);
     const right = Math.max(this.anchor.col, this.end.col);
-    return selected.map((row, index) => {
+    this.cachedText = selected.map((row, index) => {
       const first = this.columnMode ? left : index === 0 ? start.col : 0;
       const last = this.columnMode ? right : index === selected.length - 1 ? end.col : row.offsets.length - 1;
       const text = row.text.slice(row.offsets[first] ?? row.text.length, row.offsets[last] ?? row.text.length);
       return `${index > 0 && (this.columnMode || !row.wrapped) ? "\n" : ""}${text}`;
     }).join("");
+    return this.cachedText;
   }
 
   /** Visible part of the frozen selection, using xterm's public select API. */
@@ -184,7 +213,7 @@ export class SelectionTranscript {
     let first = -1;
     let last = -1;
     this.frame.forEach((row, index) => {
-      const position = this.rows.indexOf(row);
+      const position = this.positions.get(row)!;
       if (position >= start.row && position <= end.row) {
         if (first < 0) first = index;
         last = index;
@@ -197,8 +226,8 @@ export class SelectionTranscript {
         end: { row: last, col: Math.max(this.anchor.col, this.end.col) },
       };
     }
-    const startCol = this.rows.indexOf(this.frame[first]) === start.row ? start.col : 0;
-    const endCol = this.rows.indexOf(this.frame[last]) === end.row ? end.col : this.frame[last].offsets.length - 1;
+    const startCol = this.positions.get(this.frame[first]) === start.row ? start.col : 0;
+    const endCol = this.positions.get(this.frame[last]) === end.row ? end.col : this.frame[last].offsets.length - 1;
     return { start: { row: first, col: startCol }, end: { row: last, col: endCol } };
   }
 }

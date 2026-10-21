@@ -195,7 +195,7 @@ export function useTerminalSession(sessionId?: string) {
     handleSelectAll,
     handleCopySelection,
     copyText,
-    selectionText: socketState.selectionText,
+    hasSelection: socketState.hasSelection,
     selectionAnchor: socketState.selectionAnchor,
   };
 }

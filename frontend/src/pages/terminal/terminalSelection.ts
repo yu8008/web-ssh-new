@@ -2,7 +2,7 @@ import type { Terminal } from "xterm";
 import { captureSelectionRows, SelectionTranscript, type SelectionPoint, type SelectionRow } from "./selectionTranscript";
 
 type SelectionOptions = {
-  onChange: (text: string) => void;
+  onChange: (hasSelection: boolean) => void;
   onFinish: (x: number, y: number) => void;
   onLimit: () => void;
 };
@@ -23,18 +23,28 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
   let nativeDown = false;
   let active = false;
   let point = { x: 0, y: 0 };
-  let scrollTimer: number | undefined;
+  let frame: number | undefined;
+  let needsDraw = false;
+  let finishAfterDraw = false;
+  let notifiedSelection = false;
   let parseTimer: number | undefined;
   let finishTimer: number | undefined;
   let remote: { direction: -1 | 1; started: number } | null = null;
   let stoppedDirection = 0;
   let sendingWheel = false;
   let synchronizedRepaint = false;
+  let completedRepaint = false;
   let captureStopped = false;
   let disposed = false;
 
   const getText = () => transcript?.getText() ?? term.getSelection();
-  const notify = () => options.onChange(getText());
+  const hasSelection = () => transcript?.hasSelection() ?? term.hasSelection();
+  const notify = () => {
+    const selected = hasSelection();
+    if (selected === notifiedSelection) return;
+    notifiedSelection = selected;
+    options.onChange(selected);
+  };
   const coords = (x: number, y: number): SelectionPoint => {
     const rect = screen.getBoundingClientRect();
     return {
@@ -78,8 +88,10 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
   };
 
   const stopTimer = () => {
-    view.clearInterval(scrollTimer);
-    scrollTimer = undefined;
+    if (frame !== undefined) view.cancelAnimationFrame(frame);
+    frame = undefined;
+    needsDraw = false;
+    finishAfterDraw = false;
   };
   const clear = () => {
     active = false;
@@ -117,11 +129,12 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
     }
   };
   const tick = () => {
+    if (!active) return false;
     const rect = screen.getBoundingClientRect();
     const direction = point.y <= rect.top + 12 ? -1 : point.y >= rect.bottom - 12 ? 1 : 0;
     if (!direction) {
       stoppedDirection = 0;
-      return;
+      return false;
     }
     if (stoppedDirection !== direction) stoppedDirection = 0;
     // Wait for a response instead of flooding a slow SSH link or skipping pages.
@@ -135,6 +148,23 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
       }
     }
     requestScroll(direction);
+    return true;
+  };
+  const scheduleFrame = () => {
+    if (frame !== undefined || disposed) return;
+    frame = view.requestAnimationFrame(() => {
+      frame = undefined;
+      if (needsDraw && transcript) {
+        needsDraw = false;
+        transcript.move(endpoint());
+        draw();
+      }
+      if (finishAfterDraw) {
+        finishAfterDraw = false;
+        if (hasSelection()) options.onFinish(point.x, point.y);
+      }
+      if (tick()) scheduleFrame();
+    });
   };
 
   const begin = (event: MouseEvent) => {
@@ -146,11 +176,11 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
     stoppedDirection = 0;
     term.focus();
     stopTimer();
-    scrollTimer = view.setInterval(tick, 120);
+    scheduleFrame();
   };
   const onDown = (event: MouseEvent) => {
     if (replayingClick) return;
-    if (event.button === 2 && getText()) {
+    if (event.button === 2 && hasSelection()) {
       // Keep the selection when opening the browser's copy menu.
       event.stopPropagation();
       return;
@@ -191,8 +221,8 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
     }
     if (!active || !transcript) return;
     point = { x: event.clientX, y: event.clientY };
-    transcript.move(endpoint());
-    draw();
+    needsDraw = true;
+    scheduleFrame();
     // Selection gestures never become remote button/drag reports.
     event.preventDefault();
     event.stopImmediatePropagation();
@@ -229,7 +259,7 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
     }
     view.clearTimeout(finishTimer);
     finishTimer = view.setTimeout(() => {
-      if (!disposed && getText()) options.onFinish(event.clientX, event.clientY);
+      if (!disposed && hasSelection()) options.onFinish(event.clientX, event.clientY);
     }, 0);
   };
   function release() {
@@ -266,6 +296,8 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
   };
   const parsed = term.onWriteParsed(() => {
     view.clearTimeout(parseTimer);
+    const delay = completedRepaint ? 0 : 24;
+    completedRepaint = false;
     if (!remote || !transcript || synchronizedRepaint) return;
     parseTimer = view.setTimeout(() => {
       if (disposed || !remote || !transcript || synchronizedRepaint) return;
@@ -273,9 +305,9 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
       if (result === "moved") {
         remote = null;
         stoppedDirection = 0;
-        transcript.move(endpoint());
-        draw();
-        if (!active && getText()) options.onFinish(point.x, point.y);
+        needsDraw = true;
+        finishAfterDraw = !active;
+        scheduleFrame();
       } else if (result === "limit") {
         remote = null;
         captureStopped = true;
@@ -284,16 +316,22 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
       }
       // Partial repaints and unrelated output may not align yet. Keep the
       // last verified snapshot; the next parsed batch can complete the match.
-    }, 120);
+    }, delay);
   });
   // Modern TUIs bracket a repaint with DEC synchronized-output mode. A slow
   // connection can split that repaint into many writes; never align half of it.
   const syncStart = term.parser.registerCsiHandler({ prefix: "?", final: "h" }, (params) => {
-    if (params.includes(2026)) synchronizedRepaint = true;
+    if (params.includes(2026)) {
+      synchronizedRepaint = true;
+      completedRepaint = false;
+    }
     return false;
   });
   const syncEnd = term.parser.registerCsiHandler({ prefix: "?", final: "l" }, (params) => {
-    if (params.includes(2026)) synchronizedRepaint = false;
+    if (params.includes(2026)) {
+      synchronizedRepaint = false;
+      completedRepaint = true;
+    }
     return false;
   });
   const selection = term.onSelectionChange(notify);

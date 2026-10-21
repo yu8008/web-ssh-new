@@ -178,7 +178,7 @@ export function TerminalMobile({ state, onBack }: TerminalMobileProps) {
               </div>
             </div>
             <div className="absolute right-4 bottom-4 flex flex-col gap-2">
-              {state.selectionText ? (
+              {state.hasSelection ? (
                 <button
                   type="button"
                   onClick={() => void state.handleCopySelection()}

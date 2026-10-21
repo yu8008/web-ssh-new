@@ -117,12 +117,12 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
   }, [filesOpen]);
   const containerRef = React.useRef<HTMLDivElement | null>(null);
 
-  const { selectionText, selectionAnchor, handleCopySelection } = state;
+  const { hasSelection, selectionAnchor, handleCopySelection } = state;
   const [copyFlash, setCopyFlash] = React.useState(false);
 
   React.useEffect(() => {
     setCopyFlash(false);
-  }, [selectionText]);
+  }, [hasSelection, selectionAnchor]);
 
   const handleBubbleCopy = React.useCallback(async () => {
     const copied = await handleCopySelection();
@@ -323,7 +323,7 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
               </>
             ) : null}
 
-            {state.selectionText && selectionAnchor ? (
+            {hasSelection && selectionAnchor ? (
               <div
                 data-wsg-overlay="true"
                 className="absolute z-20"

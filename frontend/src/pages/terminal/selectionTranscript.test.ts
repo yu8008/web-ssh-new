@@ -71,6 +71,30 @@ describe("TUI selection transcript", () => {
     expect(selection.getText()).toBe("123\n456\n789");
   });
 
+  it("invalidates lazy copy text only when the selection or captured rows change", () => {
+    const selection = new SelectionTranscript(frame("one", "two", "three"), { row: 0, col: 0 });
+    expect(selection.hasSelection()).toBe(false);
+    selection.move({ row: 2, col: 5 });
+    expect(selection.hasSelection()).toBe(true);
+    expect(selection.getText()).toBe("one\ntwo\nthree");
+    selection.scroll(frame("two", "three", "four"), 1);
+    selection.move({ row: 2, col: 4 });
+    expect(selection.getText()).toBe("one\ntwo\nthree\nfour");
+    selection.move({ row: 0, col: 1 });
+    expect(selection.getText()).toBe("one\nt");
+    expect(selection.getText()).toBe("one\nt");
+  });
+
+  it("does not advertise empty selections in trailing whitespace", () => {
+    const selection = new SelectionTranscript(frame("", "words"), { row: 0, col: 0 });
+    selection.move({ row: 0, col: 8 });
+    expect(selection.hasSelection()).toBe(false);
+    expect(selection.getText()).toBe("");
+    selection.move({ row: 1, col: 2 });
+    expect(selection.hasSelection()).toBe(true);
+    expect(selection.getText()).toBe("\nwo");
+  });
+
   it("highlights only the visible part when the anchor has scrolled offscreen", () => {
     const selection = new SelectionTranscript(frame("header", "line 1", "line 2", "line 3", "footer"), { row: 1, col: 2 });
     selection.scroll(frame("header", "line 2", "line 3", "line 4", "footer"), 1);

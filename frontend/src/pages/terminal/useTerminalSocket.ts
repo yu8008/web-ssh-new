@@ -3,13 +3,14 @@ import { Terminal } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
 import { clearAuthStorage, getSession, getStoredToken, openTerminalSocket } from "../../lib/api";
 import { attachTerminalSelection } from "./terminalSelection";
+import { createTerminalInputWriter } from "./terminalInput";
+import { configureTerminalRendering } from "./terminalRendering";
+import { attachTerminalWheel } from "./terminalWheel";
 import {
   buildDefaultColorAnnouncement,
   clampSelectionAnchor,
   darkTerminalTheme,
   lightTerminalTheme,
-  normalizeWheelDeltaToLines,
-  normalizeWheelDeltaToPixels,
   sanitizeTerminalOutputChunk,
 } from "./terminalUtils";
 
@@ -49,7 +50,7 @@ export function useTerminalSocket({
   const [connectionState, setConnectionState] = React.useState<"connecting" | "open" | "closed">("connecting");
   const [autoReconnect, setAutoReconnect] = React.useState(true);
   const [reconnectCountdown, setReconnectCountdown] = React.useState<number | null>(null);
-  const [selectionText, setSelectionText] = React.useState("");
+  const [hasSelection, setHasSelection] = React.useState(false);
   // 选区结束位置（相对终端容器），用于把“选中即复制”的气泡贴在鼠标附近。
   const [selectionAnchor, setSelectionAnchor] = React.useState<{ x: number; y: number } | null>(null);
   const themeRef = React.useRef<"dark" | "light">(
@@ -385,12 +386,13 @@ export function useTerminalSocket({
     }
     let disposed = false;
     let term: Terminal | null = null;
-    let handleTerminalWheel: ((event: WheelEvent) => void) | null = null;
+    let wheelController: ReturnType<typeof attachTerminalWheel> | null = null;
     let handleResize: (() => void) | null = null;
     let selectionController: ReturnType<typeof attachTerminalSelection> | null = null;
+    let inputWriter: ReturnType<typeof createTerminalInputWriter> | null = null;
 
     // 会话切换时清空上一个会话遗留的选区状态。
-    setSelectionText("");
+    setHasSelection(false);
     setSelectionAnchor(null);
 
     const initTerminal = async () => {
@@ -420,6 +422,7 @@ export function useTerminalSocket({
       const fit = new FitAddon();
       term.loadAddon(fit);
       term.open(terminalContainer);
+      configureTerminalRendering(term);
       fit.fit();
 
       terminalInstance.current = term;
@@ -427,14 +430,13 @@ export function useTerminalSocket({
 
       connectSocketRef.current(term);
 
-      term.onData((data) => {
-        sendInputRef.current(data);
-      });
+      inputWriter = createTerminalInputWriter(window, (data) => { sendInputRef.current(data); });
+      term.onData(inputWriter.write);
 
       selectionController = attachTerminalSelection(term, terminalContainer, {
-        onChange: (text) => {
-          setSelectionText(text);
-          if (!text) setSelectionAnchor(null);
+        onChange: (selected) => {
+          setHasSelection(selected);
+          if (!selected) setSelectionAnchor(null);
         },
         onFinish: (clientX, clientY) => {
           const rect = terminalContainer.getBoundingClientRect();
@@ -466,78 +468,7 @@ export function useTerminalSocket({
         return false;
       });
 
-      let wheelRemainder = 0;
-      const sendTmuxWheelPage = (lineDelta: number) => {
-        if (lineDelta === 0) {
-          return;
-        }
-        const sequence = lineDelta < 0 ? "\x1b[5~" : "\x1b[6~";
-        sendInputRef.current(sequence);
-      };
-      handleTerminalWheel = (event: WheelEvent) => {
-        if (!term) {
-          return;
-        }
-        if (term.modes.mouseTrackingMode !== "none") {
-          return;
-        }
-        const isEnhancedSession = enhancedSessionRef.current;
-
-        const activeBuffer = term.buffer.active;
-        const hasLocalScrollback = activeBuffer.type === "normal" && activeBuffer.baseY > 0;
-        if (!hasLocalScrollback) {
-          const lineDelta = normalizeWheelDeltaToLines(event, term.rows);
-          if (lineDelta === 0) {
-            return;
-          }
-          event.preventDefault();
-          event.stopPropagation();
-          sendTmuxWheelPage(lineDelta);
-          return;
-        }
-
-        event.preventDefault();
-        event.stopPropagation();
-
-        const viewport = terminalContainer.querySelector<HTMLElement>(".xterm-viewport");
-        if (viewport) {
-          const pixelDelta = normalizeWheelDeltaToPixels(event, viewport.clientHeight);
-          const maxScrollTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
-          const isAtTop = viewport.scrollTop <= 0;
-          const isAtBottom = viewport.scrollTop >= maxScrollTop;
-          const lineDelta = normalizeWheelDeltaToLines(event, term.rows);
-
-          if (isEnhancedSession && pixelDelta < 0 && isAtTop) {
-            sendTmuxWheelPage(lineDelta);
-            return;
-          }
-
-          if (isEnhancedSession && pixelDelta > 0 && isAtBottom) {
-            sendTmuxWheelPage(lineDelta);
-            return;
-          }
-
-          if (pixelDelta !== 0) {
-            const nextScrollTop = Math.min(maxScrollTop, Math.max(0, viewport.scrollTop + pixelDelta));
-            viewport.scrollTop = nextScrollTop;
-          }
-          return;
-        }
-
-        const lineDelta = normalizeWheelDeltaToLines(event, term.rows);
-        if (lineDelta === 0) {
-          return;
-        }
-        wheelRemainder += lineDelta;
-        const wholeLines = wheelRemainder > 0 ? Math.floor(wheelRemainder) : Math.ceil(wheelRemainder);
-        if (wholeLines === 0) {
-          return;
-        }
-        term.scrollLines(wholeLines);
-        wheelRemainder -= wholeLines;
-      };
-
-      terminalContainer.addEventListener("wheel", handleTerminalWheel, { capture: true, passive: false });
+      wheelController = attachTerminalWheel(term, terminalContainer, () => enhancedSessionRef.current, inputWriter.write);
       handleResize = () => {
         if (!term) {
           return;
@@ -552,13 +483,12 @@ export function useTerminalSocket({
 
     return () => {
       disposed = true;
-      if (handleTerminalWheel) {
-        terminalContainer.removeEventListener("wheel", handleTerminalWheel, { capture: true });
-      }
+      wheelController?.dispose();
       if (handleResize) {
         window.removeEventListener("resize", handleResize);
       }
       selectionController?.dispose();
+      inputWriter?.dispose();
       if (selectionControllerRef.current === selectionController) selectionControllerRef.current = null;
       clearReconnectTimer();
       socketRef.current?.close();
@@ -578,7 +508,7 @@ export function useTerminalSocket({
     scrollTerminal,
     handleReconnect,
     handleCancelReconnect,
-    selectionText,
+    hasSelection,
     getSelectionText,
     clearSelectionSnapshot,
     selectionAnchor,

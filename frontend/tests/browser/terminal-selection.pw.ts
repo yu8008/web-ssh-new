@@ -174,3 +174,79 @@ test("ordinary shell selection retains native scrollback auto-scroll", async ({ 
   await expect(page.locator("#selection")).toContainText("Shell row");
   expect(await page.locator("#wheels").textContent()).toBe("0");
 });
+
+test("TUI wheel bursts share a packet without dropping or reordering reports", async ({ page }) => {
+  await open(page, "?delay=10&chunkDelay=0");
+  await page.locator(".xterm-screen").evaluate((screen) => {
+    const box = screen.getBoundingClientRect();
+    for (const deltaY of [1, 1, 1, -1, -1]) {
+      screen.dispatchEvent(new WheelEvent("wheel", {
+        bubbles: true, cancelable: true, deltaMode: 1, deltaY,
+        clientX: box.left + 20, clientY: box.top + 20,
+      }));
+    }
+  });
+  await expect(page.locator("#wheels")).toHaveText("5");
+  const packets: string[] = JSON.parse((await page.locator("#packets").textContent())!);
+  expect(packets).toHaveLength(1);
+  expect([...packets[0].matchAll(/\x1b\[<(64|65);/g)].map((match) => match[1])).toEqual(["65", "65", "65", "64", "64"]);
+});
+
+test("fast remote repaints advance promptly without repeatedly reading the full selection", async ({ page }) => {
+  const box = await open(page, "?delay=10&chunkDelay=0&synchronized=1&maxOffset=10000");
+  await page.mouse.move(box.x + 1, box.y + box.line * 2.5);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 20, box.y + box.height - 2, { steps: 3 });
+  await page.waitForTimeout(700);
+  expect(Number(await page.locator("#wheels").textContent())).toBeGreaterThanOrEqual(10);
+  expect(await page.locator("#selection").getAttribute("data-text-reads")).toBeNull();
+  expect(await page.locator("#selection").getAttribute("data-changes")).toBe("1");
+  await page.mouse.up();
+  await expect(page.locator("#selection")).toContainText("Output 021 中文 😀");
+  await page.waitForTimeout(100);
+  const text = (await page.locator("#selection").textContent())!;
+  const numbers = [...text.matchAll(/Output (\d+)/g)].map((match) => Number(match[1]));
+  expect(numbers.length).toBeGreaterThan(20);
+  expect(numbers).toEqual(Array.from({ length: numbers.length }, (_, index) => 21 + index));
+  expect(Number(await page.locator("#selection").getAttribute("data-text-reads"))).toBeLessThanOrEqual(2);
+});
+
+test("shell wheel scrolling uses intermediate animation frames", async ({ page }) => {
+  await open(page, "?mode=shell");
+  const positions = await page.locator(".xterm-screen").evaluate(async (screen) => {
+    const viewport = document.querySelector<HTMLElement>(".xterm-viewport")!;
+    const values = [viewport.scrollTop];
+    const box = screen.getBoundingClientRect();
+    screen.dispatchEvent(new WheelEvent("wheel", {
+      bubbles: true, cancelable: true, deltaMode: 1, deltaY: 8,
+      clientX: box.left + 20, clientY: box.top + 20,
+    }));
+    const start = performance.now();
+    while (performance.now() - start < 160) {
+      await new Promise(requestAnimationFrame);
+      values.push(viewport.scrollTop);
+    }
+    return values;
+  });
+  const unique = [...new Set(positions)];
+  expect(unique.length).toBeGreaterThan(3);
+  expect(positions.at(-1)).toBeGreaterThan(positions[0]);
+  await expect(page.locator(".xterm-screen canvas").first()).toBeVisible();
+});
+
+for (const direction of ["up", "down"]) {
+  test(`smooth shell scrolling hands off to remote ${direction} at its target boundary`, async ({ page }) => {
+    await open(page, `?mode=shell&enhanced=1&scrollLine=${direction === "up" ? 1 : 87}`);
+    await page.locator(".xterm-screen").evaluate((screen, direction) => {
+      const box = screen.getBoundingClientRect();
+      for (let i = 0; i < 3; i += 1) {
+        screen.dispatchEvent(new WheelEvent("wheel", {
+          bubbles: true, cancelable: true, deltaMode: 1, deltaY: direction === "up" ? -4 : 4,
+          clientX: box.left + 20, clientY: box.top + 20,
+        }));
+      }
+    }, direction);
+    const packets: string[] = JSON.parse((await page.locator("#packets").textContent())!);
+    expect(packets).toEqual(Array(2).fill(direction === "up" ? "\x1b[5~" : "\x1b[6~"));
+  });
+}
