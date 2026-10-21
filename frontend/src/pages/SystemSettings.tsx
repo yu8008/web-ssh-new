@@ -5,6 +5,7 @@ import { Input } from "../components/Input";
 import { useToast } from "../components/ToastContext";
 import { useApp } from "../context/AppContextCore";
 import { updateSystemSettings } from "../lib/api";
+import { getTerminalScrollback, saveTerminalScrollback, TERMINAL_SCROLLBACK_CHOICES } from "./terminal/terminalPreferences";
 
 const DEFAULT_RETRY_SCHEDULE_SECONDS = [2, 4, 8, 16, 32];
 
@@ -51,6 +52,7 @@ export function SystemSettingsPage() {
     defaultEnableEnhancedSession: false,
   });
   const [saving, setSaving] = React.useState(false);
+  const [terminalScrollback, setTerminalScrollback] = React.useState(getTerminalScrollback);
 
   React.useEffect(() => {
     if (!systemSettings) {
@@ -129,6 +131,7 @@ export function SystemSettingsPage() {
         default_enable_enhanced_session: form.defaultEnableEnhancedSession,
       });
       applySystemSettings(saved);
+      saveTerminalScrollback(terminalScrollback);
       push(t("系统设置已保存并应用", "System settings saved and applied."));
     } catch (error) {
       push(error instanceof Error ? error.message : t("保存系统设置失败", "Failed to save system settings."));
@@ -183,6 +186,24 @@ export function SystemSettingsPage() {
             <div className={`text-sm ${isDark ? "text-slate-400" : "text-slate-500"}`}>{t("加载系统设置中...", "Loading system settings...")}</div>
           ) : (
             <form className="space-y-5" onSubmit={handleSave}>
+              <div className={`rounded-xl border p-4 ${sectionClassName}`}>
+                <label htmlFor="terminal-scrollback" className="text-sm font-medium">
+                  {t("终端历史保留行数", "Terminal scrollback lines")}
+                </label>
+                <select
+                  id="terminal-scrollback"
+                  value={terminalScrollback}
+                  onChange={(event) => setTerminalScrollback(Number(event.target.value))}
+                  className={`mt-2 block w-full rounded-md border px-3 py-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand ${sectionClassName}`}
+                >
+                  {TERMINAL_SCROLLBACK_CHOICES.map((lines) => (
+                    <option key={lines} value={lines}>{lines.toLocaleString()} {t("行", "lines")}</option>
+                  ))}
+                </select>
+                <p className={`mt-2 text-xs ${hintClassName}`}>
+                  {t("默认保留 10,000 行。更多历史会占用更多内存。此设置保存在当前浏览器，保存后重新打开终端生效。", "Defaults to 10,000 lines. More history uses more memory. Saved in this browser and applied when reopening a terminal.")}
+                </p>
+              </div>
               <div className={`rounded-xl border p-4 ${sectionClassName}`}>
                 <div className="space-y-1">
                   <h3 className="text-sm font-semibold">{t("会话系统状态展示", "Session Status Display")}</h3>

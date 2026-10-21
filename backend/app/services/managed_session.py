@@ -12,6 +12,7 @@ from fastapi import WebSocket
 from app.core.db import utc_now
 from app.services.enhanced_session import close_ssh_resources
 from app.services.types import SessionBuffer
+from app.services.terminal_output import TerminalOutput
 
 
 logger = logging.getLogger(__name__)
@@ -27,6 +28,7 @@ class ManagedSession:
     buffer: SessionBuffer
     last_activity: datetime
     websockets: set[WebSocket] = field(default_factory=set)
+    output: TerminalOutput = field(init=False)
     status: str = "active"
     enhanced_enabled: bool = False
     enhanced_fingerprint: str | None = None
@@ -39,6 +41,9 @@ class ManagedSession:
     target_probe_error_streak: int = 0
     target_measured_at: datetime | None = None
     target_rtt_samples: list[int] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        self.output = TerminalOutput(self.buffer, self.websockets)
 
     def status_payload(self) -> str:
         return json.dumps(
@@ -212,4 +217,5 @@ class ManagedSession:
         self.last_activity = utc_now()
 
     async def close(self) -> None:
+        await self.output.close()
         await close_ssh_resources(self.client, self.channel)

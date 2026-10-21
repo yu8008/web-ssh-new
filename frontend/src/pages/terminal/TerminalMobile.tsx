@@ -6,6 +6,7 @@ import type { FileInfo } from "../../lib/api";
 import { TerminalCopyPanel } from "./TerminalCopyPanel";
 import { createTerminalBufferSnapshot, type TerminalBufferSnapshot } from "./terminalUtils";
 import type { TerminalSessionState } from "./useTerminalSession";
+import { TerminalLoading } from "./TerminalLoading";
 
 const FileBrowser = React.lazy(() =>
   import("../../components/FileBrowser").then((module) => ({ default: module.FileBrowser }))
@@ -177,6 +178,7 @@ export function TerminalMobile({ state, onBack }: TerminalMobileProps) {
                 <div ref={state.terminalRef} className="h-full w-full" tabIndex={-1} onClick={() => state.terminalInstance.current?.focus()} />
               </div>
             </div>
+            <TerminalLoading state={state} />
             <div className="absolute right-4 bottom-4 flex flex-col gap-2">
               {state.hasSelection ? (
                 <button

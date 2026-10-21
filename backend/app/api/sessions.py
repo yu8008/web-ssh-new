@@ -38,6 +38,7 @@ from app.services.ssh_errors import SSH_CONNECTION_EXCEPTIONS, ssh_error_detail
 from app.services.ssh_manager import ManagedSession, SessionManager
 from app.services.system_settings import load_runtime_system_settings, resolve_retry_delay_seconds
 from app.services.types import PtyInfo
+from app.services.terminal_output import OUTPUT_PROTOCOL
 
 logger = get_logger(__name__)
 
@@ -682,7 +683,9 @@ async def terminal_socket(
     state: AppState = Depends(get_state),
     db=Depends(get_db),
 ) -> None:
-    await websocket.accept()
+    protocols = websocket.headers.get("sec-websocket-protocol", "").split(",")
+    framed = OUTPUT_PROTOCOL in (protocol.strip() for protocol in protocols)
+    await websocket.accept(subprotocol=OUTPUT_PROTOCOL if framed else None)
     language = resolve_websocket_language(websocket)
     try:
         user = get_current_user_from_ws(websocket, state, db)
@@ -707,17 +710,11 @@ async def terminal_socket(
             return
 
         bound_session = session
-        session.websockets.add(websocket)
+        subscription = session.output.subscribe(websocket, framed=framed)
         try:
-            replay_outputs = session.buffer.dump()
             # DA 响应（例如 \x1b[>0;276;0c）在重连阶段可能被误注入到远端 shell。
             # 抑制窗口对每次 WS 建连都开启，不再依赖是否有回放缓冲数据。
             suppress_initial_da_responses = True
-            for output in replay_outputs:
-                await websocket.send_text(output.data)
-            suppress_da_deadline = (
-                time.monotonic() + _INITIAL_DA_SUPPRESS_SECONDS if suppress_initial_da_responses else 0.0
-            )
             da_fragment_buffer = ""
 
             while True:
@@ -725,14 +722,13 @@ async def terminal_socket(
                 payload = TerminalMessage.model_validate_json(message)
                 active_session = session_manager.get_session(session_id)
                 if not active_session or active_session.status != "active" or not active_session.channel:
-                    await websocket.send_text(translate_message("Session not active", language))
-                    await websocket.close(code=1008)
+                    subscription.close_code = 1008
                     return
                 if payload.type == "input" and payload.data is not None:
                     data_to_send = payload.data
                     if (
                         suppress_initial_da_responses
-                        and time.monotonic() <= suppress_da_deadline
+                        and (subscription.replayed_at is None or time.monotonic() <= subscription.replayed_at + _INITIAL_DA_SUPPRESS_SECONDS)
                     ):
                         merged = da_fragment_buffer + data_to_send
                         stripped = _strip_da_response_sequences(merged)
@@ -791,10 +787,10 @@ async def terminal_socket(
             logging.getLogger(__name__).warning("terminal_socket error: %s", exc)
             return
         finally:
-            bound_session.websockets.discard(websocket)
+            await bound_session.output.unsubscribe(websocket)
             latest_session = session_manager.get_session(session_id)
             if latest_session and latest_session is not bound_session:
-                latest_session.websockets.discard(websocket)
+                await latest_session.output.unsubscribe(websocket)
             record.last_activity = utc_now()
     except Exception as exc:
         logging.getLogger(__name__).warning("terminal_socket setup error: %s", exc)

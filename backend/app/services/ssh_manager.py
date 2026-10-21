@@ -338,11 +338,8 @@ class SessionManager:
 
             class TerminalSession(asyncssh.SSHClientSession):
                 def data_received(self, data: str, datatype: asyncssh.DataType | None = None) -> None:
-                    session.buffer.append(data)
+                    session.output.publish(data)
                     session.last_activity = utc_now()
-                    if session.websockets:
-                        for websocket in list(session.websockets):
-                            asyncio.create_task(websocket.send_text(data))
 
                 def connection_lost(self, exc: Exception | None) -> None:
                     current = manager._sessions.get(session.session_id)
@@ -354,6 +351,7 @@ class SessionManager:
                         )
                         return
                     session.status = "disconnected"
+                    session.output.finish()
                     session.last_activity = utc_now()
                     manager._sessions.pop(session.session_id, None)
                     manager._cancel_target_network_probe(session.session_id)
@@ -400,9 +398,7 @@ class SessionManager:
             self._sessions[resolved_session_id] = session
             self._ensure_target_network_probe(session)
             if replaced_session and replaced_session is not session:
-                if replaced_session.websockets:
-                    session.websockets.update(replaced_session.websockets)
-                    replaced_session.websockets.clear()
+                replaced_session.output.transfer_to(session.output)
                 try:
                     await replaced_session.close()
                 except Exception as error:

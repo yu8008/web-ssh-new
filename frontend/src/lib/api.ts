@@ -513,9 +513,9 @@ export function openTerminalSocket(sessionId: string): WebSocket {
   const token = getStoredToken();
   const language = encodeURIComponent(getStoredLanguage());
   if (token) {
-    return new WebSocket(`${WS_BASE}/sessions/ws/terminal/${sessionId}?token=${encodeURIComponent(token)}&lang=${language}`);
+    return new WebSocket(`${WS_BASE}/sessions/ws/terminal/${sessionId}?token=${encodeURIComponent(token)}&lang=${language}`, "webssh.output.v1");
   }
-  return new WebSocket(`${WS_BASE}/sessions/ws/terminal/${sessionId}?lang=${language}`);
+  return new WebSocket(`${WS_BASE}/sessions/ws/terminal/${sessionId}?lang=${language}`, "webssh.output.v1");
 }
 
 // 系统监控相关类型

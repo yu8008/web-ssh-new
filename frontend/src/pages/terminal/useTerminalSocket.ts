@@ -6,6 +6,10 @@ import { attachTerminalSelection } from "./terminalSelection";
 import { createTerminalInputWriter } from "./terminalInput";
 import { configureTerminalRendering } from "./terminalRendering";
 import { attachTerminalWheel } from "./terminalWheel";
+import { createTerminalOutput, decodeTerminalOutput, TERMINAL_OUTPUT_PROTOCOL } from "./terminalOutput";
+import { attachTerminalViewport } from "./terminalViewport";
+import { attachTerminalShortcuts } from "./terminalShortcuts";
+import { getTerminalScrollback } from "./terminalPreferences";
 import {
   buildDefaultColorAnnouncement,
   clampSelectionAnchor,
@@ -47,6 +51,12 @@ export function useTerminalSocket({
   const reconnectAttemptRef = React.useRef(0);
   const lastResizeStateRef = React.useRef<ResizeState | null>(null);
   const selectionControllerRef = React.useRef<ReturnType<typeof attachTerminalSelection> | null>(null);
+  const outputRef = React.useRef<ReturnType<typeof createTerminalOutput> | null>(null);
+  const viewportRef = React.useRef<ReturnType<typeof attachTerminalViewport> | null>(null);
+  const replayingRef = React.useRef(false);
+  const remotePaintRef = React.useRef(false);
+  const paintedRef = React.useRef(false);
+  const [hasRenderedOutput, setHasRenderedOutput] = React.useState(false);
   const [connectionState, setConnectionState] = React.useState<"connecting" | "open" | "closed">("connecting");
   const [autoReconnect, setAutoReconnect] = React.useState(true);
   const [reconnectCountdown, setReconnectCountdown] = React.useState<number | null>(null);
@@ -99,7 +109,10 @@ export function useTerminalSocket({
 
   const syncTerminalSize = React.useCallback(
     (term: Terminal, options?: { force?: boolean }) => {
+      const viewport = viewportRef.current;
+      const snapshot = viewport?.capture();
       fitAddon.current?.fit();
+      viewport?.restore(snapshot);
       sendResize(term, options);
     },
     [sendResize]
@@ -165,28 +178,60 @@ export function useTerminalSocket({
 
       clearReconnectTimer();
       setConnectionState("connecting");
+      remotePaintRef.current = false;
+      paintedRef.current = false;
+      setHasRenderedOutput(false);
+      const outputWriter = outputRef.current;
+      if (!outputWriter) return;
 
       if (isReconnect) {
-        term.write(`\r\n\x1b[33m${t("正在重新连接...", "Reconnecting...")}\x1b[0m\r\n`);
+        outputWriter.enqueue(`\r\n\x1b[33m${t("正在重新连接...", "Reconnecting...")}\x1b[0m\r\n`);
       }
 
       const socket = openTerminalSocket(sessionId);
       socketRef.current = socket;
       let sanitizePendingSuffix = "";
+      let lastQueuedSeq = 0;
+      const resetReplay = () => {
+        sanitizePendingSuffix = "";
+        lastQueuedSeq = 0;
+        replayingRef.current = true;
+        outputWriter.replacePending(() => {
+          selectionControllerRef.current?.clear();
+          term.reset();
+          remotePaintRef.current = false;
+          paintedRef.current = false;
+          setHasRenderedOutput(false);
+        });
+      };
 
       socket.onmessage = (event) => {
         if (socketRef.current !== socket) {
           return;
         }
+        let data = String(event.data ?? "");
+        if (socket.protocol === TERMINAL_OUTPUT_PROTOCOL) {
+          const frame = decodeTerminalOutput(data);
+          if (frame?.type === "replay_start") { resetReplay(); return; }
+          if (frame?.type === "replay_end") {
+            outputWriter.enqueue("", () => { replayingRef.current = false; });
+            return;
+          }
+          if (frame?.type === "output") {
+            if (frame.seq <= lastQueuedSeq) return;
+            lastQueuedSeq = frame.seq;
+            data = frame.data;
+          }
+        }
         const sanitized = sanitizeTerminalOutputChunk(
-          String(event.data ?? ""),
+          data,
           enhancedSessionRef.current,
           sanitizePendingSuffix
         );
         sanitizePendingSuffix = sanitized.pendingSuffix;
         const output = sanitized.output;
 
-        term.write(output);
+        outputWriter.enqueue(output, () => { remotePaintRef.current = true; });
 
         // 检测目录变化：解析提示符中的路径
         const text = output.replace(/\x1b\[[0-9;]*m/g, "");
@@ -201,6 +246,11 @@ export function useTerminalSocket({
           return;
         }
         reconnectAttemptRef.current = 0;
+        if (socket.protocol !== TERMINAL_OUTPUT_PROTOCOL) {
+          replayingRef.current = false;
+          if (isReconnect) resetReplay();
+          replayingRef.current = false;
+        }
         clearNetworkHint();
         syncTerminalSize(term, { force: true });
         sendThemeAnnouncement();
@@ -235,7 +285,8 @@ export function useTerminalSocket({
           reportNetworkHint("poor", 25000);
         }
 
-        if (autoReconnect && !event.wasClean && reconnectAttemptRef.current < 5) {
+        const retryable = !event.wasClean || [1011, 1012, 1013, 4001].includes(event.code);
+        if (autoReconnect && retryable && reconnectAttemptRef.current < 5) {
           const schedule = [2, 4, 8, 16, 32];
           const attempt = reconnectAttemptRef.current + 1;
           const delaySeconds = schedule[attempt - 1] ?? schedule[schedule.length - 1];
@@ -246,7 +297,7 @@ export function useTerminalSocket({
             `连接已断开，${delaySeconds}秒后自动重连 (${reconnectAttemptRef.current}/5)...`,
             `Connection lost. Auto reconnect in ${delaySeconds}s (${reconnectAttemptRef.current}/5)...`
           );
-          term.write(`\r\n\x1b[31m${reconnectMessage}\x1b[0m\r\n`);
+          outputWriter.enqueue(`\r\n\x1b[31m${reconnectMessage}\x1b[0m\r\n`);
           setReconnectCountdown(Math.round(delay / 1000));
 
           let countdown = Math.round(delay / 1000);
@@ -271,8 +322,8 @@ export function useTerminalSocket({
             }
             connectSocket(term, true);
           }, delay);
-        } else if (!event.wasClean) {
-          term.write(`\r\n\x1b[31m${t("连接已断开", "Connection lost")}\x1b[0m\r\n`);
+        } else if (retryable) {
+          outputWriter.enqueue(`\r\n\x1b[31m${t("连接已断开", "Connection lost")}\x1b[0m\r\n`);
           push(t("终端连接已断开", "Terminal connection closed"));
         }
       };
@@ -305,7 +356,7 @@ export function useTerminalSocket({
   const handleCancelReconnect = React.useCallback(() => {
     clearReconnectTimer();
     setAutoReconnect(false);
-    terminalInstance.current?.write(`\r\n\x1b[33m${t("已取消自动重连", "Auto reconnect canceled")}\x1b[0m\r\n`);
+    outputRef.current?.enqueue(`\r\n\x1b[33m${t("已取消自动重连", "Auto reconnect canceled")}\x1b[0m\r\n`);
   }, [clearReconnectTimer, t]);
 
   const connectSocketRef = React.useRef(connectSocket);
@@ -321,6 +372,7 @@ export function useTerminalSocket({
       return;
     }
     const lineDelta = direction === "up" ? -8 : 8;
+    viewportRef.current?.interact();
     const sendTmuxWheelPage = (delta: number) => {
       if (delta === 0) {
         return;
@@ -390,10 +442,14 @@ export function useTerminalSocket({
     let handleResize: (() => void) | null = null;
     let selectionController: ReturnType<typeof attachTerminalSelection> | null = null;
     let inputWriter: ReturnType<typeof createTerminalInputWriter> | null = null;
+    let outputWriter: ReturnType<typeof createTerminalOutput> | null = null;
+    let viewport: ReturnType<typeof attachTerminalViewport> | null = null;
+    let rendered: { dispose(): void } | null = null;
 
     // 会话切换时清空上一个会话遗留的选区状态。
     setHasSelection(false);
     setSelectionAnchor(null);
+    setHasRenderedOutput(false);
 
     const initTerminal = async () => {
       try {
@@ -417,7 +473,7 @@ export function useTerminalSocket({
         fontSize: 15,
         lineHeight: 1.3,
         cursorBlink: true,
-        scrollback: 100000,
+        scrollback: getTerminalScrollback(),
       });
       const fit = new FitAddon();
       term.loadAddon(fit);
@@ -428,10 +484,38 @@ export function useTerminalSocket({
       terminalInstance.current = term;
       fitAddon.current = fit;
 
-      connectSocketRef.current(term);
+      viewport = attachTerminalViewport(term, terminalContainer);
+      viewportRef.current = viewport;
+      const activeTerm = term;
+      outputWriter = createTerminalOutput({
+        write: (data, onParsed) => activeTerm.write(data, onParsed),
+        beforeWrite: viewport.capture,
+        afterWrite: viewport.restore,
+        onOverflow: () => {
+          // Reconnect through a fresh bounded replay instead of dropping ANSI.
+          socketRef.current?.close(4001, "Terminal output queue full");
+        },
+      });
+      outputRef.current = outputWriter;
+      rendered = term.onRender(({ start, end }) => {
+        if (!remotePaintRef.current || paintedRef.current) return;
+        const buffer = activeTerm.buffer.active;
+        for (let row = start; row <= end; row++) {
+          if (buffer.getLine(buffer.viewportY + row)?.translateToString(true).trim()) {
+            paintedRef.current = true;
+            setHasRenderedOutput(true);
+            break;
+          }
+        }
+      });
 
       inputWriter = createTerminalInputWriter(window, (data) => { sendInputRef.current(data); });
-      term.onData(inputWriter.write);
+      term.onData((data) => {
+        // Replayed device/color/cursor queries must not inject replies into the
+        // remote prompt. Real keystrokes remain usable while history loads.
+        if (replayingRef.current && /^\x1b(?:\[[?=>\d;]*[cnR]|\]\d+;[^]*?(?:\x07|\x1b\\))$/.test(data)) return;
+        inputWriter!.write(data);
+      });
 
       selectionController = attachTerminalSelection(term, terminalContainer, {
         onChange: (selected) => {
@@ -448,25 +532,7 @@ export function useTerminalSocket({
       });
       selectionControllerRef.current = selectionController;
 
-      // 复制快捷键：Windows/Linux 用 Ctrl+Shift+C，macOS 用 Cmd+C。
-      term.attachCustomKeyEventHandler((event) => {
-        if (event.type !== "keydown") {
-          return true;
-        }
-        const key = event.key.toLowerCase();
-        const copyCombo =
-          (event.metaKey && !event.ctrlKey && key === "c") ||
-          (event.ctrlKey && event.shiftKey && key === "c");
-        if (!copyCombo) {
-          return true;
-        }
-        const selection = getSelectionText();
-        if (selection) {
-          copyRequestRef.current?.(selection);
-        }
-        // 无论有没有选区都不把 Ctrl/Cmd+Shift+C 当输入发给远端。
-        return false;
-      });
+      attachTerminalShortcuts(term, getSelectionText, (text) => copyRequestRef.current?.(text));
 
       wheelController = attachTerminalWheel(term, terminalContainer, () => enhancedSessionRef.current, inputWriter.write);
       handleResize = () => {
@@ -477,6 +543,7 @@ export function useTerminalSocket({
       };
 
       window.addEventListener("resize", handleResize);
+      connectSocketRef.current(term);
     };
 
     void initTerminal();
@@ -489,10 +556,17 @@ export function useTerminalSocket({
       }
       selectionController?.dispose();
       inputWriter?.dispose();
+      outputWriter?.dispose();
+      viewport?.dispose();
+      rendered?.dispose();
+      if (outputRef.current === outputWriter) outputRef.current = null;
+      if (viewportRef.current === viewport) viewportRef.current = null;
       if (selectionControllerRef.current === selectionController) selectionControllerRef.current = null;
       clearReconnectTimer();
       socketRef.current?.close();
+      socketRef.current = null;
       term?.dispose();
+      if (terminalInstance.current === term) terminalInstance.current = null;
     };
   }, [sessionId, clearReconnectTimer, enhancedSessionRef, getSelectionText]);
 
@@ -501,6 +575,7 @@ export function useTerminalSocket({
     terminalInstance,
     fitAddon,
     connectionState,
+    hasRenderedOutput,
     reconnectCountdown,
     autoReconnect,
     setAutoReconnect,

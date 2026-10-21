@@ -5,6 +5,9 @@ import { configureTerminalRendering } from "../../src/pages/terminal/terminalRen
 import { createTerminalInputWriter } from "../../src/pages/terminal/terminalInput";
 import { SelectionTranscript } from "../../src/pages/terminal/selectionTranscript";
 import { attachTerminalWheel } from "../../src/pages/terminal/terminalWheel";
+import { createTerminalOutput } from "../../src/pages/terminal/terminalOutput";
+import { attachTerminalViewport } from "../../src/pages/terminal/terminalViewport";
+import { attachTerminalShortcuts } from "../../src/pages/terminal/terminalShortcuts";
 
 const element = (id: string) => document.getElementById(id)!;
 const parameters = new URLSearchParams(location.search);
@@ -30,6 +33,13 @@ const terminal = new Terminal({
 });
 terminal.open(element("terminal"));
 if (parameters.get("renderer") !== "dom") configureTerminalRendering(terminal);
+const viewport = attachTerminalViewport(terminal, element("terminal"));
+const output = createTerminalOutput({
+  write: (data, done) => terminal.write(data, done),
+  beforeWrite: viewport.capture, afterWrite: viewport.restore,
+  onOverflow: () => { throw new Error("Fixture output overflow"); },
+});
+const writeOutput = (data: string) => output.enqueue(data);
 const selection = attachTerminalSelection(terminal, element("terminal"), {
   onChange: (selected) => {
     element("selection").dataset.changes = String(++changes);
@@ -55,8 +65,8 @@ const render = (unrelated = false) => {
   const halfway = Math.floor(lines.length / 2);
   const first = (synchronized ? "\x1b[?2026h" : "") + "\x1b[H" + lines.slice(0, halfway).map((text) => "\x1b[2K" + text).join("\r\n") + "\r\n";
   const second = lines.slice(halfway).map((text) => "\x1b[2K" + text).join("\r\n") + (synchronized ? "\x1b[?2026l" : "");
-  terminal.write(first);
-  setTimeout(() => terminal.write(second), chunkDelay);
+  writeOutput(first);
+  setTimeout(() => writeOutput(second), chunkDelay);
 };
 const inputWriter = createTerminalInputWriter(window, (data) => {
   packets.push(data);
@@ -77,10 +87,11 @@ const inputWriter = createTerminalInputWriter(window, (data) => {
   }
 });
 terminal.onData(inputWriter.write);
+attachTerminalShortcuts(terminal, selection.getText, (text) => { element("copied").textContent = text; });
 const wheelController = attachTerminalWheel(terminal, element("terminal"), () => parameters.has("enhanced"), inputWriter.write);
 element("copy").addEventListener("click", () => { element("copied").textContent = selection.getText(); });
 element("repaint").addEventListener("click", () => render(true));
-element("dispose").addEventListener("click", () => { selection.dispose(); inputWriter.dispose(); wheelController.dispose(); });
+element("dispose").addEventListener("click", () => { selection.dispose(); inputWriter.dispose(); wheelController.dispose(); output.dispose(); viewport.dispose(); });
 if (shell) {
   terminal.write(Array.from({ length: 100 }, (_, index) => `Shell row ${String(index).padStart(3, "0")}`).join("\r\n"), () => {
     const duration = terminal.options.smoothScrollDuration;

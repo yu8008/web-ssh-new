@@ -5,6 +5,7 @@ import { FileViewer } from "../../components/FileViewer";
 import { getServerClock, type ServerClock } from "../../lib/api";
 import type { FileInfo } from "../../lib/api";
 import type { TerminalSessionState } from "./useTerminalSession";
+import { TerminalLoading } from "./TerminalLoading";
 
 function cx(...values: Array<string | false | null | undefined>): string {
   return values.filter(Boolean).join(" ");
@@ -264,12 +265,13 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
                 <div
                   ref={state.terminalRef}
                   className="h-full w-full"
-                  title={state.t("Shift + 拖动可选择文本；拖到边缘会自动滚动", "Shift + drag to select text; dragging past the edge auto-scrolls")}
+                  title={state.t("拖动选择文本，拖到边缘自动滚动；选中后按 Ctrl+C 或 Cmd+C 复制", "Drag to select; edges auto-scroll. Ctrl+C or Cmd+C copies selected text")}
                   tabIndex={-1}
                   onClick={() => state.terminalInstance.current?.focus()}
                 />
               </div>
             </div>
+            <TerminalLoading state={state} />
             <button
               type="button"
               onClick={() => setFilesOpen((open) => !open)}
