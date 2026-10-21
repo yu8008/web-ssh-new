@@ -381,6 +381,9 @@ export function useTerminalSocket({
     let term: Terminal | null = null;
     let handleTerminalWheel: ((event: WheelEvent) => void) | null = null;
     let handleTerminalMouseDown: ((event: MouseEvent) => void) | null = null;
+    let handleTerminalMouseMove: ((event: MouseEvent) => void) | null = null;
+    let selectionScrollTimer: number | null = null;
+    const shiftDragPoint = { x: 0, y: 0 };
     let handleTerminalMouseUp: ((event: MouseEvent) => void) | null = null;
     let handleResize: (() => void) | null = null;
     let selectionDisposable: { dispose: () => void } | null = null;
@@ -539,31 +542,53 @@ export function useTerminalSocket({
       };
 
       terminalContainer.addEventListener("wheel", handleTerminalWheel, { capture: true, passive: false });
+      // 应用开启鼠标上报（如 Codex）时，普通点击/拖动交给远端程序；
+      // 按住 Shift/Alt 拖动才进入本地选区，保证 TUI 里的按钮、链接可点。
       handleTerminalMouseDown = (event: MouseEvent) => {
         if (!term || term.modes.mouseTrackingMode === "none") {
           return;
         }
-        if (event.button === 0) {
+        if (event.button === 0 && (event.shiftKey || event.altKey)) {
           suppressMouseReportRef.current = true;
-          const selectionService = (term as unknown as { _core?: { _selectionService?: { enable?: () => void; handleMouseDown?: (e: MouseEvent) => void } } })._core
-            ?._selectionService;
-          if (selectionService?.enable && selectionService?.handleMouseDown) {
-            selectionService.enable();
-            selectionService.handleMouseDown(event);
-            term.focus();
-            event.stopPropagation();
+          shiftDragPoint.x = event.clientX;
+          shiftDragPoint.y = event.clientY;
+          if (selectionScrollTimer === null) {
+            selectionScrollTimer = window.setInterval(() => {
+              const host = terminalRef.current;
+              if (!host || !term || !suppressMouseReportRef.current) {
+                return;
+              }
+              const rect = host.getBoundingClientRect();
+              if (shiftDragPoint.y < rect.top + 8) {
+                term.scrollLines(-1);
+              } else if (shiftDragPoint.y > rect.bottom - 8) {
+                term.scrollLines(1);
+              }
+            }, 45);
           }
           return;
         }
         if (event.button === 2) {
           suppressMouseReportRef.current = true;
-          event.stopPropagation();
         }
       };
+      handleTerminalMouseMove = (event: MouseEvent) => {
+        if (!suppressMouseReportRef.current) {
+          return;
+        }
+        shiftDragPoint.x = event.clientX;
+        shiftDragPoint.y = event.clientY;
+      };
+      document.addEventListener("mousemove", handleTerminalMouseMove, { capture: true });
+
       handleTerminalMouseUp = (event: MouseEvent) => {
         const clientX = event.clientX;
         const clientY = event.clientY;
         // 放到下一轮事件循环：此时 xterm 才把选区状态收敛完毕。
+        if (selectionScrollTimer !== null) {
+          window.clearInterval(selectionScrollTimer);
+          selectionScrollTimer = null;
+        }
         window.setTimeout(() => {
           suppressMouseReportRef.current = false;
           const container = terminalRef.current;
@@ -607,6 +632,13 @@ export function useTerminalSocket({
       }
       if (handleTerminalMouseUp) {
         document.removeEventListener("mouseup", handleTerminalMouseUp, { capture: true });
+      }
+      if (handleTerminalMouseMove) {
+        document.removeEventListener("mousemove", handleTerminalMouseMove, { capture: true });
+      }
+      if (selectionScrollTimer !== null) {
+        window.clearInterval(selectionScrollTimer);
+        selectionScrollTimer = null;
       }
       if (handleResize) {
         window.removeEventListener("resize", handleResize);

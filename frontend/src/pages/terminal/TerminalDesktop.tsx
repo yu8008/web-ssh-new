@@ -264,6 +264,7 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
                 <div
                   ref={state.terminalRef}
                   className="h-full w-full"
+                  title={state.t("Shift + 拖动可选择文本；拖到边缘会自动滚动", "Shift + drag to select text; dragging past the edge auto-scrolls")}
                   tabIndex={-1}
                   onClick={() => state.terminalInstance.current?.focus()}
                 />
