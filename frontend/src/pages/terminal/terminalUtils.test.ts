@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   buildDefaultColorAnnouncement,
+  buildExtendedAnsiPalette,
   clampSelectionAnchor,
   createTerminalBufferSnapshot,
   resolveCopyText,
   toX11RgbColor,
+  xtermPaletteColor,
 } from "./terminalUtils";
 
 type FakeLine = {
@@ -234,6 +236,42 @@ describe("buildDefaultColorAnnouncement", () => {
 
   it("没有合法颜色时返回空串", () => {
     expect(buildDefaultColorAnnouncement({ foreground: "", background: "", cursor: "" })).toBe("");
+  });
+});
+
+describe("xtermPaletteColor", () => {
+  it("色立方两端", () => {
+    expect(xtermPaletteColor(16)).toBe("#000000");
+    expect(xtermPaletteColor(231)).toBe("#ffffff");
+  });
+
+  it("灰阶与 Codex 用到的面板色索引一致", () => {
+    expect(xtermPaletteColor(232)).toBe("#080808");
+    expect(xtermPaletteColor(235)).toBe("#262626");
+    expect(xtermPaletteColor(236)).toBe("#303030");
+    expect(xtermPaletteColor(255)).toBe("#eeeeee");
+  });
+});
+
+describe("buildExtendedAnsiPalette", () => {
+  it("默认展开为 240 项，与 xterm 默认调色板一致", () => {
+    const palette = buildExtendedAnsiPalette();
+    expect(palette).toHaveLength(240);
+    expect(palette[235 - 16]).toBe("#262626");
+    expect(palette[236 - 16]).toBe("#303030");
+  });
+
+  it("覆盖指定索引且不影响其它索引", () => {
+    const palette = buildExtendedAnsiPalette({ 235: "#1e293b", 236: "#1e293b" });
+    expect(palette[235 - 16]).toBe("#1e293b");
+    expect(palette[236 - 16]).toBe("#1e293b");
+    expect(palette[234 - 16]).toBe("#1c1c1c");
+  });
+
+  it("忽略越界索引", () => {
+    const palette = buildExtendedAnsiPalette({ 15: "#ffffff", 256: "#000000" });
+    expect(palette[0]).toBe("#000000");
+    expect(palette).toHaveLength(240);
   });
 });
 

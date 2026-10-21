@@ -43,6 +43,44 @@ export function normalizeTargetNetworkProfile(raw: string | undefined | null): T
   return "unknown";
 }
 
+const XTERM_ANSI_CUBE = [0, 95, 135, 175, 215, 255];
+
+function toHexColor(red: number, green: number, blue: number): string {
+  return `#${[red, green, blue].map((value) => value.toString(16).padStart(2, "0")).join("")}`;
+}
+
+/** 还原 xterm 默认调色板中 16~255 号索引的颜色（6x6x6 色立方 + 24 级灰阶）。 */
+export function xtermPaletteColor(index: number): string {
+  if (index >= 16 && index <= 231) {
+    const offset = index - 16;
+    return toHexColor(
+      XTERM_ANSI_CUBE[Math.floor(offset / 36)],
+      XTERM_ANSI_CUBE[Math.floor((offset % 36) / 6)],
+      XTERM_ANSI_CUBE[offset % 6]
+    );
+  }
+  const level = 8 + (index - 232) * 10;
+  return toHexColor(level, level, level);
+}
+
+/**
+ * 生成 xterm 的 extendedAnsi 调色板（对应 16~255 号索引），并按需覆盖个别索引。
+ *
+ * Codex 这类 TUI 在 256 色模式下会用索引色画面板底色（实测用到 235/236，
+ * 默认渲染成 #262626 / #303030 的中性灰），与深色主题的 slate 色系不协调。
+ * 这里把这些索引重映射到主题的深色表面色。
+ */
+export function buildExtendedAnsiPalette(overrides: Record<number, string> = {}): string[] {
+  const palette = Array.from({ length: 240 }, (_, offset) => xtermPaletteColor(offset + 16));
+  for (const [rawIndex, color] of Object.entries(overrides)) {
+    const index = Number(rawIndex);
+    if (Number.isInteger(index) && index >= 16 && index <= 255) {
+      palette[index - 16] = color;
+    }
+  }
+  return palette;
+}
+
 export const darkTerminalTheme = {
   background: "#020617",
   foreground: "#e2e8f0",
@@ -65,6 +103,12 @@ export const darkTerminalTheme = {
   brightMagenta: "#d8b4fe",
   brightCyan: "#67e8f9",
   brightWhite: "#ffffff",
+  // Codex 的面板底色走 256 色索引：235 是输入框、236 是消息块，
+  // 统一压到 slate-800，和页面边框/卡片保持同一色系。
+  extendedAnsi: buildExtendedAnsiPalette({
+    235: "#1e293b",
+    236: "#1e293b",
+  }),
 };
 
 export const lightTerminalTheme = {
