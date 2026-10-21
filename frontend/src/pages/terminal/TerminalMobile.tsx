@@ -172,12 +172,11 @@ export function TerminalMobile({ state, onBack }: TerminalMobileProps) {
       <div className="flex-1 min-h-0 pb-16">
         <div className={`${activeTab === "terminal" ? "flex" : "hidden"} h-full flex-col`}>
           <div className="flex-1 p-3 min-h-0 relative">
-            <div
-              ref={state.terminalRef}
-              className={`h-full w-full rounded-lg border ${state.isDark ? "border-slate-800" : "border-slate-300 xterm-light"} ${state.sessionInfo?.enhanced_enabled ? "xterm-tmux-enhanced" : ""}`}
-              tabIndex={-1}
-              onClick={() => state.terminalInstance.current?.focus()}
-            />
+            <div className="h-full w-full overflow-hidden rounded-lg border border-line" style={{ backgroundColor: state.isDark ? "#020617" : "#ffffff" }}>
+              <div className={`h-full w-full p-2 ${state.isDark ? "" : "xterm-light"} ${state.sessionInfo?.enhanced_enabled ? "xterm-tmux-enhanced" : ""}`}>
+                <div ref={state.terminalRef} className="h-full w-full" tabIndex={-1} onClick={() => state.terminalInstance.current?.focus()} />
+              </div>
+            </div>
             <div className="absolute right-4 bottom-4 flex flex-col gap-2">
               {state.selectionText ? (
                 <button

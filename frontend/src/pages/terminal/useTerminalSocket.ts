@@ -409,7 +409,8 @@ export function useTerminalSocket({
       term = new Terminal({
         theme: initialTheme === "light" ? lightTerminalTheme : darkTerminalTheme,
         fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-        fontSize: 14,
+        fontSize: 15,
+        lineHeight: 1.3,
         cursorBlink: true,
         scrollback: 100000,
       });

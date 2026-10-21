@@ -195,11 +195,18 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
         <div className="flex-1 flex flex-col min-w-0">
           <div className="relative min-h-0 flex-1 p-3 sm:p-4">
             <div
-              ref={state.terminalRef}
-              className={cx("h-full w-full overflow-hidden rounded-lg border border-line", !state.isDark && "xterm-light", state.sessionInfo?.enhanced_enabled && "xterm-tmux-enhanced")}
-              tabIndex={-1}
-              onClick={() => state.terminalInstance.current?.focus()}
-            />
+              className="h-full w-full overflow-hidden rounded-lg border border-line"
+              style={{ backgroundColor: state.isDark ? "#020617" : "#ffffff" }}
+            >
+              <div className={cx("h-full w-full p-3", !state.isDark && "xterm-light", state.sessionInfo?.enhanced_enabled && "xterm-tmux-enhanced")}>
+                <div
+                  ref={state.terminalRef}
+                  className="h-full w-full"
+                  tabIndex={-1}
+                  onClick={() => state.terminalInstance.current?.focus()}
+                />
+              </div>
+            </div>
             <button
               type="button"
               onClick={() => setFilesOpen((open) => !open)}
