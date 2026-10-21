@@ -293,6 +293,28 @@ export function resolveCopyText(terminalSelection: string, domSelection: string)
   return terminalSelection || domSelection || "";
 }
 
+export type TerminalSelectionAnchor = { x: number; y: number };
+
+/**
+ * 把“鼠标松开的位置”换算成终端容器内的气泡坐标，并夹紧到容器范围内。
+ * offsetY 让气泡落在指针右下方一点，避免盖住刚选中的那行文字。
+ */
+export function clampSelectionAnchor(
+  x: number,
+  y: number,
+  bounds: { width: number; height: number },
+  options: { margin?: number; offsetY?: number } = {}
+): TerminalSelectionAnchor {
+  const margin = options.margin ?? 16;
+  const offsetY = options.offsetY ?? 12;
+  const maxX = Math.max(margin, bounds.width - margin);
+  const maxY = Math.max(margin, bounds.height - margin);
+  return {
+    x: Math.min(Math.max(x, margin), maxX),
+    y: Math.min(Math.max(y + offsetY, margin), maxY),
+  };
+}
+
 export function normalizeWheelDeltaToLines(event: WheelEvent, terminalRows: number): number {
   let lineDelta = event.deltaY;
   if (event.deltaMode === 0) {

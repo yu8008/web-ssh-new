@@ -120,10 +120,10 @@ export function useTerminalSession(sessionId?: string) {
     copyTextRef.current = copyText;
   }, [copyText]);
 
-  const handleCopySelection = React.useCallback(async () => {
+  const handleCopySelection = React.useCallback(async (): Promise<boolean> => {
     const termSelection = socketState.terminalInstance.current?.getSelection() ?? "";
     const domSelection = window.getSelection()?.toString() ?? "";
-    await copyText(resolveCopyText(termSelection, domSelection));
+    return copyText(resolveCopyText(termSelection, domSelection));
   }, [copyText, socketState.terminalInstance]);
 
   const connectionLabel =
@@ -187,6 +187,7 @@ export function useTerminalSession(sessionId?: string) {
     handleCopySelection,
     copyText,
     selectionText: socketState.selectionText,
+    selectionAnchor: socketState.selectionAnchor,
     screenFrozen: socketState.screenFrozen,
     setScreenFrozen: socketState.setScreenFrozen,
     toggleScreenFrozen: socketState.toggleScreenFrozen,

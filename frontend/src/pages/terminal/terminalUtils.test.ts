@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   appendFrozenOutput,
   buildDefaultColorAnnouncement,
+  clampSelectionAnchor,
   createTerminalBufferSnapshot,
   resolveCopyText,
   toX11RgbColor,
@@ -252,6 +253,33 @@ describe("appendFrozenOutput", () => {
     const chunks: string[] = [];
     expect(appendFrozenOutput(chunks, "", 5, 100)).toEqual({ usedChars: 5, overflow: false });
     expect(chunks).toEqual([]);
+  });
+});
+
+describe("clampSelectionAnchor", () => {
+  const bounds = { width: 800, height: 400 };
+
+  it("把气泡放在指针右下方一点", () => {
+    expect(clampSelectionAnchor(300, 200, bounds)).toEqual({ x: 300, y: 212 });
+  });
+
+  it("靠近边缘时夹紧到容器内", () => {
+    expect(clampSelectionAnchor(795, 395, bounds)).toEqual({ x: 784, y: 384 });
+    expect(clampSelectionAnchor(-20, -30, bounds)).toEqual({ x: 16, y: 16 });
+  });
+
+  it("容器很小时不会把坐标夹成负数", () => {
+    expect(clampSelectionAnchor(5, 5, { width: 20, height: 20 }, { margin: 16 })).toEqual({
+      x: 16,
+      y: 16,
+    });
+  });
+
+  it("支持自定义边距与偏移", () => {
+    expect(clampSelectionAnchor(100, 100, bounds, { margin: 8, offsetY: 0 })).toEqual({
+      x: 100,
+      y: 100,
+    });
   });
 });
 

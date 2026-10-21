@@ -5,6 +5,7 @@ import { clearAuthStorage, getSession, getStoredToken, openTerminalSocket } from
 import {
   appendFrozenOutput,
   buildDefaultColorAnnouncement,
+  clampSelectionAnchor,
   darkTerminalTheme,
   lightTerminalTheme,
   normalizeWheelDeltaToLines,
@@ -49,6 +50,8 @@ export function useTerminalSocket({
   const [autoReconnect, setAutoReconnect] = React.useState(true);
   const [reconnectCountdown, setReconnectCountdown] = React.useState<number | null>(null);
   const [selectionText, setSelectionText] = React.useState("");
+  // 选区结束位置（相对终端容器），用于把“选中即复制”的气泡贴在鼠标附近。
+  const [selectionAnchor, setSelectionAnchor] = React.useState<{ x: number; y: number } | null>(null);
   // 选择模式：冻结画面刷新并屏蔽鼠标上报，让 TUI 重绘不再冲掉本地选区。
   const [screenFrozen, setScreenFrozen] = React.useState(false);
   const frozenRef = React.useRef(false);
@@ -434,6 +437,7 @@ export function useTerminalSocket({
     frozenChunksRef.current = [];
     frozenCharsRef.current = 0;
     setSelectionText("");
+    setSelectionAnchor(null);
 
     const initTerminal = async () => {
       try {
@@ -487,7 +491,11 @@ export function useTerminalSocket({
       });
 
       selectionDisposable = term.onSelectionChange(() => {
-        setSelectionText(term?.getSelection() ?? "");
+        const text = term?.getSelection() ?? "";
+        setSelectionText(text);
+        if (!text) {
+          setSelectionAnchor(null);
+        }
       });
 
       // 复制快捷键：Windows/Linux 用 Ctrl+Shift+C，macOS 用 Cmd+C。
@@ -612,12 +620,26 @@ export function useTerminalSocket({
           event.stopPropagation();
         }
       };
-      handleTerminalMouseUp = () => {
-        if (!suppressMouseReportRef.current) {
-          return;
-        }
+      handleTerminalMouseUp = (event: MouseEvent) => {
+        const clientX = event.clientX;
+        const clientY = event.clientY;
+        // 放到下一轮事件循环：此时 xterm 才把选区状态收敛完毕。
         window.setTimeout(() => {
           suppressMouseReportRef.current = false;
+          const container = terminalRef.current;
+          const current = terminalInstance.current;
+          // 点气泡/工具栏本身时不重新定位，否则气泡会跳到点击处。
+          const target = event.target as HTMLElement | null;
+          if (!container || !current || target?.closest?.("[data-wsg-overlay]") || !current.getSelection()) {
+            return;
+          }
+          const rect = container.getBoundingClientRect();
+          setSelectionAnchor(
+            clampSelectionAnchor(clientX - rect.left, clientY - rect.top, {
+              width: rect.width,
+              height: rect.height,
+            })
+          );
         }, 0);
       };
       terminalContainer.addEventListener("mousedown", handleTerminalMouseDown, { capture: true });
@@ -669,6 +691,7 @@ export function useTerminalSocket({
     handleReconnect,
     handleCancelReconnect,
     selectionText,
+    selectionAnchor,
     screenFrozen,
     setScreenFrozen: setScreenFrozenState,
     toggleScreenFrozen,

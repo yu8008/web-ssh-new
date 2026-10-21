@@ -48,16 +48,20 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
     window.requestAnimationFrame(() => terminalInstance.current?.focus());
   }, [terminalInstance]);
 
-  const { selectionText, handleCopySelection } = state;
+  const { selectionText, selectionAnchor, handleCopySelection } = state;
+  const [copyFlash, setCopyFlash] = React.useState(false);
 
-  const handleCopyClick = React.useCallback(() => {
-    if (selectionText) {
-      void handleCopySelection();
-      return;
+  React.useEffect(() => {
+    setCopyFlash(false);
+  }, [selectionText]);
+
+  const handleBubbleCopy = React.useCallback(async () => {
+    const copied = await handleCopySelection();
+    if (copied) {
+      setCopyFlash(true);
+      window.setTimeout(() => setCopyFlash(false), 1500);
     }
-    // 没有选区时直接打开快照面板：TUI 里拖动经常选不中，硬复制只会得到空内容。
-    openCopyPanel();
-  }, [selectionText, handleCopySelection, openCopyPanel]);
+  }, [handleCopySelection]);
 
   const handleMouseDown = React.useCallback((event: React.MouseEvent) => {
     event.preventDefault();
@@ -199,59 +203,62 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
                 )}
               </div>
             ) : null}
-            <div className="pointer-events-none absolute bottom-4 right-6 z-10 flex flex-col items-end gap-2">
-              {state.selectionText ? (
-                <div
-                  className={`pointer-events-auto rounded-full border px-3 py-1 text-[11px] shadow-sm ${
-                    state.isDark
-                      ? "border-slate-700 bg-slate-900/90 text-slate-300"
-                      : "border-slate-300 bg-white/95 text-slate-600"
-                  }`}
-                >
-                  {state.t(
-                    `已选 ${state.selectionText.length} 字符`,
-                    `${state.selectionText.length} chars selected`
-                  )}
-                </div>
-              ) : null}
+            {state.selectionText && selectionAnchor && !copySnapshot ? (
               <div
-                className={`pointer-events-auto flex items-center gap-1 rounded-lg border p-1 shadow-lg backdrop-blur ${
-                  state.isDark ? "border-slate-700 bg-slate-900/90" : "border-slate-300 bg-white/95"
-                }`}
+                data-wsg-overlay="true"
+                className="absolute z-20"
+                style={{
+                  left: selectionAnchor.x,
+                  top: selectionAnchor.y,
+                  transform: "translateX(-50%)",
+                }}
               >
-                <Button
-                  variant={state.selectionText ? "primary" : "ghost"}
-                  lightMode={!state.isDark}
-                  className="h-8 px-2.5 text-xs"
-                  onClick={handleCopyClick}
-                  title={state.t("复制选中文本；未选中时打开选择复制面板", "Copy selection, or open the copy panel")}
+                <button
+                  type="button"
+                  // 阻止按下时抢焦点，否则终端失焦会让选区消失。
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => void handleBubbleCopy()}
+                  className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium shadow-lg transition ${
+                    copyFlash
+                      ? "border-emerald-400 bg-emerald-500 text-white"
+                      : "border-indigo-400/60 bg-indigo-500 text-white hover:bg-indigo-400"
+                  }`}
+                  aria-label={state.t("复制选中内容", "Copy selected text")}
+                  title={state.t("复制选中内容", "Copy selected text")}
                 >
                   <Copy className="h-3.5 w-3.5" aria-hidden="true" />
-                  {state.t("复制", "Copy")}
-                </Button>
-                <Button
-                  variant="ghost"
-                  lightMode={!state.isDark}
-                  className="h-8 px-2.5 text-xs"
-                  onClick={openCopyPanel}
-                  title={state.t("从终端输出快照中选择复制", "Copy from a text snapshot of the terminal")}
-                >
-                  <ScanText className="h-3.5 w-3.5" aria-hidden="true" />
-                  {state.t("选择复制", "Select")}
-                </Button>
-                <Button
-                  variant={state.screenFrozen ? "primary" : "ghost"}
-                  lightMode={!state.isDark}
-                  className="h-8 px-2.5 text-xs"
-                  onClick={state.toggleScreenFrozen}
-                  title={state.t(
-                    "冻结画面并接管鼠标，TUI 重绘时也能稳定选中文本",
-                    "Freeze the screen and take over the mouse so TUI redraws cannot clear the selection"
-                  )}
-                >
-                  {state.screenFrozen ? state.t("恢复刷新", "Resume") : state.t("选择模式", "Freeze")}
-                </Button>
+                  {copyFlash ? state.t("已复制", "Copied") : state.t("复制", "Copy")}
+                </button>
               </div>
+            ) : null}
+            <div
+              data-wsg-overlay="true"
+              className={`pointer-events-auto absolute bottom-4 right-6 z-10 flex items-center gap-1 rounded-lg border p-1 opacity-60 shadow-lg backdrop-blur transition-opacity hover:opacity-100 ${
+                state.isDark ? "border-slate-700 bg-slate-900/90" : "border-slate-300 bg-white/95"
+              }`}
+            >
+              <Button
+                variant="ghost"
+                lightMode={!state.isDark}
+                className="h-8 px-2.5 text-xs"
+                onClick={openCopyPanel}
+                title={state.t("从终端输出快照中选择复制", "Copy from a text snapshot of the terminal")}
+              >
+                <ScanText className="h-3.5 w-3.5" aria-hidden="true" />
+                {state.t("选择复制", "Select")}
+              </Button>
+              <Button
+                variant={state.screenFrozen ? "primary" : "ghost"}
+                lightMode={!state.isDark}
+                className="h-8 px-2.5 text-xs"
+                onClick={state.toggleScreenFrozen}
+                title={state.t(
+                  "冻结画面并接管鼠标，TUI 重绘时也能稳定选中文本",
+                  "Freeze the screen and take over the mouse so TUI redraws cannot clear the selection"
+                )}
+              >
+                {state.screenFrozen ? state.t("恢复刷新", "Resume") : state.t("选择模式", "Freeze")}
+              </Button>
             </div>
             {copySnapshot ? (
               <TerminalCopyPanel
