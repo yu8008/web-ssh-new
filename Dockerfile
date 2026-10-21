@@ -1,4 +1,8 @@
-FROM --platform=$BUILDPLATFORM node:20-slim AS frontend-build
+# 基础镜像地址可通过 --build-arg 覆盖，便于使用内网镜像站
+ARG NODE_IMAGE=node:20-slim
+ARG PYTHON_IMAGE=python:3.11-slim
+
+FROM --platform=$BUILDPLATFORM ${NODE_IMAGE} AS frontend-build
 WORKDIR /frontend
 COPY frontend/package.json frontend/package-lock.json* ./
 RUN npm install --legacy-peer-deps && chmod -R +x node_modules/.bin/
@@ -6,7 +10,7 @@ COPY frontend ./
 RUN mkdir -p /backend/frontend
 RUN node node_modules/vite/bin/vite.js build
 
-FROM python:3.11-slim
+FROM ${PYTHON_IMAGE}
 RUN useradd -m appuser
 WORKDIR /app
 

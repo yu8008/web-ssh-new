@@ -152,3 +152,40 @@ docker run --rm \
 - SSH 连接失败：确认目标主机可达、账号凭据正确、主机 key 策略配置正确。
 - 前端请求 401：检查 token 是否过期，或 `VITE_API_BASE` 是否指向正确后端。
 - 排查服务问题：登录后可在会话管理页点击“系统设置”右侧的“日志”，或直接访问 `/logs` 查看当前后端进程最近运行日志。该日志来自进程内存缓冲区，服务重启后会重新开始记录，不等同于宿主机或 Docker 的完整历史日志。
+
+
+### 构建时拉不到基础镜像（registry-1.docker.io 超时 / no route to host）
+
+国内服务器经常无法直连 Docker Hub，报错形如：
+
+```text
+failed to resolve source metadata for docker.io/library/node:20-slim:
+dial tcp 108.160.169.54:443: connect: no route to host
+```
+
+这不是仓库代码问题，而是构建机连不上 `registry-1.docker.io`（域名还可能被解析到污染地址）。三种处理方式：
+
+1. 给 Docker 配置镜像加速（推荐，全局生效）：
+
+   ```bash
+   sudo mkdir -p /etc/docker
+   sudo tee /etc/docker/daemon.json >/dev/null <<'JSON'
+   {
+     "registry-mirrors": ["https://docker.m.daocloud.io", "https://docker.1ms.run"]
+   }
+   JSON
+   sudo systemctl daemon-reload && sudo systemctl restart docker
+   ```
+
+   镜像站地址会失效，用前先测：`curl -sS -o /dev/null -w '%{http_code}\n' https://docker.m.daocloud.io/v2/`，返回 200 或 401 才算可用。
+
+2. 只替换本次构建的基础镜像（不改 Dockerfile）：
+
+   ```bash
+   docker build \
+     --build-arg NODE_IMAGE=docker.m.daocloud.io/library/node:20-slim \
+     --build-arg PYTHON_IMAGE=docker.m.daocloud.io/library/python:3.11-slim \
+     -t webssh-gateway:community .
+   ```
+
+3. 构建机完全无外网时：在能联网的机器上 `docker pull` 两个基础镜像，`docker save` 后拷到服务器 `docker load`，再执行构建。
