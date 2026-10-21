@@ -91,6 +91,10 @@ class SessionCreateRequest(BaseModel):
     enable_enhanced_persistence: bool = False
 
 
+class SessionTitleUpdateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=64)
+
+
 class SessionResponse(BaseModel):
     id: str
     connection_id: int

@@ -21,6 +21,7 @@ from app.schemas.api import (
     SessionOrderUpdateRequest,
     SessionNoteUpdateRequest,
     SessionResponse,
+    SessionTitleUpdateRequest,
     SessionStatusResponse,
     TerminalMessage,
 )
@@ -164,7 +165,7 @@ def _build_session_response(
         last_activity=record.last_activity,
         host=conn.host,
         username=conn.username,
-        name=conn.name,
+        name=record.title or conn.name,
         note=record.note,
         session_order=record.session_order or 0,
         enhanced_enabled=bool(record.enhanced_enabled),
@@ -587,6 +588,38 @@ async def update_session_note(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
 
     record.note = payload.note
+    record.last_activity = utc_now()
+
+    conn = db.execute(select(Connection).where(Connection.id == record.connection_id)).scalar_one_or_none()
+    if not conn:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Connection not found")
+
+    managed_session = state.session_manager.get_session(record.id)
+    response = _build_session_response(record, conn, managed_session)
+    broadcaster: SessionBroadcaster = state.session_broadcaster
+    await broadcaster.broadcast(user.id, response.model_dump_json())
+    return response
+
+
+@router.patch("/{session_id}/title", response_model=SessionResponse)
+async def update_session_title(
+    session_id: str,
+    payload: SessionTitleUpdateRequest,
+    state: AppState = Depends(get_state),
+    user=Depends(get_current_user),
+    db=Depends(get_db),
+) -> SessionResponse:
+    record = db.execute(
+        select(SessionRecord).where(SessionRecord.id == session_id, SessionRecord.user_id == user.id)
+    ).scalar_one_or_none()
+    if not record:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+
+    title = payload.name.strip()
+    if not title:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Title cannot be empty")
+
+    record.title = title
     record.last_activity = utc_now()
 
     conn = db.execute(select(Connection).where(Connection.id == record.connection_id)).scalar_one_or_none()

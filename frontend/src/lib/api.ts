@@ -392,6 +392,19 @@ export async function disconnectSession(sessionId: string): Promise<void> {
   }
 }
 
+export async function renameSession(sessionId: string, name: string): Promise<Session> {
+  const response = await fetch(`${HTTP_BASE}/sessions/${sessionId}/title`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...getAuthHeader() },
+    body: JSON.stringify({ name })
+  });
+  if (!response.ok) {
+    const detail = await safeError(response, "保存标题失败");
+    throw new Error(detail);
+  }
+  return response.json();
+}
+
 export async function updateSessionNote(sessionId: string, note: string | null): Promise<Session> {
   const response = await fetch(`${HTTP_BASE}/sessions/${sessionId}/note`, {
     method: "PATCH",

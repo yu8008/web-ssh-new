@@ -15,6 +15,7 @@ import {
   retrySession,
   updateConnection,
   updateSessionNote,
+  renameSession,
   verifyConnection,
 } from "../../lib/api";
 import {
@@ -530,6 +531,20 @@ export function useSessionsState() {
     setNoteDrafts((prev) => ({ ...prev, [sessionId]: value }));
   };
 
+  const handleRenameSession = async (session: Session, nextName: string) => {
+    const trimmed = nextName.trim();
+    if (!trimmed || trimmed === session.name) {
+      return;
+    }
+    try {
+      const response = await renameSession(session.id, trimmed);
+      setSessions((prev) => prev.map((item) => (item.id === response.id ? { ...item, ...response } : item)));
+      push(t("标题已更新", "Title updated"));
+    } catch (error) {
+      push(error instanceof Error ? error.message : t("保存失败", "Save failed"));
+    }
+  };
+
   const handleSaveNote = async (session: Session) => {
     try {
       const note = (noteDrafts[session.id] ?? "").trim();
@@ -575,6 +590,7 @@ export function useSessionsState() {
     sessionStatusEntries,
     enhancedRetryMaxAttempts,
     handleNoteChange,
+    handleRenameSession,
     handleSaveNote,
     deleteConfirm,
     setDeleteConfirm,

@@ -574,6 +574,23 @@ function SessionRow({
 }) {
   const active = session.status === "active";
   const retrying = Boolean(state.retryingSessionIds[session.id]) || state.isSystemRetrying(session);
+  const [renaming, setRenaming] = React.useState(false);
+  const [draftName, setDraftName] = React.useState(session.name);
+
+  React.useEffect(() => {
+    if (!renaming) {
+      setDraftName(session.name);
+    }
+  }, [session.name, renaming]);
+
+  const commitRename = () => {
+    setRenaming(false);
+    const next = draftName.trim();
+    if (next && next !== session.name) {
+      void state.handleRenameSession(session, next);
+    }
+  };
+
   const noteValue = state.noteDrafts[session.id] ?? "";
   const noteDirty = noteValue.trim() !== (session.note ?? "");
   const scope = state.filteredSessions;
@@ -595,8 +612,47 @@ function SessionRow({
       >
         <StatusDot tone={active ? "ok" : retrying ? "warn" : "muted"} pulse={active || retrying} />
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="truncate text-sm font-medium">{session.name}</span>
+          <div className="flex items-center gap-1.5">
+            {renaming ? (
+              <input
+                autoFocus
+                value={draftName}
+                maxLength={64}
+                onChange={(event) => setDraftName(event.target.value)}
+                onClick={(event) => event.stopPropagation()}
+                onKeyDown={(event) => {
+                  event.stopPropagation();
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    commitRename();
+                  } else if (event.key === "Escape") {
+                    event.preventDefault();
+                    setRenaming(false);
+                    setDraftName(session.name);
+                  }
+                }}
+                onBlur={commitRename}
+                aria-label={state.t("会话标题", "Session title")}
+                className="h-6 w-44 rounded border border-brand/50 bg-canvas px-1.5 text-sm font-medium text-ink outline-none focus:ring-2 focus:ring-brand/25"
+              />
+            ) : (
+              <>
+                <span className="truncate text-sm font-medium">{session.name}</span>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setDraftName(session.name);
+                    setRenaming(true);
+                  }}
+                  aria-label={state.t("重命名会话", "Rename session")}
+                  title={state.t("重命名会话", "Rename session")}
+                  className="grid h-5 w-5 shrink-0 place-items-center rounded text-muted opacity-0 transition hover:bg-elevated hover:text-ink focus-visible:opacity-100 group-hover:opacity-100"
+                >
+                  <Pencil className="h-3 w-3" />
+                </button>
+              </>
+            )}
             {session.enhanced_enabled ? (
               <span className="rounded border border-brand/25 bg-brand/8 px-1.5 py-px text-[10px] font-medium text-brand">
                 {state.t("持久", "Persistent")}

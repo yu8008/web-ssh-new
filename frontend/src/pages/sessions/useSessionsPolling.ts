@@ -109,6 +109,9 @@ export function useSessionsPolling({
     };
     let warned = false;
     socket.onerror = () => {
+      if (intentionalClose) {
+        return;
+      }
       if (!warned) {
         push(t("会话状态连接失败", "Session status connection failed"));
         warned = true;
@@ -116,6 +119,9 @@ export function useSessionsPolling({
       reportNetworkHint("degraded", 15000);
     };
     socket.onclose = (event) => {
+      if (intentionalClose) {
+        return;
+      }
       if (!event.wasClean && !warned) {
         push(t("会话状态连接已断开", "Session status connection closed"));
         warned = true;

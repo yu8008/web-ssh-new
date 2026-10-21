@@ -48,6 +48,18 @@ def ensure_session_note_column(database: Database) -> None:
         connection.execute(text("ALTER TABLE sessions ADD COLUMN note TEXT"))
 
 
+def ensure_session_title_column(database: Database) -> None:
+    inspector = inspect(database._engine)
+    if "sessions" not in inspector.get_table_names():
+        return
+    columns = {column["name"] for column in inspector.get_columns("sessions")}
+    if "title" in columns:
+        return
+
+    with database._engine.begin() as connection:
+        connection.execute(text("ALTER TABLE sessions ADD COLUMN title VARCHAR(64)"))
+
+
 def ensure_connection_arch_columns(database: Database) -> None:
     inspector = inspect(database._engine)
     if "connections" not in inspector.get_table_names():
