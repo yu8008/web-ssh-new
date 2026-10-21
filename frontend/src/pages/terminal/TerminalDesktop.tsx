@@ -26,8 +26,9 @@ function TerminalPanelFallback({ isDark }: { isDark: boolean }) {
 export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
   const { syncTerminalSize, terminalInstance } = state;
   const [sidebarWidth, setSidebarWidth] = React.useState(() => {
-    const saved = localStorage.getItem("terminal-sidebar-width");
-    return saved ? Number(saved) : 256;
+    const saved = Number(localStorage.getItem("terminal-sidebar-width"));
+    // 侧边栏现在同时承载系统状态和文件管理，太窄会挤成一团。
+    return Number.isFinite(saved) && saved > 0 ? Math.max(320, saved) : 380;
   });
   const [isDragging, setIsDragging] = React.useState(false);
   const containerRef = React.useRef<HTMLDivElement | null>(null);
@@ -60,7 +61,7 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
       const containerRect = containerRef.current.getBoundingClientRect();
       const newWidth = containerRect.right - event.clientX;
       const maxWidth = containerRect.width * 0.7;
-      const clampedWidth = Math.max(50, Math.min(maxWidth, newWidth));
+      const clampedWidth = Math.max(320, Math.min(maxWidth, newWidth));
       setSidebarWidth(clampedWidth);
     };
 
@@ -166,7 +167,7 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
       </div>
       <div ref={containerRef} className="flex flex-1 overflow-hidden">
         <div className="flex-1 flex flex-col min-w-0">
-          <div className="relative flex-1 p-4 pb-2 min-h-0">
+          <div className="relative flex-1 p-4 min-h-0">
             <div
               ref={state.terminalRef}
               className={`h-full w-full rounded-lg border ${state.isDark ? "border-slate-800" : "border-slate-300 xterm-light"} ${state.sessionInfo?.enhanced_enabled ? "xterm-tmux-enhanced" : ""}`}
@@ -202,7 +203,32 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
               </div>
             ) : null}
           </div>
-          <div className={`p-4 pt-2 ${state.isDark ? "border-t border-slate-800" : "border-t border-slate-200"}`} style={{ height: "280px" }}>
+        </div>
+        <div
+          onMouseDown={handleMouseDown}
+          className={`w-1 cursor-col-resize transition-colors hidden md:block ${
+            isDragging
+              ? (state.isDark ? "bg-indigo-500" : "bg-indigo-400")
+              : (state.isDark ? "bg-slate-800 hover:bg-slate-700" : "bg-slate-200 hover:bg-slate-300")
+          }`}
+        />
+        <div
+          style={{ width: sidebarWidth }}
+          className={`hidden min-h-0 flex-shrink-0 flex-col gap-3 overflow-hidden p-3 md:flex ${state.isDark ? "bg-slate-900/50 dark-scrollbar" : "bg-white border-l border-slate-200 light-scrollbar"}`}
+        >
+          <div className="max-h-[42%] shrink-0 overflow-y-auto pr-1">
+            {state.sessionId ? (
+              <React.Suspense fallback={<TerminalPanelFallback isDark={state.isDark} />}>
+                <SystemMonitor
+                  sessionId={state.sessionId}
+                  isDark={state.isDark}
+                  selectedFilePath={state.selectedFilePath || undefined}
+                  networkProfile={state.sessionNetworkProfile}
+                />
+              </React.Suspense>
+            ) : null}
+          </div>
+          <div className={`flex min-h-0 flex-1 flex-col rounded-lg border p-3 ${state.isDark ? "border-slate-800 bg-slate-950/40" : "border-slate-200 bg-white"}`}>
             {state.sessionId ? (
               <React.Suspense fallback={<TerminalPanelFallback isDark={state.isDark} />}>
                 <FileBrowser
@@ -211,33 +237,11 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
                   currentDir={state.currentDir}
                   onFileSelect={state.setSelectedFilePath}
                   networkProfile={state.sessionNetworkProfile}
+                  compact
                 />
               </React.Suspense>
             ) : null}
           </div>
-        </div>
-        <div
-          onMouseDown={handleMouseDown}
-          className={`w-1 cursor-col-resize transition-colors hidden lg:block ${
-            isDragging
-              ? (state.isDark ? "bg-indigo-500" : "bg-indigo-400")
-              : (state.isDark ? "bg-slate-800 hover:bg-slate-700" : "bg-slate-200 hover:bg-slate-300")
-          }`}
-        />
-        <div
-          style={{ width: sidebarWidth }}
-          className={`p-4 hidden lg:block flex-shrink-0 overflow-y-auto ${state.isDark ? "bg-slate-900/50 dark-scrollbar" : "bg-white border-l border-slate-200 light-scrollbar"}`}
-        >
-          {state.sessionId ? (
-            <React.Suspense fallback={<TerminalPanelFallback isDark={state.isDark} />}>
-              <SystemMonitor
-                sessionId={state.sessionId}
-                isDark={state.isDark}
-                selectedFilePath={state.selectedFilePath || undefined}
-                networkProfile={state.sessionNetworkProfile}
-              />
-            </React.Suspense>
-          ) : null}
         </div>
       </div>
       {isDragging ? <div className="fixed inset-0 z-50 cursor-col-resize" /> : null}
