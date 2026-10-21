@@ -140,3 +140,4 @@ class TerminalMessage(BaseModel):
     data: Optional[str] = None
     rows: Optional[int] = None
     cols: Optional[int] = None
+    ping_id: Optional[int] = Field(default=None, ge=0, le=2147483647)

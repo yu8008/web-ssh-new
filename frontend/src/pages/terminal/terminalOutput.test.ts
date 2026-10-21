@@ -108,6 +108,7 @@ describe("terminal output scheduling", () => {
 });
 
 it("validates framed output without confusing malformed data with control frames", () => {
+  expect(decodeTerminalOutput('{"type":"pong","ping_id":7}')).toEqual({ type: "pong", ping_id: 7 });
   expect(decodeTerminalOutput('{"type":"output","seq":1,"data":"中文"}')).toEqual({ type: "output", seq: 1, data: "中文" });
   for (const data of ["hello", "null", '{"type":"output","seq":-1,"data":"x"}', '{"type":"replay_end","seq":"1"}']) expect(decodeTerminalOutput(data)).toBeNull();
 });

@@ -185,6 +185,7 @@ export function useTerminalSession(sessionId?: string) {
     handleCancelReconnect: socketState.handleCancelReconnect,
     sessionInfo: sessionInfoState.sessionInfo,
     browserLatencyMs: networkLatency,
+    terminalLatencyMs: socketState.terminalLatencyMs,
     targetLatencyMs: sessionInfoState.targetLatencyMs,
     latencyBarHeights: sessionInfoState.latencyBarHeights,
     latencyHistoryMaxMs: sessionInfoState.latencyHistoryMaxMs,

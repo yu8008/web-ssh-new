@@ -109,6 +109,7 @@ export function createTerminalOutput({
 }
 
 export type TerminalOutputFrame =
+  | { type: "pong"; ping_id: number }
   | { type: "replay_start" }
   | { type: "replay_end"; seq: number }
   | { type: "output"; seq: number; data: string };
@@ -117,6 +118,9 @@ export function decodeTerminalOutput(data: string): TerminalOutputFrame | null {
   try {
     const frame = JSON.parse(data);
     if (frame?.type === "replay_start") return { type: "replay_start" };
+    if (frame?.type === "pong" && Number.isSafeInteger(frame.ping_id) && frame.ping_id >= 0) {
+      return { type: "pong", ping_id: frame.ping_id };
+    }
     if (!Number.isSafeInteger(frame?.seq) || frame.seq < 0) return null;
     if (frame.type === "replay_end") return { type: "replay_end", seq: frame.seq };
     if (frame.type === "output" && typeof frame.data === "string") return frame;

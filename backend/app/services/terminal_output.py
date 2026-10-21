@@ -25,6 +25,7 @@ class TerminalOutputSubscription:
         self.accepting = True
         self.close_code = 1000
         self.replayed_at: float | None = None
+        self.pending_pong: int | None = None
         self.replay(owner.buffer)
         self.task = asyncio.create_task(self._run())
 
@@ -53,11 +54,19 @@ class TerminalOutputSubscription:
         self.queue.append(output)
         self.wake.set()
 
+    def pong(self, ping_id: int) -> None:
+        # Keep one control response, owned by the same writer as output. A slow
+        # viewer must not build an unbounded queue of latency probes.
+        if self.accepting and self.framed:
+            self.pending_pong = ping_id
+            self.wake.set()
+
     def _overflow(self) -> None:
         self.close_code = 1013
         self.accepting = False
         self.queue.clear()
         self.queued_bytes = 0
+        self.pending_pong = None
         self.wake.set()
 
     def finish(self) -> None:
@@ -74,16 +83,20 @@ class TerminalOutputSubscription:
 
     async def _run(self) -> None:
         try:
-            while self.queue or self.accepting:
-                if not self.queue:
+            while self.queue or self.pending_pong is not None or self.accepting:
+                if not self.queue and self.pending_pong is None:
                     self.wake.clear()
                     await self.wake.wait()
-                    if not self.queue:
+                    if not self.queue and self.pending_pong is None:
                         continue
                     # Give ready SSH callbacks a turn to coalesce a live burst.
                     # The default yields without a fixed delay on each echo.
-                    if self.replayed_at is not None:
+                    if self.replayed_at is not None and self.pending_pong is None:
                         await asyncio.sleep(self.owner.batch_delay)
+                if self.pending_pong is not None:
+                    ping_id, self.pending_pong = self.pending_pong, None
+                    await self._send(json.dumps({"type": "pong", "ping_id": ping_id}))
+                    continue
                 item = self.queue.popleft()
                 if isinstance(item, dict):
                     if self.framed:
@@ -118,6 +131,7 @@ class TerminalOutputSubscription:
             self.accepting = False
             self.queue.clear()
             self.queued_bytes = 0
+            self.pending_pong = None
             self.owner.detach(self)
             try:
                 await asyncio.wait_for(self.websocket.close(code=self.close_code), timeout=1)

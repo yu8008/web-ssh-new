@@ -260,6 +260,8 @@ def test_terminal_endpoint_negotiates_output_and_keeps_user_input(monkeypatch, f
                 self.reads += 1
                 await asyncio.sleep(0.01)
                 if self.reads == 1:
+                    return json.dumps({"type": "ping", "ping_id": 7})
+                if self.reads == 2:
                     return json.dumps({"type": "input", "data": "\x1b[?1;2cuser"})
                 raise WebSocketDisconnect()
 
@@ -271,9 +273,33 @@ def test_terminal_endpoint_negotiates_output_and_keeps_user_input(monkeypatch, f
         assert not output.subscriptions and not output.websockets
         if framed:
             frames = [json.loads(message) for message in viewer.messages]
-            assert [frame["type"] for frame in frames] == ["replay_start", "output", "replay_end"]
+            assert [frame["type"] for frame in frames if frame["type"] != "pong"] == ["replay_start", "output", "replay_end"]
+            assert [frame for frame in frames if frame["type"] == "pong"] == [{"type": "pong", "ping_id": 7}]
         else:
             assert viewer.messages == ["prompt 中文"]
+    asyncio.run(scenario())
+
+
+def test_latency_pongs_are_bounded_and_share_the_output_writer() -> None:
+    async def scenario() -> None:
+        output = TerminalOutput(SessionBuffer(), set())
+        viewer = Viewer(block=True)
+        subscription = output.subscribe(viewer, framed=True)
+        await until(lambda: viewer.sending == 1)
+        output.publish("before")
+        for ping_id in range(1000):
+            subscription.pong(ping_id)
+        output.publish("after")
+        assert subscription.pending_pong == 999
+        assert len(subscription.queue) == 3  # Replay end and two output chunks.
+        viewer.gate.set()
+        await until(lambda: subscription.pending_pong is None and not subscription.queue)
+        await output.close()
+        frames = [json.loads(message) for message in viewer.messages]
+        assert [frame for frame in frames if frame["type"] == "pong"] == [{"type": "pong", "ping_id": 999}]
+        assert "".join(frame["data"] for frame in frames if frame["type"] == "output") == "beforeafter"
+        assert viewer.max_sending == 1
+
     asyncio.run(scenario())
 
 

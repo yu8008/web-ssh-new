@@ -124,7 +124,14 @@ export function TerminalMobile({ state, onBack }: TerminalMobileProps) {
             {state.reconnectCountdown !== null ? state.t(`重连中 (${state.reconnectCountdown}s)`, `Reconnecting (${state.reconnectCountdown}s)`) : state.connectionLabel}
           </span>
           <span className={`${state.networkProfileTone}`}>{state.networkProfileLabel}</span>
-          {state.browserLatencyMs !== null ? (
+          {state.terminalLatencyMs !== null ? (
+            <span className={state.isDark ? "text-slate-500" : "text-slate-400"} title={state.t(
+              `终端长连接往返时间，包含浏览器和网关调度，不包含 SSH 和画面渲染；HTTP 健康检查：${state.browserLatencyMs ?? "—"}ms`,
+              `Terminal connection round trip, including browser/gateway scheduling, excluding SSH and rendering; HTTP health check: ${state.browserLatencyMs ?? "—"}ms`,
+            )}>
+              {state.t("终端", "Terminal")} {state.terminalLatencyMs}ms
+            </span>
+          ) : state.browserLatencyMs !== null ? (
             <span className={state.isDark ? "text-slate-500" : "text-slate-400"} title={state.t("浏览器到网关的 HTTP 往返时间，包含请求处理耗时", "Browser-to-gateway HTTP round trip, including request processing")}>
               {state.t("网页", "Web")} {state.browserLatencyMs}ms
             </span>

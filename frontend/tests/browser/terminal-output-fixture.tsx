@@ -27,7 +27,15 @@ class FixtureSocket extends EventTarget {
     sockets.push(this);
     queueMicrotask(() => { this.readyState = 1; this.onopen?.(); });
   }
-  send(data: string) { this.inputs.push(data); }
+  send(data: string) {
+    this.inputs.push(data);
+    const frame = JSON.parse(data);
+    if (frame.type === "ping" && !parameters.has("noPong")) {
+      setTimeout(() => {
+        if (this.readyState === 1) this.receive(JSON.stringify({ type: "pong", ping_id: frame.ping_id }));
+      }, Number(parameters.get("pingDelay") || "0"));
+    }
+  }
   close(code = 1000) {
     this.readyState = 3;
     queueMicrotask(() => this.onclose?.({ code, wasClean: true }));
@@ -76,6 +84,7 @@ export function Harness() {
   }, [state]);
   return <>
     <div id="connection">{state.connectionState}</div>
+    <div id="latency">{state.terminalLatencyMs ?? "unknown"}</div>
     <div id="painted">{String(state.hasRenderedOutput)}</div>
     <div style={{ position: "relative", height: "65vh", minHeight: 200, padding: 12 }}>
       <div ref={state.terminalRef} style={{ height: "100%", width: "100%" }} />

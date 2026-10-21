@@ -207,7 +207,14 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
           <span className="font-mono">{state.sessionInfo ? new Date(state.sessionInfo.started_at).toLocaleString() : ""}</span>
           <span aria-hidden="true">·</span>
           <span>{state.networkProfileLabel}</span>
-          {state.browserLatencyMs !== null ? (
+          {state.terminalLatencyMs !== null ? (
+            <span className="font-mono" title={state.t(
+              `终端长连接往返时间，包含浏览器和网关调度，不包含 SSH 和画面渲染；HTTP 健康检查：${state.browserLatencyMs ?? "—"}ms`,
+              `Terminal connection round trip, including browser/gateway scheduling, excluding SSH and rendering; HTTP health check: ${state.browserLatencyMs ?? "—"}ms`,
+            )}>
+              {state.t("终端", "Terminal")} {state.terminalLatencyMs}ms
+            </span>
+          ) : state.browserLatencyMs !== null ? (
             <span className="font-mono" title={state.t("浏览器到网关的 HTTP 往返时间，包含请求处理耗时", "Browser-to-gateway HTTP round trip, including request processing")}>
               {state.t("网页", "Web")} {state.browserLatencyMs}ms
             </span>

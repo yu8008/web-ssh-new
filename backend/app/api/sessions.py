@@ -741,6 +741,9 @@ async def terminal_socket(
             while True:
                 message = await websocket.receive_text()
                 payload = TerminalMessage.model_validate_json(message)
+                if payload.type == "ping" and payload.ping_id is not None:
+                    subscription.pong(payload.ping_id)
+                    continue
                 active_session = session_manager.get_session(session_id)
                 if not active_session or active_session.status != "active" or not active_session.channel:
                     subscription.close_code = 1008

@@ -4,6 +4,7 @@ import { FitAddon } from "xterm-addon-fit";
 import { clearAuthStorage, getSession, getStoredToken, openTerminalSocket } from "../../lib/api";
 import { attachTerminalSelection } from "./terminalSelection";
 import { createTerminalInputWriter } from "./terminalInput";
+import { createTerminalLatencyProbe } from "./terminalLatency";
 import { configureTerminalRendering } from "./terminalRendering";
 import { disposeTerminal } from "./terminalLifecycle";
 import { attachTerminalWheel } from "./terminalWheel";
@@ -54,6 +55,8 @@ export function useTerminalSocket({
   const selectionControllerRef = React.useRef<ReturnType<typeof attachTerminalSelection> | null>(null);
   const outputRef = React.useRef<ReturnType<typeof createTerminalOutput> | null>(null);
   const viewportRef = React.useRef<ReturnType<typeof attachTerminalViewport> | null>(null);
+  const latencyProbeRef = React.useRef<ReturnType<typeof createTerminalLatencyProbe> | null>(null);
+  const [terminalLatencyMs, setTerminalLatencyMs] = React.useState<number | null>(null);
   const replayingRef = React.useRef(false);
   const remotePaintRef = React.useRef(false);
   const paintedRef = React.useRef(false);
@@ -191,6 +194,14 @@ export function useTerminalSocket({
 
       const socket = openTerminalSocket(sessionId);
       socketRef.current = socket;
+      latencyProbeRef.current?.dispose();
+      latencyProbeRef.current = null;
+      setTerminalLatencyMs(null);
+      let latencyProbe: ReturnType<typeof createTerminalLatencyProbe> | undefined;
+      const stopLatencyProbe = () => {
+        latencyProbe?.dispose();
+        if (latencyProbeRef.current === latencyProbe) latencyProbeRef.current = null;
+      };
       let sanitizePendingSuffix = "";
       let lastQueuedSeq = 0;
       const resetReplay = () => {
@@ -213,6 +224,7 @@ export function useTerminalSocket({
         let data = String(event.data ?? "");
         if (socket.protocol === TERMINAL_OUTPUT_PROTOCOL) {
           const frame = decodeTerminalOutput(data);
+          if (frame?.type === "pong") { latencyProbe?.pong(frame.ping_id); return; }
           if (frame?.type === "replay_start") { resetReplay(); return; }
           if (frame?.type === "replay_end") {
             outputWriter.enqueue("", () => { replayingRef.current = false; });
@@ -253,6 +265,14 @@ export function useTerminalSocket({
           replayingRef.current = false;
         }
         clearNetworkHint();
+        if (socket.protocol === TERMINAL_OUTPUT_PROTOCOL) {
+          latencyProbe = createTerminalLatencyProbe(window,
+            (pingId) => socket.send(JSON.stringify({ type: "ping", ping_id: pingId })),
+            (milliseconds) => {
+              if (socketRef.current === socket) setTerminalLatencyMs(milliseconds);
+            });
+          latencyProbeRef.current = latencyProbe;
+        }
         syncTerminalSize(term, { force: true });
         sendThemeAnnouncement();
         [300, 1200].forEach((delay) => {
@@ -270,18 +290,22 @@ export function useTerminalSocket({
       };
 
       socket.onerror = () => {
+        stopLatencyProbe();
         if (socketRef.current !== socket) {
           return;
         }
         setConnectionState("closed");
+        setTerminalLatencyMs(null);
         reportNetworkHint("poor", 15000);
       };
 
       socket.onclose = (event) => {
+        stopLatencyProbe();
         if (socketRef.current !== socket) {
           return;
         }
         setConnectionState("closed");
+        setTerminalLatencyMs(null);
         if (!event.wasClean) {
           reportNetworkHint("poor", 25000);
         }
@@ -566,6 +590,8 @@ export function useTerminalSocket({
       if (viewportRef.current === viewport) viewportRef.current = null;
       if (selectionControllerRef.current === selectionController) selectionControllerRef.current = null;
       clearReconnectTimer();
+      latencyProbeRef.current?.dispose();
+      latencyProbeRef.current = null;
       socketRef.current?.close();
       socketRef.current = null;
       if (term) disposeTerminal(term, rendering);
@@ -578,6 +604,7 @@ export function useTerminalSocket({
     terminalInstance,
     fitAddon,
     connectionState,
+    terminalLatencyMs,
     hasRenderedOutput,
     reconnectCountdown,
     autoReconnect,

@@ -6,6 +6,23 @@ async function open(page: import("@playwright/test").Page, suffix = "") {
   await expect(page.locator("#connection")).toHaveText("open");
 }
 
+test("terminal pongs measure the existing socket without becoming shell output", async ({ page }) => {
+  await open(page, "?pingDelay=75");
+  await expect.poll(async () => Number(await page.locator("#latency").textContent())).toBeGreaterThanOrEqual(75);
+  expect(await page.evaluate(() => window.pipeline.screen())).not.toContain("pong");
+  expect(await page.evaluate(() => window.pipeline.inputs().filter((input) => input.type === "input"))).toEqual([]);
+  await page.locator("#reconnect").click();
+  await expect.poll(() => page.evaluate(() => window.pipeline.count())).toBe(2);
+  await expect.poll(async () => Number(await page.locator("#latency").textContent())).toBeGreaterThanOrEqual(75);
+});
+
+test("servers without pong support keep the terminal usable", async ({ page }) => {
+  await open(page, "?noPong");
+  await expect(page.locator("#latency")).toHaveText("unknown");
+  await page.evaluate(() => window.pipeline.frame({ type: "output", seq: 1, data: "Ready" }));
+  await expect.poll(() => page.evaluate(() => window.pipeline.screen())).toContain("Ready");
+});
+
 test("packet completion callbacks do not serialize a burst into hundreds of parser tasks", async ({ page }) => {
   await open(page);
   const writesBefore = await page.evaluate(() => window.pipeline.writes());
