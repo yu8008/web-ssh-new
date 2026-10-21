@@ -267,27 +267,6 @@ export function buildDefaultColorAnnouncement(theme: TerminalThemePalette): stri
   return replies.join("");
 }
 
-/** 冻结期间最多缓存多少字符的输出，超出后自动恢复刷新，避免长时间冻结吃满内存。 */
-export const TERMINAL_FROZEN_OUTPUT_LIMIT = 2 * 1024 * 1024;
-
-/**
- * 把一段输出追加到冻结缓冲。返回累计字符数与是否溢出；
- * 溢出时调用方应立即恢复刷新，丢弃或冲刷缓冲由调用方决定。
- */
-export function appendFrozenOutput(
-  chunks: string[],
-  chunk: string,
-  usedChars: number,
-  limit: number = TERMINAL_FROZEN_OUTPUT_LIMIT
-): { usedChars: number; overflow: boolean } {
-  if (!chunk) {
-    return { usedChars, overflow: false };
-  }
-  chunks.push(chunk);
-  const nextUsed = usedChars + chunk.length;
-  return { usedChars: nextUsed, overflow: nextUsed >= limit };
-}
-
 /** 复制时优先取终端选区，其次取浏览器 DOM 选区。 */
 export function resolveCopyText(terminalSelection: string, domSelection: string): string {
   return terminalSelection || domSelection || "";

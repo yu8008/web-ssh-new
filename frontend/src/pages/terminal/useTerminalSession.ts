@@ -188,9 +188,6 @@ export function useTerminalSession(sessionId?: string) {
     copyText,
     selectionText: socketState.selectionText,
     selectionAnchor: socketState.selectionAnchor,
-    screenFrozen: socketState.screenFrozen,
-    setScreenFrozen: socketState.setScreenFrozen,
-    toggleScreenFrozen: socketState.toggleScreenFrozen,
   };
 }
 

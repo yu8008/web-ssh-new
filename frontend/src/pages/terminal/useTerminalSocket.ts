@@ -3,7 +3,6 @@ import { Terminal } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
 import { clearAuthStorage, getSession, getStoredToken, openTerminalSocket } from "../../lib/api";
 import {
-  appendFrozenOutput,
   buildDefaultColorAnnouncement,
   clampSelectionAnchor,
   darkTerminalTheme,
@@ -52,11 +51,6 @@ export function useTerminalSocket({
   const [selectionText, setSelectionText] = React.useState("");
   // 选区结束位置（相对终端容器），用于把“选中即复制”的气泡贴在鼠标附近。
   const [selectionAnchor, setSelectionAnchor] = React.useState<{ x: number; y: number } | null>(null);
-  // 选择模式：冻结画面刷新并屏蔽鼠标上报，让 TUI 重绘不再冲掉本地选区。
-  const [screenFrozen, setScreenFrozen] = React.useState(false);
-  const frozenRef = React.useRef(false);
-  const frozenChunksRef = React.useRef<string[]>([]);
-  const frozenCharsRef = React.useRef(0);
   const themeRef = React.useRef<"dark" | "light">(
     typeof window !== "undefined" && localStorage.getItem("theme") === "light" ? "light" : "dark"
   );
@@ -121,33 +115,6 @@ export function useTerminalSocket({
     },
     [push, t]
   );
-
-  const flushFrozenOutput = React.useCallback((term: Terminal | null) => {
-    const chunks = frozenChunksRef.current;
-    frozenChunksRef.current = [];
-    frozenCharsRef.current = 0;
-    if (term && chunks.length > 0) {
-      term.write(chunks.join(""));
-    }
-  }, []);
-
-  const setScreenFrozenState = React.useCallback(
-    (frozen: boolean) => {
-      if (frozenRef.current === frozen) {
-        return;
-      }
-      frozenRef.current = frozen;
-      setScreenFrozen(frozen);
-      if (!frozen) {
-        flushFrozenOutput(terminalInstance.current);
-      }
-    },
-    [flushFrozenOutput]
-  );
-
-  const toggleScreenFrozen = React.useCallback(() => {
-    setScreenFrozenState(!frozenRef.current);
-  }, [setScreenFrozenState]);
 
   /**
    * 把当前主题的默认前景/背景色作为颜色应答送回会话。
@@ -214,18 +181,6 @@ export function useTerminalSocket({
         );
         sanitizePendingSuffix = sanitized.pendingSuffix;
         const output = sanitized.output;
-
-        if (frozenRef.current) {
-          const buffered = appendFrozenOutput(frozenChunksRef.current, output, frozenCharsRef.current);
-          frozenCharsRef.current = buffered.usedChars;
-          if (buffered.overflow) {
-            // 长时间冻结会吃掉过多内存，达到上限时自动恢复刷新。
-            frozenRef.current = false;
-            setScreenFrozen(false);
-            flushFrozenOutput(term);
-          }
-          return;
-        }
 
         term.write(output);
 
@@ -330,7 +285,6 @@ export function useTerminalSocket({
       autoReconnect,
       enhancedSessionRef,
       setCurrentDir,
-      flushFrozenOutput,
     ]
   );
 
@@ -431,11 +385,7 @@ export function useTerminalSocket({
     let handleResize: (() => void) | null = null;
     let selectionDisposable: { dispose: () => void } | null = null;
 
-    // 会话切换时清空上一个会话遗留的选择/冻结状态。
-    frozenRef.current = false;
-    setScreenFrozen(false);
-    frozenChunksRef.current = [];
-    frozenCharsRef.current = 0;
+    // 会话切换时清空上一个会话遗留的选区状态。
     setSelectionText("");
     setSelectionAnchor(null);
 
@@ -478,8 +428,7 @@ export function useTerminalSocket({
       if (coreMouseService && !coreMouseService._wsghTriggerMouseEvent) {
         coreMouseService._wsghTriggerMouseEvent = coreMouseService.triggerMouseEvent.bind(coreMouseService);
         coreMouseService.triggerMouseEvent = (event) => {
-          // 选择模式下一律不把鼠标事件上报给远端 TUI，让浏览器原生选区接管拖动。
-          if (suppressMouseReportRef.current || frozenRef.current) {
+          if (suppressMouseReportRef.current) {
             return false;
           }
           return coreMouseService._wsghTriggerMouseEvent?.(event) ?? false;
@@ -499,14 +448,9 @@ export function useTerminalSocket({
       });
 
       // 复制快捷键：Windows/Linux 用 Ctrl+Shift+C，macOS 用 Cmd+C。
-      // 选择模式下 Esc 退出，避免用户被困在冻结画面里。
       term.attachCustomKeyEventHandler((event) => {
         if (event.type !== "keydown") {
           return true;
-        }
-        if (event.key === "Escape" && frozenRef.current) {
-          setScreenFrozenState(false);
-          return false;
         }
         const key = event.key.toLowerCase();
         const copyCombo =
@@ -599,10 +543,6 @@ export function useTerminalSocket({
         if (!term || term.modes.mouseTrackingMode === "none") {
           return;
         }
-        if (frozenRef.current) {
-          // 选择模式：鼠标上报已被关闭，交给 xterm 原生选区。
-          return;
-        }
         if (event.button === 0) {
           suppressMouseReportRef.current = true;
           const selectionService = (term as unknown as { _core?: { _selectionService?: { enable?: () => void; handleMouseDown?: (e: MouseEvent) => void } } })._core
@@ -676,7 +616,7 @@ export function useTerminalSocket({
       socketRef.current?.close();
       term?.dispose();
     };
-  }, [sessionId, clearReconnectTimer, enhancedSessionRef, flushFrozenOutput, setScreenFrozenState]);
+  }, [sessionId, clearReconnectTimer, enhancedSessionRef]);
 
   return {
     terminalRef,
@@ -692,9 +632,6 @@ export function useTerminalSocket({
     handleCancelReconnect,
     selectionText,
     selectionAnchor,
-    screenFrozen,
-    setScreenFrozen: setScreenFrozenState,
-    toggleScreenFrozen,
     announceThemeColors,
   };
 }

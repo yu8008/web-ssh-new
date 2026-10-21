@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  appendFrozenOutput,
   buildDefaultColorAnnouncement,
   clampSelectionAnchor,
   createTerminalBufferSnapshot,
@@ -235,24 +234,6 @@ describe("buildDefaultColorAnnouncement", () => {
 
   it("没有合法颜色时返回空串", () => {
     expect(buildDefaultColorAnnouncement({ foreground: "", background: "", cursor: "" })).toBe("");
-  });
-});
-
-describe("appendFrozenOutput", () => {
-  it("累计字符数并在达到上限时报告溢出", () => {
-    const chunks: string[] = [];
-    const first = appendFrozenOutput(chunks, "abc", 0, 10);
-    expect(first).toEqual({ usedChars: 3, overflow: false });
-
-    const second = appendFrozenOutput(chunks, "defghij", first.usedChars, 10);
-    expect(second).toEqual({ usedChars: 10, overflow: true });
-    expect(chunks).toEqual(["abc", "defghij"]);
-  });
-
-  it("空片段不改变缓冲", () => {
-    const chunks: string[] = [];
-    expect(appendFrozenOutput(chunks, "", 5, 100)).toEqual({ usedChars: 5, overflow: false });
-    expect(chunks).toEqual([]);
   });
 });
 
