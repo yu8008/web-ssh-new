@@ -211,6 +211,39 @@ test("fast remote repaints advance promptly without repeatedly reading the full 
   expect(Number(await page.locator("#selection").getAttribute("data-text-reads"))).toBeLessThanOrEqual(2);
 });
 
+test("continuous parsed output cannot starve cross-screen selection", async ({ page }) => {
+  const box = await open(page, "?delay=10&chunkDelay=0&steady=1&maxOffset=10000");
+  await page.mouse.move(box.x + 1, box.y + box.line * 2.5);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 20, box.y + box.height - 2, { steps: 3 });
+  await page.waitForTimeout(700);
+  expect(Number(await page.locator("#wheels").textContent())).toBeGreaterThanOrEqual(8);
+  await page.mouse.up();
+  await expect(page.locator("#selection")).toContainText("Output 021 中文 😀");
+  const text = (await page.locator("#selection").textContent())!;
+  const numbers = [...text.matchAll(/Output (\d+)/g)].map((match) => Number(match[1]));
+  expect(numbers).toEqual(Array.from({ length: numbers.length }, (_, index) => 21 + index));
+});
+
+test("pointer movement inside the same selected cell does not redraw the selection", async ({ page }) => {
+  const box = await open(page);
+  const point = { x: box.x + box.cell * 8.2, y: box.y + box.line * 4.2 };
+  await page.mouse.move(box.x + 1, box.y + box.line * 2.5);
+  await page.mouse.down();
+  await page.mouse.move(point.x, point.y, { steps: 4 });
+  await expect(page.locator("#selection")).toHaveAttribute("data-selected", "true");
+  const draws = await page.locator("#selection").getAttribute("data-draws");
+  await page.evaluate(async (point) => {
+    const screen = document.querySelector(".xterm-screen")!;
+    for (let i = 0; i < 12; i++) {
+      screen.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, buttons: 1, clientX: point.x + i / 100, clientY: point.y }));
+      await new Promise(requestAnimationFrame);
+    }
+  }, point);
+  expect(await page.locator("#selection").getAttribute("data-draws")).toBe(draws);
+  await page.mouse.up();
+});
+
 test("shell wheel scrolling uses intermediate animation frames", async ({ page }) => {
   await open(page, "?mode=shell");
   const positions = await page.locator(".xterm-screen").evaluate(async (screen) => {

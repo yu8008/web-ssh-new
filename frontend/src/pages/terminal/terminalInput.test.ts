@@ -40,4 +40,16 @@ describe("terminal wheel input batching", () => {
     frame();
     expect(packets).toEqual([]);
   });
+
+  it("sends a selection scroll immediately without leaving a duplicate frame callback", () => {
+    const { writer, packets, frame } = setup();
+    writer.write("\x1b[<65;12;8M");
+    writer.flush();
+    expect(packets).toEqual(["\x1b[<65;12;8M"]);
+    frame();
+    expect(packets).toHaveLength(1);
+    writer.write("\x1b[<64;12;8M");
+    frame();
+    expect(packets).toEqual(["\x1b[<65;12;8M", "\x1b[<64;12;8M"]);
+  });
 });

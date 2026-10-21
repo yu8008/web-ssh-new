@@ -109,11 +109,12 @@ export class SelectionTranscript {
     this.positions = new Map(this.rows.map((row, index) => [row, index]));
   }
 
-  move(point: SelectionPoint): void {
-    if (this.end.row === this.frame[point.row] && this.end.col === point.col) return;
+  move(point: SelectionPoint): boolean {
+    if (this.end.row === this.frame[point.row] && this.end.col === point.col) return false;
     this.end = { row: this.frame[point.row], col: point.col };
     this.cachedText = undefined;
     this.cachedHasSelection = undefined;
+    return true;
   }
 
   hasSelection(): boolean {

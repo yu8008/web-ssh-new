@@ -25,7 +25,8 @@
     "tailwindcss-animate": "^1.0.7",
     "xterm": "^5.0.0",
     "xterm-addon-canvas": "^0.5.0",
-    "xterm-addon-fit": "^0.8.0"
+    "xterm-addon-fit": "^0.8.0",
+    "xterm-addon-webgl": "0.16.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.64.1",

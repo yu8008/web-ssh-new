@@ -20,6 +20,7 @@ let wheelCount = 0;
 let finished = 0;
 let changes = 0;
 let textReads = 0;
+let selectionDraws = 0;
 const readText = SelectionTranscript.prototype.getText;
 SelectionTranscript.prototype.getText = function () {
   element("selection").dataset.textReads = String(++textReads);
@@ -32,7 +33,9 @@ const terminal = new Terminal({
   fontSize: 16, scrollback: 500, theme: { background: "#111827" },
 });
 terminal.open(element("terminal"));
-if (parameters.get("renderer") !== "dom") configureTerminalRendering(terminal);
+if (parameters.get("renderer") !== "dom") configureTerminalRendering(terminal, {
+  preferWebgl: parameters.get("renderer") === "webgl" ? true : parameters.get("renderer") === "canvas" ? false : undefined,
+});
 const viewport = attachTerminalViewport(terminal, element("terminal"));
 const output = createTerminalOutput({
   write: (data, done) => terminal.write(data, done),
@@ -40,6 +43,11 @@ const output = createTerminalOutput({
   onOverflow: () => { throw new Error("Fixture output overflow"); },
 });
 const writeOutput = (data: string) => output.enqueue(data);
+const select = terminal.select.bind(terminal);
+terminal.select = (...args) => {
+  element("selection").dataset.draws = String(++selectionDraws);
+  select(...args);
+};
 const selection = attachTerminalSelection(terminal, element("terminal"), {
   onChange: (selected) => {
     element("selection").dataset.changes = String(++changes);
@@ -51,6 +59,7 @@ const selection = attachTerminalSelection(terminal, element("terminal"), {
     element("finished").textContent = String(++finished);
   },
   onLimit: () => { element("selection").dataset.limit = "true"; },
+  flushInput: () => inputWriter.flush(),
 });
 const render = (unrelated = false) => {
   const lines = unrelated
@@ -91,7 +100,8 @@ attachTerminalShortcuts(terminal, selection.getText, (text) => { element("copied
 const wheelController = attachTerminalWheel(terminal, element("terminal"), () => parameters.has("enhanced"), inputWriter.write);
 element("copy").addEventListener("click", () => { element("copied").textContent = selection.getText(); });
 element("repaint").addEventListener("click", () => render(true));
-element("dispose").addEventListener("click", () => { selection.dispose(); inputWriter.dispose(); wheelController.dispose(); output.dispose(); viewport.dispose(); });
+element("dispose").addEventListener("click", () => { clearInterval(steadyOutput); selection.dispose(); inputWriter.dispose(); wheelController.dispose(); output.dispose(); viewport.dispose(); });
+const steadyOutput = parameters.has("steady") ? setInterval(() => writeOutput("\x1b[0m"), 8) : undefined;
 if (shell) {
   terminal.write(Array.from({ length: 100 }, (_, index) => `Shell row ${String(index).padStart(3, "0")}`).join("\r\n"), () => {
     const duration = terminal.options.smoothScrollDuration;

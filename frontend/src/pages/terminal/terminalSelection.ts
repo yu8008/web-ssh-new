@@ -5,6 +5,7 @@ type SelectionOptions = {
   onChange: (hasSelection: boolean) => void;
   onFinish: (x: number, y: number) => void;
   onLimit: () => void;
+  flushInput?: () => void;
 };
 
 /** Native xterm selection handles shell scrollback. Mouse-reporting TUIs need
@@ -25,6 +26,7 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
   let point = { x: 0, y: 0 };
   let frame: number | undefined;
   let needsDraw = false;
+  let frameChanged = false;
   let finishAfterDraw = false;
   let notifiedSelection = false;
   let parseTimer: number | undefined;
@@ -32,6 +34,7 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
   let remote: { direction: -1 | 1; started: number } | null = null;
   let stoppedDirection = 0;
   let sendingWheel = false;
+  let lastRequestAt = -Infinity;
   let synchronizedRepaint = false;
   let completedRepaint = false;
   let captureStopped = false;
@@ -91,6 +94,7 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
     if (frame !== undefined) view.cancelAnimationFrame(frame);
     frame = undefined;
     needsDraw = false;
+    frameChanged = false;
     finishAfterDraw = false;
   };
   const clear = () => {
@@ -105,6 +109,7 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
     captureStopped = false;
     stopTimer();
     view.clearTimeout(parseTimer);
+    parseTimer = undefined;
     columnOverlay?.remove();
     columnOverlay = null;
     term.clearSelection();
@@ -113,7 +118,9 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
 
   const requestScroll = (direction: -1 | 1) => {
     if (!active || disposed || captureStopped || !transcript || remote || direction === stoppedDirection) return;
+    if (view.performance.now() - lastRequestAt < 16) return;
     if (term.modes.mouseTrackingMode === "none" || term.modes.mouseTrackingMode === "x10") return;
+    lastRequestAt = view.performance.now();
     remote = { direction, started: Date.now() };
     // Use xterm's wheel encoder rather than hardcoding an escape sequence.
     // A line-mode delta emits one wheel report, with no held button/modifiers.
@@ -127,6 +134,9 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
     } finally {
       sendingWheel = false;
     }
+    // This gesture has only one outstanding report. Waiting for the normal
+    // wheel-burst frame would add another display frame to every SSH round trip.
+    options.flushInput?.();
   };
   const tick = () => {
     if (!active) return false;
@@ -156,8 +166,9 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
       frame = undefined;
       if (needsDraw && transcript) {
         needsDraw = false;
-        transcript.move(endpoint());
-        draw();
+        const moved = transcript.move(endpoint());
+        if (moved || frameChanged) draw();
+        frameChanged = false;
       }
       if (finishAfterDraw) {
         finishAfterDraw = false;
@@ -294,34 +305,48 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
     if (["shift", "alt", "control", "meta"].includes(key)) return;
     if (transcript) clear();
   };
+  const captureRemote = () => {
+    parseTimer = undefined;
+    if (!remote || !transcript || synchronizedRepaint) return;
+    if (disposed) return;
+    const result = transcript.scroll(captureSelectionRows(term), remote.direction);
+    if (result === "moved") {
+      remote = null;
+      stoppedDirection = 0;
+      needsDraw = true;
+      frameChanged = true;
+      finishAfterDraw = !active;
+      // Continue as soon as the complete response is verified. Highlighting
+      // still draws once per frame, and requests remain bounded to one at a time.
+      tick();
+      scheduleFrame();
+    } else if (result === "limit") {
+      remote = null;
+      captureStopped = true;
+      stopTimer();
+      options.onLimit();
+    }
+    // Partial/unrelated repaints retain the last verified snapshot.
+  };
   const parsed = term.onWriteParsed(() => {
-    view.clearTimeout(parseTimer);
-    const delay = completedRepaint ? 0 : 24;
+    const complete = completedRepaint;
     completedRepaint = false;
     if (!remote || !transcript || synchronizedRepaint) return;
-    parseTimer = view.setTimeout(() => {
-      if (disposed || !remote || !transcript || synchronizedRepaint) return;
-      const result = transcript.scroll(captureSelectionRows(term), remote.direction);
-      if (result === "moved") {
-        remote = null;
-        stoppedDirection = 0;
-        needsDraw = true;
-        finishAfterDraw = !active;
-        scheduleFrame();
-      } else if (result === "limit") {
-        remote = null;
-        captureStopped = true;
-        stopTimer();
-        options.onLimit();
-      }
-      // Partial repaints and unrelated output may not align yet. Keep the
-      // last verified snapshot; the next parsed batch can complete the match.
-    }, delay);
+    if (complete) {
+      view.clearTimeout(parseTimer);
+      captureRemote();
+    } else if (parseTimer === undefined) {
+      // A bounded trailing check also runs during continuous output. Restarting
+      // a debounce on every SSH chunk could starve selection indefinitely.
+      parseTimer = view.setTimeout(captureRemote, 16);
+    }
   });
   // Modern TUIs bracket a repaint with DEC synchronized-output mode. A slow
   // connection can split that repaint into many writes; never align half of it.
   const syncStart = term.parser.registerCsiHandler({ prefix: "?", final: "h" }, (params) => {
     if (params.includes(2026)) {
+      view.clearTimeout(parseTimer);
+      parseTimer = undefined;
       synchronizedRepaint = true;
       completedRepaint = false;
     }

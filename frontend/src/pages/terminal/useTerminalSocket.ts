@@ -529,6 +529,7 @@ export function useTerminalSocket({
           }));
         },
         onLimit: () => selectionLimitRef.current(),
+        flushInput: () => inputWriter?.flush(),
       });
       selectionControllerRef.current = selectionController;
 

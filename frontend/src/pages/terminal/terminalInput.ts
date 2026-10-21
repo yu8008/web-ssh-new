@@ -12,6 +12,7 @@ export function createTerminalInputWriter(view: Window, send: (data: string) => 
     send(data);
   };
   return {
+    flush,
     write(data: string) {
       const wheel = /^\x1b\[<(\d+);\d+;\d+M$/.exec(data);
       if (wheel && (Number(wheel[1]) & 192) === 64) {
