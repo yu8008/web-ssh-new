@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React from "react";
 import {
   listDirectory,
   FileInfo,
@@ -59,6 +59,8 @@ type FileBrowserProps = {
   isDark: boolean;
   currentDir?: string;
   onFileSelect?: (path: string | null) => void;
+  /** 双击文件（或右键「打开」）时回调，用于打开查看器。 */
+  onOpenFile?: (file: FileInfo) => void;
   networkProfile?: NetworkProfile;
   compact?: boolean;
 };
@@ -108,7 +110,7 @@ function createRootTree(): TreeNode[] {
   return [{ name: "/", path: "/", expanded: true, loaded: false }];
 }
 
-export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, networkProfile, compact }: FileBrowserProps) {
+export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpenFile, networkProfile, compact }: FileBrowserProps) {
   const { networkProfile: globalNetworkProfile, language } = useApp();
   const t = React.useCallback((zh: string, en: string) => localizeText(language, zh, en), [language]);
   const effectiveNetworkProfile = networkProfile ?? globalNetworkProfile;
@@ -966,12 +968,16 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, netwo
         onFileSelect(file.path);
       }
 
-      if (file.is_dir && isDoubleClick) {
+      if (isDoubleClick && file.is_dir) {
         loadDirectory(file.path, true, { preferCache: true });
         expandTreeToPath(file.path, { preferCache: true });
       }
+
+      if (isDoubleClick && !file.is_dir) {
+        onOpenFile?.(file);
+      }
     }
-  }, [selectedFiles, loadDirectory, expandTreeToPath, onFileSelect]);
+  }, [selectedFiles, loadDirectory, expandTreeToPath, onFileSelect, onOpenFile]);
 
   const parentPath = React.useMemo(() => {
     const normalized = normalizePath(selectedPath);
@@ -1246,6 +1252,21 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, netwo
           >
             {t("权限", "Permissions")}
           </button>
+          {onOpenFile ? (
+            <button
+              type="button"
+              onClick={() => {
+                const target = selectedItems.find((file) => !file.is_dir);
+                if (target) {
+                  onOpenFile(target);
+                }
+              }}
+              disabled={!hasSelection || selectedItems.every((file) => file.is_dir)}
+              className={`rounded-full px-3 py-2 ${hasSelection ? "" : "opacity-40 cursor-not-allowed"} ${isDark ? "bg-slate-800 text-slate-200" : "bg-white text-slate-700 border border-slate-200"}`}
+            >
+              {t("打开", "Open")}
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => handleActionForFiles("download", selectedItems)}
@@ -1570,6 +1591,18 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, netwo
           )}
           {contextMenu.type === 'single' && (
             <>
+              {onOpenFile && contextMenu.files[0] && !contextMenu.files[0].is_dir ? (
+                <button
+                  onClick={() => {
+                    const target = contextMenu.files[0];
+                    setContextMenu(null);
+                    onOpenFile(target);
+                  }}
+                  className={`w-full px-4 py-2 text-left text-sm ${isDark ? "hover:bg-slate-700 text-slate-200" : "hover:bg-slate-100 text-slate-700"}`}
+                >
+                  {t("打开", "Open")}
+                </button>
+              ) : null}
               <button onClick={() => handleContextAction("download")} className={`w-full px-4 py-2 text-left text-sm ${isDark ? "hover:bg-slate-700 text-slate-200" : "hover:bg-slate-100 text-slate-700"}`}>
                 {t("下载", "Download")}
               </button>

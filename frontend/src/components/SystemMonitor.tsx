@@ -1,8 +1,7 @@
 ﻿import React from "react";
-import { downloadFile, getSystemOverview, readFile, writeFile, SystemStats, NetworkInfo, ProcessInfo, DiskInfo } from "../lib/api";
+import { getSystemOverview, SystemStats, NetworkInfo, ProcessInfo, DiskInfo } from "../lib/api";
 import { useApp } from "../context/AppContextCore";
 import type { NetworkProfile } from "../context/AppContextCore";
-import { useToast } from "./ToastContext";
 
 function localizeText(language: string, zh: string, en: string): string {
   return language === "en-US" ? en : zh;
@@ -25,16 +24,6 @@ function formatSpeed(bytesPerSec: number): string {
   const sizes = ["B/s", "KB/s", "MB/s", "GB/s"];
   const i = Math.floor(Math.log(bytesPerSec) / Math.log(k));
   return parseFloat((bytesPerSec / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
-}
-
-const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "ico", "tif", "tiff"]);
-
-function isImagePath(path: string): boolean {
-  const normalized = path.split("?")[0].split("#")[0];
-  const lastDot = normalized.lastIndexOf(".");
-  if (lastDot === -1) return false;
-  const ext = normalized.slice(lastDot + 1).toLowerCase();
-  return IMAGE_EXTENSIONS.has(ext);
 }
 
 type ProgressBarProps = {
@@ -82,12 +71,11 @@ function ProgressBar({ percent, isDark, label, color = "blue" }: ProgressBarProp
 type SystemMonitorProps = {
   sessionId: string;
   isDark: boolean;
-  selectedFilePath?: string;
   networkProfile?: NetworkProfile;
   compact?: boolean;
 };
 
-export function SystemMonitor({ sessionId, isDark, selectedFilePath, networkProfile, compact }: SystemMonitorProps) {
+export function SystemMonitor({ sessionId, isDark, networkProfile, compact }: SystemMonitorProps) {
   const { networkProfile: globalNetworkProfile, language } = useApp();
   const t = React.useCallback((zh: string, en: string) => localizeText(language, zh, en), [language]);
   const effectiveNetworkProfile = networkProfile ?? globalNetworkProfile;
@@ -96,24 +84,15 @@ export function SystemMonitor({ sessionId, isDark, selectedFilePath, networkProf
     status: false,
     processes: isCompact,
     disks: isCompact,
-    file: false,
   });
   const [stats, setStats] = React.useState<SystemStats | null>(null);
   const [network, setNetwork] = React.useState<NetworkInfo | null>(null);
   const [processes, setProcesses] = React.useState<ProcessInfo[]>([]);
   const [disks, setDisks] = React.useState<DiskInfo[]>([]);
-  const [fileContent, setFileContent] = React.useState<string>("");
-  const [originalContent, setOriginalContent] = React.useState<string>("");
-  const [imageUrl, setImageUrl] = React.useState<string | null>(null);
-  const [imageError, setImageError] = React.useState<string | null>(null);
-  const [fileLoading, setFileLoading] = React.useState(false);
-  const [fileTooLarge, setFileTooLarge] = React.useState(false);
-  const [fileSize, setFileSize] = React.useState(0);
   const [sortField, setSortField] = React.useState<SortField>("memory");
   const [sortOrder, setSortOrder] = React.useState<SortOrder>("desc");
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
-  const { push } = useToast();
   const overviewInFlightRef = React.useRef(false);
   const metricsPollIntervalMs =
     effectiveNetworkProfile === "poor" ? 12000 : effectiveNetworkProfile === "degraded" ? 7000 : 3000;
@@ -136,149 +115,6 @@ export function SystemMonitor({ sessionId, isDark, selectedFilePath, networkProf
       setLoading(false);
     }
   }, [sessionId, t]);
-
-  const isImageFile = React.useMemo(() => {
-    return selectedFilePath ? isImagePath(selectedFilePath) : false;
-  }, [selectedFilePath]);
-
-  const revokeImageUrl = React.useCallback((url: string | null) => {
-    if (url) {
-      URL.revokeObjectURL(url);
-    }
-  }, []);
-
-  // 读取文件内容或加载图片
-  React.useEffect(() => {
-    let cancelled = false;
-
-    if (!selectedFilePath) {
-      setFileContent("");
-      setOriginalContent("");
-      setFileTooLarge(false);
-      setImageError(null);
-      setFileSize(0);
-      setImageUrl((prev) => {
-        revokeImageUrl(prev);
-        return null;
-      });
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    if (isImageFile) {
-      setFileLoading(true);
-      setFileTooLarge(false);
-      setFileContent("");
-      setOriginalContent("");
-      setImageError(null);
-
-      const loadImage = async () => {
-        try {
-          const blob = await downloadFile(sessionId, selectedFilePath);
-          if (cancelled) {
-            return;
-          }
-          const url = URL.createObjectURL(blob);
-          setImageUrl((prev) => {
-            revokeImageUrl(prev);
-            return url;
-          });
-          setFileSize(blob.size);
-        } catch (err) {
-          if (cancelled) {
-            return;
-          }
-          setImageError(err instanceof Error ? err.message : t("图片加载失败", "Failed to load image"));
-          setImageUrl((prev) => {
-            revokeImageUrl(prev);
-            return null;
-          });
-        } finally {
-          if (!cancelled) {
-            setFileLoading(false);
-          }
-        }
-      };
-
-      loadImage();
-
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    setImageError(null);
-    setImageUrl((prev) => {
-      revokeImageUrl(prev);
-      return null;
-    });
-
-    const loadFile = async (force = false) => {
-      setFileLoading(true);
-      try {
-        const result = await readFile(sessionId, selectedFilePath, force);
-        if (result.too_large) {
-          setFileTooLarge(true);
-          setFileSize(result.size);
-          setFileContent("");
-          setOriginalContent("");
-        } else {
-          setFileContent(result.content || "");
-          setOriginalContent(result.content || "");
-          setFileTooLarge(false);
-        }
-      } catch (err) {
-        push(err instanceof Error ? err.message : t("读取文件失败", "Failed to read file"));
-        setFileContent("");
-        setOriginalContent("");
-      } finally {
-        if (!cancelled) {
-          setFileLoading(false);
-        }
-      }
-    };
-
-    loadFile();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [sessionId, selectedFilePath, isImageFile, push, t, revokeImageUrl]);
-
-  React.useEffect(() => {
-    return () => {
-      revokeImageUrl(imageUrl);
-    };
-  }, [imageUrl, revokeImageUrl]);
-
-  const handleLoadLargeFile = React.useCallback(async () => {
-    if (!selectedFilePath) return;
-    if (isImageFile) return;
-    setFileLoading(true);
-    try {
-      const result = await readFile(sessionId, selectedFilePath, true);
-      setFileContent(result.content || "");
-      setOriginalContent(result.content || "");
-      setFileTooLarge(false);
-    } catch (err) {
-      push(err instanceof Error ? err.message : t("读取文件失败", "Failed to read file"));
-    } finally {
-      setFileLoading(false);
-    }
-  }, [sessionId, selectedFilePath, push, t, isImageFile]);
-
-  // 保存文件
-  const handleSaveFile = React.useCallback(async () => {
-    if (!selectedFilePath) return;
-    try {
-      await writeFile(sessionId, selectedFilePath, fileContent);
-      setOriginalContent(fileContent);
-      push(t("保存成功", "Saved successfully"));
-    } catch (err) {
-      push(err instanceof Error ? err.message : t("保存失败", "Save failed"));
-    }
-  }, [sessionId, selectedFilePath, fileContent, push, t]);
 
   // 系统监控轮询：改为单接口拉取并按网络质量动态降频
   React.useEffect(() => {
@@ -556,98 +392,6 @@ export function SystemMonitor({ sessionId, isDark, selectedFilePath, networkProf
         ) : null}
       </div>
 
-      {/* 文件预览 */}
-      {selectedFilePath && (
-        <div className={`pt-4 ${isDark ? "border-t border-slate-700" : "border-t border-slate-200"}`}>
-          {isCompact ? (
-            renderSectionHeader("file", isImageFile ? t("图片预览", "Image Preview") : t("文件预览", "File Preview"))
-          ) : (
-            <div className="flex justify-between items-center mb-2">
-              <h3 className={`text-sm font-semibold ${isDark ? "text-slate-200" : "text-slate-700"}`}>
-                {isImageFile ? t("图片预览", "Image Preview") : t("文件预览", "File Preview")}
-              </h3>
-              {!isImageFile ? (
-                <button
-                  onClick={handleSaveFile}
-                  disabled={fileContent === originalContent || fileTooLarge}
-                  className={`px-2 py-1 text-xs rounded ${
-                    fileContent === originalContent || fileTooLarge
-                      ? "opacity-50 cursor-not-allowed"
-                      : (isDark ? "bg-indigo-600 hover:bg-indigo-500" : "bg-indigo-500 hover:bg-indigo-400")
-                  } text-white`}
-                >
-                  {t("保存", "Save")}
-                </button>
-              ) : null}
-            </div>
-          )}
-          {!isCompact || !collapsedSections.file ? (
-            <>
-              {isCompact ? (
-                <div className="flex justify-end mb-2">
-                  {!isImageFile ? (
-                    <button
-                      onClick={handleSaveFile}
-                      disabled={fileContent === originalContent || fileTooLarge}
-                      className={`px-3 py-2 text-sm rounded ${
-                        fileContent === originalContent || fileTooLarge
-                          ? "opacity-50 cursor-not-allowed"
-                          : (isDark ? "bg-indigo-600 hover:bg-indigo-500" : "bg-indigo-500 hover:bg-indigo-400")
-                      } text-white`}
-                    >
-                      {t("保存", "Save")}
-                    </button>
-                  ) : null}
-                </div>
-              ) : null}
-              {fileLoading ? (
-                <div className={`flex items-center justify-center text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`} style={{ height: "172px" }}>
-                  <span className="animate-spin mr-2">⟳</span> {t("加载中...", "Loading...")}
-                </div>
-              ) : isImageFile ? (
-                imageError ? (
-                  <div className={`flex items-center justify-center text-xs ${isDark ? "text-rose-400" : "text-rose-500"}`} style={{ height: "172px" }}>
-                    {imageError}
-                  </div>
-                ) : imageUrl ? (
-                  <div className={`flex items-center justify-center rounded border ${isDark ? "border-slate-700 bg-slate-900/40" : "border-slate-200 bg-slate-50"}`} style={{ height: "172px" }}>
-                    <img
-                      src={imageUrl}
-                      alt={selectedFilePath}
-                      className="max-h-full max-w-full object-contain"
-                    />
-                  </div>
-                ) : (
-                  <div className={`flex items-center justify-center text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`} style={{ height: "172px" }}>
-                    {t("暂无图片内容", "No image preview")}
-                  </div>
-                )
-              ) : fileTooLarge ? (
-                <div className={`flex flex-col items-center justify-center text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`} style={{ height: "172px" }}>
-                  <p className="mb-2">{t(`文件过大 (${(fileSize / 1024 / 1024).toFixed(2)} MB)`, `File too large (${(fileSize / 1024 / 1024).toFixed(2)} MB)`)}</p>
-                  <button
-                    onClick={handleLoadLargeFile}
-                    className={`px-3 py-1 rounded ${isDark ? "bg-indigo-600 hover:bg-indigo-500" : "bg-indigo-500 hover:bg-indigo-400"} text-white`}
-                  >
-                    {t("仍然加载", "Load anyway")}
-                  </button>
-                </div>
-              ) : (
-                <textarea
-                  value={fileContent}
-                  onChange={(e) => setFileContent(e.target.value)}
-                  className={`w-full text-xs font-mono p-2 rounded border ${
-                    isDark
-                      ? "bg-slate-900 border-slate-700 text-slate-200"
-                      : "bg-white border-slate-300 text-slate-700"
-                  }`}
-                  style={{ height: "172px" }}
-                />
-              )}
-            </>
-          ) : null}
-        </div>
-      )}
     </div>
   );
 }

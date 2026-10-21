@@ -1,6 +1,8 @@
 import React from "react";
 import { Copy } from "lucide-react";
 import { Button } from "../../components/Button";
+import { FileViewer } from "../../components/FileViewer";
+import type { FileInfo } from "../../lib/api";
 import { TerminalCopyPanel } from "./TerminalCopyPanel";
 import { createTerminalBufferSnapshot, type TerminalBufferSnapshot } from "./terminalUtils";
 import type { TerminalSessionState } from "./useTerminalSession";
@@ -30,6 +32,8 @@ function MobilePanelFallback({ isDark }: { isDark: boolean }) {
 export function TerminalMobile({ state, onBack }: TerminalMobileProps) {
   const [activeTab, setActiveTab] = React.useState<MobileTab>("terminal");
   const [copySnapshot, setCopySnapshot] = React.useState<TerminalBufferSnapshot | null>(null);
+  const [openedFile, setOpenedFile] = React.useState<FileInfo | null>(null);
+  const closeViewer = React.useCallback(() => setOpenedFile(null), []);
   const { syncTerminalSize, terminalInstance, scrollTerminal } = state;
 
   React.useEffect(() => {
@@ -235,7 +239,7 @@ export function TerminalMobile({ state, onBack }: TerminalMobileProps) {
                   sessionId={state.sessionId}
                   isDark={state.isDark}
                   currentDir={state.currentDir}
-                  onFileSelect={state.setSelectedFilePath}
+                  onOpenFile={setOpenedFile}
                   networkProfile={state.sessionNetworkProfile}
                   compact
                 />
@@ -251,7 +255,6 @@ export function TerminalMobile({ state, onBack }: TerminalMobileProps) {
                 <SystemMonitor
                   sessionId={state.sessionId}
                   isDark={state.isDark}
-                  selectedFilePath={state.selectedFilePath || undefined}
                   networkProfile={state.sessionNetworkProfile}
                   compact
                 />
@@ -286,6 +289,15 @@ export function TerminalMobile({ state, onBack }: TerminalMobileProps) {
           })}
         </div>
       </div>
+
+      {openedFile && state.sessionId ? (
+        <FileViewer
+          sessionId={state.sessionId}
+          path={openedFile.path}
+          isDark={state.isDark}
+          onClose={closeViewer}
+        />
+      ) : null}
 
       {state.sessionDisconnected?.disconnected && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950">

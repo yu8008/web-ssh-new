@@ -39,7 +39,6 @@ export function useTerminalSession(sessionId?: string) {
   } = useApp();
   const t = React.useCallback((zh: string, en: string) => localizeText(language, zh, en), [language]);
   const [currentDir, setCurrentDir] = React.useState<string>("/");
-  const [selectedFilePath, setSelectedFilePath] = React.useState<string | null>(null);
   const enhancedSessionRef = React.useRef(false);
   const copyTextRef = React.useRef<(text: string) => Promise<boolean>>(async () => false);
 
@@ -65,7 +64,6 @@ export function useTerminalSession(sessionId?: string) {
   });
 
   React.useEffect(() => {
-    setSelectedFilePath(null);
     setCurrentDir("/");
   }, [sessionId]);
 
@@ -159,8 +157,6 @@ export function useTerminalSession(sessionId?: string) {
     language,
     sessionId,
     currentDir,
-    selectedFilePath,
-    setSelectedFilePath,
     terminalRef: socketState.terminalRef,
     terminalInstance: socketState.terminalInstance,
     fitAddon: socketState.fitAddon,
