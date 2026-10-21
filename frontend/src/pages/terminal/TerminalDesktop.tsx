@@ -207,14 +207,23 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
           <span className="font-mono">{state.sessionInfo ? new Date(state.sessionInfo.started_at).toLocaleString() : ""}</span>
           <span aria-hidden="true">·</span>
           <span>{state.networkProfileLabel}</span>
-          {state.targetLatencyMs !== null ? <span className="font-mono">{state.targetLatencyMs}ms</span> : null}
+          {state.browserLatencyMs !== null ? (
+            <span className="font-mono" title={state.t("浏览器到网关的 HTTP 往返时间，包含请求处理耗时", "Browser-to-gateway HTTP round trip, including request processing")}>
+              {state.t("网页", "Web")} {state.browserLatencyMs}ms
+            </span>
+          ) : null}
+          {state.targetLatencyMs !== null ? (
+            <span className="font-mono" title={state.t("网关到 SSH 目标的命令往返时间，不包含浏览器网络和画面渲染", "Gateway-to-SSH command round trip, excluding browser network and rendering")}>
+              SSH {state.targetLatencyMs}ms
+            </span>
+          ) : null}
         </div>
         <div className="ml-auto flex items-center gap-1">
           {state.targetLatencyMs !== null ? (
             <div
               className="mr-1 hidden h-5 w-[84px] items-end gap-px rounded bg-elevated px-1 py-1 lg:flex"
-              title={state.t("近30次网络延迟波动", "Latency trend (last 30 samples)")}
-              aria-label={state.t("近30次网络延迟波动", "Latency trend (last 30 samples)")}
+              title={state.t("近30次 SSH 命令延迟波动", "SSH command latency trend (last 30 samples)")}
+              aria-label={state.t("近30次 SSH 命令延迟波动", "SSH command latency trend (last 30 samples)")}
             >
               {state.latencyBarHeights.map((height, index) => (
                 <span

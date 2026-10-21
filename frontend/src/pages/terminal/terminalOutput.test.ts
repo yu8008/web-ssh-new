@@ -4,6 +4,25 @@ import { createTerminalOutput, decodeTerminalOutput } from "./terminalOutput";
 afterEach(() => vi.useRealTimers());
 
 describe("terminal output scheduling", () => {
+  it("coalesces packets with completion callbacks while preserving every callback and replay barrier", () => {
+    vi.useFakeTimers();
+    const writes: string[] = [];
+    const completed: number[] = [];
+    const writer = createTerminalOutput({
+      onOverflow: vi.fn(),
+      write(data, done) { writes.push(data); setTimeout(done, 0); },
+    });
+    const packets = Array.from({ length: 300 }, (_, index) => `${index}: 中文😀 ${"x".repeat(100)}\r\n`);
+    packets.forEach((packet, index) => writer.enqueue(packet, () => completed.push(index)));
+    writer.enqueue("", () => completed.push(-1));
+    writer.enqueue("after replay", () => completed.push(-2));
+    vi.runAllTimers();
+    expect(writes.join("")).toBe(packets.join("") + "after replay");
+    expect(completed).toEqual([...packets.map((_, index) => index), -1, -2]);
+    expect(writes.length).toBeLessThanOrEqual(5);
+    writer.dispose();
+  });
+
   it("coalesces tiny chunks, preserves control sequences and waits for parsing", () => {
     vi.useFakeTimers();
     const writes: string[] = [];
@@ -15,8 +34,10 @@ describe("terminal output scheduling", () => {
     vi.runOnlyPendingTimers();
     expect(writes).toHaveLength(1);
     expect(complete).not.toHaveBeenCalled();
-    while (parsed.length) parsed.shift()!();
-    vi.runAllTimers();
+    for (let turn = 0; turn < 10 && !complete.mock.calls.length; turn++) {
+      while (parsed.length) parsed.shift()!();
+      vi.runAllTimers();
+    }
     expect(writes.join("")).toBe("\x1b[31m中文😀\x1b[0m");
     expect(complete).toHaveBeenCalledOnce();
     writer.dispose();
@@ -27,10 +48,18 @@ describe("terminal output scheduling", () => {
     const writes: string[] = [];
     const writer = createTerminalOutput({ chunkSize: 2, onOverflow: vi.fn(), write(data, done) { writes.push(data); done(); } });
     writer.enqueue("x".repeat(100));
-    vi.runOnlyPendingTimers();
     expect(writes.length).toBeLessThanOrEqual(8);
     vi.runAllTimers();
     expect(writes.join("")).toBe("x".repeat(100));
+    writer.dispose();
+  });
+
+  it("starts an idle keyboard echo without an extra timer", () => {
+    vi.useFakeTimers();
+    const write = vi.fn((_data: string, done: () => void) => done());
+    const writer = createTerminalOutput({ write, onOverflow: vi.fn() });
+    writer.enqueue("typed character");
+    expect(write).toHaveBeenCalledOnce();
     writer.dispose();
   });
 

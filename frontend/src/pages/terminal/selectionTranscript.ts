@@ -3,11 +3,18 @@ import type { IBufferCell, IBufferLine, Terminal } from "xterm";
 export type SelectionPoint = { row: number; col: number };
 export type SelectionRow = { text: string; wrapped: boolean; offsets: number[] };
 
-export function captureSelectionRows(term: Terminal): SelectionRow[] {
+export function captureSelectionRows(term: Terminal, previous: SelectionRow[] = []): SelectionRow[] {
   const buffer = term.buffer.active;
   const cell = buffer.getNullCell();
+  const cachedOffsets = new Map(previous.filter((row) => row.offsets.length === term.cols + 1)
+    .map((row) => [row.text, row.offsets]));
   return Array.from({ length: term.rows }, (_, index) => {
     const line = buffer.getLine(buffer.viewportY + index);
+    const text = line?.translateToString(true).trimEnd() ?? "";
+    const offsets = cachedOffsets.get(text);
+    // Reuse immutable column offsets for unchanged/moved rows, but keep each
+    // row's identity distinct so duplicate/blank lines remain selectable.
+    if (offsets) return { text, wrapped: line?.isWrapped ?? false, offsets };
     return captureRow(line, term.cols, cell);
   });
 }
@@ -100,6 +107,7 @@ export class SelectionTranscript {
   private positions: Map<SelectionRow, number>;
   private cachedText: string | undefined;
   private cachedHasSelection: boolean | undefined;
+  private capturedChars: number;
 
   constructor(frame: SelectionRow[], point: SelectionPoint, private readonly columnMode = false) {
     this.rows = [...frame];
@@ -107,6 +115,7 @@ export class SelectionTranscript {
     this.anchor = { row: frame[point.row], col: point.col };
     this.end = { ...this.anchor };
     this.positions = new Map(this.rows.map((row, index) => [row, index]));
+    this.capturedChars = this.rows.reduce((size, row) => size + row.text.length + 1, 0);
   }
 
   move(point: SelectionPoint): boolean {
@@ -150,6 +159,8 @@ export class SelectionTranscript {
     // Stationary chrome outside the moving block must not become a neighbour.
     const fixed = new Set([...this.frame.slice(0, top), ...this.frame.slice(bottom)]);
     const document = [...this.rows];
+    let firstInserted = document.length;
+    let addedChars = 0;
     if (direction > 0) {
       let position = document.indexOf(mapped[newStart + length - 1]) + 1;
       for (let index = newStart + length; index < bottom; index += 1) {
@@ -158,6 +169,8 @@ export class SelectionTranscript {
           mapped[index] = existing;
         } else {
           mapped[index] = next[index];
+          firstInserted = Math.min(firstInserted, position);
+          addedChars += next[index].text.length + 1;
           document.splice(position, 0, next[index]);
         }
         position += 1;
@@ -171,16 +184,21 @@ export class SelectionTranscript {
           position -= 1;
         } else {
           mapped[index] = next[index];
+          firstInserted = Math.min(firstInserted, position);
+          addedChars += next[index].text.length + 1;
           document.splice(position, 0, next[index]);
         }
       }
     }
-    if (document.length > 10000 || document.reduce((size, row) => size + row.text.length + 1, 0) > 1024 * 1024) {
+    if (document.length > 10000 || this.capturedChars + addedChars > 1024 * 1024) {
       return "limit";
     }
     this.rows = document;
     this.frame = mapped;
-    this.positions = new Map(document.map((row, index) => [row, index]));
+    this.capturedChars += addedChars;
+    for (let index = firstInserted; index < document.length; index++) {
+      this.positions.set(document[index], index);
+    }
     this.cachedText = undefined;
     this.cachedHasSelection = undefined;
     return "moved";

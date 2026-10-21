@@ -39,6 +39,7 @@ from app.services.ssh_manager import ManagedSession, SessionManager
 from app.services.system_settings import load_runtime_system_settings, resolve_retry_delay_seconds
 from app.services.types import PtyInfo
 from app.services.terminal_output import OUTPUT_PROTOCOL
+from app.services.terminal_resize import TerminalResizeQueue
 
 logger = get_logger(__name__)
 
@@ -711,6 +712,26 @@ async def terminal_socket(
 
         bound_session = session
         subscription = session.output.subscribe(websocket, framed=framed)
+
+        async def apply_resize(rows: int, cols: int) -> None:
+            current = session_manager.get_session(session_id)
+            if not current or current.status != "active" or not current.channel:
+                return
+            await current.resize(rows, cols)
+            try:
+                pty = session_manager.deserialize_pty(record.pty_info)
+                pty.rows = rows
+                pty.cols = cols
+                record.pty_info = session_manager.serialize_pty(pty)
+            except Exception:
+                record.pty_info = session_manager.serialize_pty(
+                    PtyInfo(term="xterm-256color", rows=rows, cols=cols)
+                )
+            logger.info("ws-resize-pty-updated session_id=%s rows=%s cols=%s", session_id, rows, cols)
+
+        # A resize performs several SSH round trips. Keep those awaits out of
+        # the receive loop so typing/wheel reports continue to reach the PTY.
+        resize_queue = TerminalResizeQueue(apply_resize)
         try:
             # DA 响应（例如 \x1b[>0;276;0c）在重连阶段可能被误注入到远端 shell。
             # 抑制窗口对每次 WS 建连都开启，不再依赖是否有回放缓冲数据。
@@ -759,34 +780,14 @@ async def terminal_socket(
                         payload.rows,
                         payload.cols,
                     )
-                    await active_session.resize(payload.rows, payload.cols)
-                    try:
-                        pty = session_manager.deserialize_pty(record.pty_info)
-                        pty.rows = payload.rows
-                        pty.cols = payload.cols
-                        record.pty_info = session_manager.serialize_pty(pty)
-                        logger.info(
-                            "ws-resize-pty-updated session_id=%s rows=%s cols=%s",
-                            session_id,
-                            pty.rows,
-                            pty.cols,
-                        )
-                    except Exception:
-                        record.pty_info = session_manager.serialize_pty(
-                            PtyInfo(term="xterm-256color", rows=payload.rows, cols=payload.cols)
-                        )
-                        logger.warning(
-                            "ws-resize-pty-reset session_id=%s rows=%s cols=%s",
-                            session_id,
-                            payload.rows,
-                            payload.cols,
-                        )
+                    resize_queue.request(payload.rows, payload.cols)
         except WebSocketDisconnect:
             return
         except Exception as exc:
             logging.getLogger(__name__).warning("terminal_socket error: %s", exc)
             return
         finally:
+            await resize_queue.close()
             await bound_session.output.unsubscribe(websocket)
             latest_session = session_manager.get_session(session_id)
             if latest_session and latest_session is not bound_session:

@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type WebSocketRoute } from "@playwright/test";
 
 for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 }]) {
   test.describe(viewport.width < 768 ? "mobile navigation" : "desktop navigation", () => {
@@ -25,6 +25,7 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 
           started_at: new Date().toISOString(),
           last_activity: new Date().toISOString(),
           enhanced_enabled: false,
+          target_avg_rtt_ms: 37,
         };
         await page.route("**/*", async (route) => {
           if (route.request().resourceType() !== "fetch") return route.continue();
@@ -36,9 +37,10 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 
           return route.fulfill({ status: 503, json: { detail: "Unavailable in navigation test" } });
         });
         await page.routeWebSocket("**/sessions/ws/sessions/**", () => {});
-        let terminalCloses = 0;
+        const terminalSockets = new Set<WebSocketRoute>();
         await page.routeWebSocket("**/sessions/ws/terminal/**", (socket) => {
-          socket.onClose(() => terminalCloses++);
+          terminalSockets.add(socket);
+          socket.onClose(() => terminalSockets.delete(socket));
           socket.send(JSON.stringify({ type: "replay_start" }));
           socket.send(JSON.stringify({ type: "output", seq: 1, data: "Ready\r\n$ " }));
           socket.send(JSON.stringify({ type: "replay_end", seq: 1 }));
@@ -52,6 +54,8 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 
           await expect(page).toHaveURL(/\/terminal\/navigation$/);
           await expect(page.locator(".xterm")).toBeVisible();
           await expect(page.getByText("已连接", { exact: true })).toBeVisible();
+          await expect(page.getByText(/^网页 \d+ms$/)).toBeVisible();
+          await expect(page.getByText("SSH 37ms", { exact: true })).toBeVisible();
           session.name = `Updated session ${visit + 1}`;
           if (back === "arrow") {
             await page.getByRole("button", { name: viewport.width < 768 ? "返回" : "返回会话管理", exact: true }).click();
@@ -62,7 +66,7 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 
           expect(errors).toEqual([]);
           await expect(page.getByRole("button", { name: "打开会话 " + session.name, exact: true })).toBeVisible();
           await expect(page.locator(".xterm")).toHaveCount(0);
-          await expect.poll(() => terminalCloses).toBe(visit + 1);
+          await expect.poll(() => terminalSockets.size).toBe(0);
           await expect(page.locator("html")).toHaveAttribute("data-navigation-test", "same-document");
           expect(errors).toEqual([]);
         }

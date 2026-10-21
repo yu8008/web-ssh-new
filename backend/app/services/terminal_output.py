@@ -80,7 +80,8 @@ class TerminalOutputSubscription:
                     await self.wake.wait()
                     if not self.queue:
                         continue
-                    # Coalesce a short live burst without delaying replay.
+                    # Give ready SSH callbacks a turn to coalesce a live burst.
+                    # The default yields without a fixed delay on each echo.
                     if self.replayed_at is not None:
                         await asyncio.sleep(self.owner.batch_delay)
                 item = self.queue.popleft()
@@ -130,7 +131,7 @@ class TerminalOutputSubscription:
 class TerminalOutput:
     def __init__(
         self, buffer: SessionBuffer, websockets: set[WebSocket], *,
-        batch_delay: float = 0.008, batch_chars: int = 64 * 1024,
+        batch_delay: float = 0, batch_chars: int = 64 * 1024,
         max_queued_bytes: int = 16 * 1024 * 1024, send_timeout: float = 10,
     ) -> None:
         self.buffer = buffer

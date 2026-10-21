@@ -1,8 +1,14 @@
-/** Coalesce wheel reports within one display frame. Preserve every report and
- * flush before keys/clicks so scroll bursts cannot delay or reorder other input. */
+/** Send the first wheel report immediately, then coalesce a burst per frame.
+ * Preserve every report and flush before keys/clicks to retain input order. */
 export function createTerminalInputWriter(view: Window, send: (data: string) => void) {
   let frame: number | undefined;
   let pending = "";
+  const scheduleFrame = () => {
+    frame = view.requestAnimationFrame(() => {
+      frame = undefined;
+      flush();
+    });
+  };
   const flush = () => {
     if (frame !== undefined) view.cancelAnimationFrame(frame);
     frame = undefined;
@@ -16,8 +22,12 @@ export function createTerminalInputWriter(view: Window, send: (data: string) => 
     write(data: string) {
       const wheel = /^\x1b\[<(\d+);\d+;\d+M$/.exec(data);
       if (wheel && (Number(wheel[1]) & 192) === 64) {
-        pending += data;
-        if (frame === undefined) frame = view.requestAnimationFrame(flush);
+        if (frame === undefined) {
+          send(data);
+          scheduleFrame();
+        } else {
+          pending += data;
+        }
       } else {
         flush();
         send(data);

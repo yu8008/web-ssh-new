@@ -1,10 +1,42 @@
 import { describe, expect, it } from "vitest";
-import { SelectionTranscript, type SelectionRow } from "./selectionTranscript";
+import type { Terminal } from "xterm";
+import { captureSelectionRows, SelectionTranscript, type SelectionRow } from "./selectionTranscript";
 
 const row = (text: string, wrapped = false): SelectionRow => ({
   text, wrapped, offsets: Array.from({ length: 81 }, (_, index) => index),
 });
 const frame = (...text: string[]) => text.map((value) => row(value));
+
+it("reuses column offsets across moved rows without sharing duplicate row identities", () => {
+  let reads = 0;
+  let lines = ["ABCD", "WXYZ", "    "];
+  const term = {
+    rows: 3, cols: 4,
+    buffer: { active: {
+      viewportY: 0,
+      getNullCell: () => ({}),
+      getLine: (index: number) => ({
+        isWrapped: false,
+        translateToString: () => lines[index].trimEnd(),
+        getCell: (col: number) => {
+          reads++;
+          return { getChars: () => lines[index][col], getWidth: () => 1 };
+        },
+      }),
+    } },
+  } as unknown as Terminal;
+  const first = captureSelectionRows(term);
+  expect(reads).toBe(12);
+  lines = ["WXYZ", "    ", "    "];
+  const next = captureSelectionRows(term, first);
+  expect(reads).toBe(12);
+  expect(next[0].offsets).toBe(first[1].offsets);
+  expect(next[1]).not.toBe(next[2]);
+  expect(next[1].offsets).toBe(next[2].offsets);
+  const selection = new SelectionTranscript(next, { row: 0, col: 0 });
+  selection.move({ row: 2, col: 4 });
+  expect(selection.getText()).toBe("WXYZ\n\n");
+});
 
 describe("TUI selection transcript", () => {
   it("keeps selected text across remote repaints and includes fixed chrome once", () => {

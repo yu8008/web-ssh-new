@@ -36,6 +36,8 @@ class FixtureSocket extends EventTarget {
 }
 const sockets: FixtureSocket[] = [];
 window.WebSocket = FixtureSocket as unknown as typeof WebSocket;
+let parseWrites = 0;
+let measuredTerminal: unknown;
 
 export function Harness() {
   const enhancedSessionRef = React.useRef(false);
@@ -44,6 +46,12 @@ export function Harness() {
   const noop = React.useCallback(() => {}, []);
   const state = useTerminalSocket({ sessionId: "pipeline", t, enhancedSessionRef, push: noop, reportNetworkHint: noop, clearNetworkHint: noop, setCurrentDir: noop, onCopyRequest: setCopied });
   React.useEffect(() => {
+    const term = state.terminalInstance.current;
+    if (term && measuredTerminal !== term) {
+      measuredTerminal = term;
+      const write = term.write.bind(term);
+      term.write = (data, callback) => { parseWrites++; write(data, callback); };
+    }
     window.pipeline = {
       frame: (frame) => sockets.at(-1)!.receive(typeof frame === "string" ? frame : JSON.stringify(frame)),
       screen: () => {
@@ -63,6 +71,7 @@ export function Harness() {
       count: () => sockets.length,
       history: () => state.terminalInstance.current!.options.scrollback,
       dimensions: () => ({ rows: state.terminalInstance.current!.rows, cols: state.terminalInstance.current!.cols }),
+      writes: () => parseWrites,
     };
   }, [state]);
   return <>
@@ -85,6 +94,7 @@ declare global {
       screen(): string; top(): string | undefined; scroll(line: number): void;
       select(): void; selectAll(): void; selected(): string; inputs(): Array<{ type: string; data?: string }>;
       count(): number; history(): number | undefined; dimensions(): { rows: number; cols: number };
+      writes(): number;
     };
   }
 }

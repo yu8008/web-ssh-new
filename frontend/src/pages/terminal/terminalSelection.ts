@@ -39,6 +39,8 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
   let completedRepaint = false;
   let captureStopped = false;
   let disposed = false;
+  let capturedFrame: SelectionRow[] = [];
+  const captureFrame = () => (capturedFrame = captureSelectionRows(term, capturedFrame));
 
   const getText = () => transcript?.getText() ?? term.getSelection();
   const hasSelection = () => transcript?.hasSelection() ?? term.hasSelection();
@@ -179,7 +181,7 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
   };
 
   const begin = (event: MouseEvent) => {
-    transcript = new SelectionTranscript(pendingFrame ?? captureSelectionRows(term), coords(event.clientX, event.clientY), event.altKey);
+    transcript = new SelectionTranscript(pendingFrame ?? captureFrame(), coords(event.clientX, event.clientY), event.altKey);
     columnMode = event.altKey;
     pendingFrame = null;
     active = true;
@@ -214,7 +216,7 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
       // Defer the click until release. A press that becomes a drag must not
       // activate a TUI button or change the output under the selection anchor.
       pendingDown = event;
-      pendingFrame = captureSelectionRows(term);
+      pendingFrame = captureFrame();
       term.focus();
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -309,7 +311,7 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
     parseTimer = undefined;
     if (!remote || !transcript || synchronizedRepaint) return;
     if (disposed) return;
-    const result = transcript.scroll(captureSelectionRows(term), remote.direction);
+    const result = transcript.scroll(captureFrame(), remote.direction);
     if (result === "moved") {
       remote = null;
       stoppedDirection = 0;
@@ -338,7 +340,7 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
     } else if (parseTimer === undefined) {
       // A bounded trailing check also runs during continuous output. Restarting
       // a debounce on every SSH chunk could starve selection indefinitely.
-      parseTimer = view.setTimeout(captureRemote, 16);
+      parseTimer = view.setTimeout(captureRemote, 4);
     }
   });
   // Modern TUIs bracket a repaint with DEC synchronized-output mode. A slow

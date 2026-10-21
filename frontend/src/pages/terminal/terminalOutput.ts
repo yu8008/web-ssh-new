@@ -1,6 +1,6 @@
 export const TERMINAL_OUTPUT_PROTOCOL = "webssh.output.v1";
 
-type OutputJob = { data: string; onParsed?: () => void };
+type OutputJob = { data: string; callbacks?: Array<() => void> };
 type OutputOptions = {
   write: (data: string, onParsed: () => void) => void;
   beforeWrite?: () => unknown;
@@ -12,7 +12,7 @@ type OutputOptions = {
 };
 
 /** Keep only one xterm parse in flight and yield between bounded bursts.
- * Small transport messages share a write; callbacks form ordering barriers. */
+ * Completion callbacks share a write; empty jobs form replay/reset barriers. */
 export function createTerminalOutput({
   write, beforeWrite, afterWrite, onOverflow,
   chunkSize = 16 * 1024, maxQueuedChars = 16 * 1024 * 1024, timeBudgetMs = 8,
@@ -44,7 +44,7 @@ export function createTerminalOutput({
     if (head === queue.length) { queue = []; head = 0; }
     else if (head >= 256) { queue = queue.slice(head); head = 0; }
     if (!job.data) {
-      job.onParsed?.();
+      job.callbacks?.forEach((callback) => callback());
       schedule();
       return;
     }
@@ -55,7 +55,7 @@ export function createTerminalOutput({
       writing = false;
       if (disposed) return;
       afterWrite?.(snapshot);
-      job.onParsed?.();
+      job.callbacks?.forEach((callback) => callback());
       if (writes >= 8 || performance.now() - turnStart >= timeBudgetMs) schedule();
       else drain();
     });
@@ -70,12 +70,12 @@ export function createTerminalOutput({
         return;
       }
       if (!data) {
-        if (onParsed) queue.push({ data: "", onParsed });
+        if (onParsed) queue.push({ data: "", callbacks: [onParsed] });
       } else {
         let offset = 0;
         while (offset < data.length) {
           const tail = queue.length > head ? queue[queue.length - 1] : undefined;
-          const available = tail && !tail.onParsed ? chunkSize - tail.data.length : 0;
+          const available = tail?.data ? chunkSize - tail.data.length : 0;
           const size = Math.min(available || chunkSize, data.length - offset);
           const part = data.slice(offset, offset + size);
           if (available) tail!.data += part;
@@ -83,14 +83,20 @@ export function createTerminalOutput({
           offset += size;
         }
         queuedChars += data.length;
-        if (onParsed) queue[queue.length - 1].onParsed = onParsed;
+        if (onParsed) (queue[queue.length - 1].callbacks ??= []).push(onParsed);
       }
-      schedule();
+      // The socket callback is already an event-loop task. Starting an idle
+      // writer here preserves xterm's immediate echo path after user input.
+      if (!writing && timer === undefined) {
+        turnStart = performance.now();
+        writes = 0;
+        drain();
+      }
     },
     /** A new replay supersedes pending output, after the active parse finishes. */
     replacePending(reset: () => void) {
       if (disposed) return;
-      queue = [{ data: "", onParsed: reset }]; head = 0; queuedChars = 0;
+      queue = [{ data: "", callbacks: [reset] }]; head = 0; queuedChars = 0;
       overflowed = false;
       schedule();
     },

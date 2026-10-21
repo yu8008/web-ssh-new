@@ -175,7 +175,7 @@ test("ordinary shell selection retains native scrollback auto-scroll", async ({ 
   expect(await page.locator("#wheels").textContent()).toBe("0");
 });
 
-test("TUI wheel bursts share a packet without dropping or reordering reports", async ({ page }) => {
+test("TUI wheel bursts send immediately then batch without dropping or reordering reports", async ({ page }) => {
   await open(page, "?delay=10&chunkDelay=0");
   await page.locator(".xterm-screen").evaluate((screen) => {
     const box = screen.getBoundingClientRect();
@@ -188,8 +188,8 @@ test("TUI wheel bursts share a packet without dropping or reordering reports", a
   });
   await expect(page.locator("#wheels")).toHaveText("5");
   const packets: string[] = JSON.parse((await page.locator("#packets").textContent())!);
-  expect(packets).toHaveLength(1);
-  expect([...packets[0].matchAll(/\x1b\[<(64|65);/g)].map((match) => match[1])).toEqual(["65", "65", "65", "64", "64"]);
+  expect(packets).toHaveLength(2);
+  expect([...packets.join("").matchAll(/\x1b\[<(64|65);/g)].map((match) => match[1])).toEqual(["65", "65", "65", "64", "64"]);
 });
 
 test("fast remote repaints advance promptly without repeatedly reading the full selection", async ({ page }) => {

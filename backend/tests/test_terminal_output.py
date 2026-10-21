@@ -94,6 +94,36 @@ def test_live_bursts_are_batched_without_losing_or_reordering_characters() -> No
     asyncio.run(scenario())
 
 
+def test_live_echo_does_not_wait_for_a_fixed_batch_window(monkeypatch) -> None:
+    async def scenario() -> None:
+        output = TerminalOutput(SessionBuffer(), set())
+        echoed = asyncio.Event()
+
+        class EchoViewer(Viewer):
+            async def send_text(self, data: str) -> None:
+                await super().send_text(data)
+                if data == "echo":
+                    echoed.set()
+
+        viewer = EchoViewer()
+        subscription = output.subscribe(viewer)
+        await until(lambda: subscription.replayed_at is not None)
+        requested_delays = []
+        original_sleep = asyncio.sleep
+
+        async def record_sleep(delay):
+            requested_delays.append(delay)
+            await original_sleep(0)
+
+        monkeypatch.setattr(asyncio, "sleep", record_sleep)
+        output.publish("echo")
+        await asyncio.wait_for(echoed.wait(), timeout=1)
+        assert not any(delay > 0 for delay in requested_delays)
+        await output.close()
+
+    asyncio.run(scenario())
+
+
 def test_a_failed_viewer_does_not_stop_other_viewers_or_replay_storage() -> None:
     async def scenario() -> None:
         output = TerminalOutput(SessionBuffer(), set())
@@ -244,4 +274,77 @@ def test_terminal_endpoint_negotiates_output_and_keeps_user_input(monkeypatch, f
             assert [frame["type"] for frame in frames] == ["replay_start", "output", "replay_end"]
         else:
             assert viewer.messages == ["prompt 中文"]
+    asyncio.run(scenario())
+
+
+def test_terminal_input_does_not_wait_for_resize_and_latest_size_wins(monkeypatch) -> None:
+    async def scenario() -> None:
+        output = TerminalOutput(SessionBuffer(), set())
+        resize_started = asyncio.Event()
+        release_resize = asyncio.Event()
+        final_resize = asyncio.Event()
+        input_received = asyncio.Event()
+        disconnect = asyncio.Event()
+        sizes = []
+
+        async def resize(rows, cols):
+            sizes.append((rows, cols))
+            resize_started.set()
+            await release_resize.wait()
+            if (rows, cols) == (32, 120):
+                final_resize.set()
+
+        async def send(data):
+            assert data == "typed while resizing"
+            input_received.set()
+
+        session = SimpleNamespace(output=output, status="active", channel=object(), send=send, resize=resize)
+        record = SimpleNamespace(user_id=1, last_activity=None, pty_info='{"term":"xterm-256color","rows":24,"cols":80}')
+        manager = SimpleNamespace(
+            get_session=lambda _id: session,
+            deserialize_pty=lambda data: SimpleNamespace(**json.loads(data)),
+            serialize_pty=lambda pty: json.dumps(vars(pty)),
+        )
+        state = SimpleNamespace(session_manager=manager)
+        db = SimpleNamespace(execute=lambda _query: SimpleNamespace(scalar_one_or_none=lambda: record))
+
+        class ResizingViewer(Viewer):
+            headers = {"sec-websocket-protocol": "webssh.output.v1"}
+            query_params = {"lang": "en-US"}
+            reads = 0
+
+            async def accept(self, *, subprotocol=None):
+                pass
+
+            async def receive_text(self):
+                self.reads += 1
+                await asyncio.sleep(0)
+                if self.reads == 1:
+                    return json.dumps({"type": "resize", "rows": 30, "cols": 80})
+                if self.reads == 2:
+                    await resize_started.wait()
+                    return json.dumps({"type": "resize", "rows": 31, "cols": 100})
+                if self.reads == 3:
+                    return json.dumps({"type": "resize", "rows": 32, "cols": 120})
+                if self.reads == 4:
+                    return json.dumps({"type": "input", "data": "typed while resizing"})
+                await disconnect.wait()
+                raise WebSocketDisconnect()
+
+        monkeypatch.setattr(sessions_api, "get_current_user_from_ws", lambda *_args: SimpleNamespace(id=1))
+        endpoint = asyncio.create_task(sessions_api.terminal_socket(ResizingViewer(), "fixture", state, db))
+        try:
+            await asyncio.wait_for(resize_started.wait(), 1)
+            await asyncio.wait_for(input_received.wait(), .5)
+            assert not release_resize.is_set()
+            release_resize.set()
+            await asyncio.wait_for(final_resize.wait(), 1)
+            assert sizes == [(30, 80), (32, 120)]
+            await asyncio.sleep(0)
+            assert json.loads(record.pty_info) == {"term": "xterm-256color", "rows": 32, "cols": 120}
+        finally:
+            release_resize.set()
+            disconnect.set()
+            await asyncio.wait_for(endpoint, 2)
+
     asyncio.run(scenario())

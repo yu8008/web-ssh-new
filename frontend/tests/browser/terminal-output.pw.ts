@@ -6,6 +6,20 @@ async function open(page: import("@playwright/test").Page, suffix = "") {
   await expect(page.locator("#connection")).toHaveText("open");
 }
 
+test("packet completion callbacks do not serialize a burst into hundreds of parser tasks", async ({ page }) => {
+  await open(page);
+  const writesBefore = await page.evaluate(() => window.pipeline.writes());
+  await page.evaluate(() => {
+    window.pipeline.frame({ type: "replay_start" });
+    for (let index = 0; index < 300; index++) {
+      window.pipeline.frame({ type: "output", seq: index + 1, data: `packet ${index}: 中文😀 ${"x".repeat(100)}\r\n` });
+    }
+    window.pipeline.frame({ type: "replay_end", seq: 300 });
+  });
+  await expect.poll(() => page.evaluate(() => window.pipeline.screen())).toContain("packet 299:");
+  expect(await page.evaluate(() => window.pipeline.writes()) - writesBefore).toBeLessThanOrEqual(5);
+});
+
 test("loading waits for visible output; replay replies are suppressed but keys work", async ({ page }) => {
   await open(page);
   await page.evaluate(() => {
