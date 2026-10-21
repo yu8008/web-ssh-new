@@ -2,7 +2,7 @@ import React from "react";
 import { useToast } from "../../components/ToastContext";
 import { useApp } from "../../context/AppContextCore";
 import { copyTextToClipboard } from "./clipboardUtils";
-import { darkTerminalTheme, lightTerminalTheme, resolveCopyText } from "./terminalUtils";
+import { darkTerminalTheme, resolveCopyText } from "./terminalUtils";
 import { useTerminalSocket } from "./useTerminalSocket";
 import { useTerminalSessionInfo } from "./useTerminalSessionInfo";
 
@@ -72,7 +72,9 @@ export function useTerminalSession(sessionId?: string) {
   React.useEffect(() => {
     const term = terminalInstanceRef.current;
     if (!term) return;
-    term.options.theme = isDark ? darkTerminalTheme : lightTerminalTheme;
+    // 终端画布固定深色：Codex 等 TUI 只在启动时探测一次配色，
+    // 跟着页面主题切换会出现「白底深色输入框」这类错配。
+    term.options.theme = darkTerminalTheme;
     term.refresh(0, term.rows - 1);
     // 主题切换后同步给 tmux，避免 TUI（如 Codex）继续按旧配色绘制输入框。
     announceThemeColors(isDark);

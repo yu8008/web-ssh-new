@@ -6,7 +6,6 @@ import {
   buildDefaultColorAnnouncement,
   clampSelectionAnchor,
   darkTerminalTheme,
-  lightTerminalTheme,
   normalizeWheelDeltaToLines,
   normalizeWheelDeltaToPixels,
   sanitizeTerminalOutputChunk,
@@ -51,9 +50,7 @@ export function useTerminalSocket({
   const [selectionText, setSelectionText] = React.useState("");
   // 选区结束位置（相对终端容器），用于把“选中即复制”的气泡贴在鼠标附近。
   const [selectionAnchor, setSelectionAnchor] = React.useState<{ x: number; y: number } | null>(null);
-  const themeRef = React.useRef<"dark" | "light">(
-    typeof window !== "undefined" && localStorage.getItem("theme") === "light" ? "light" : "dark"
-  );
+  const themeRef = React.useRef<"dark" | "light">("dark");
   const copyRequestRef = React.useRef(onCopyRequest);
 
   React.useEffect(() => {
@@ -132,7 +129,7 @@ export function useTerminalSocket({
     if (!enhancedSessionRef.current) {
       return;
     }
-    const theme = themeRef.current === "light" ? lightTerminalTheme : darkTerminalTheme;
+    const theme = darkTerminalTheme;
     const payload = buildDefaultColorAnnouncement(theme);
     if (payload) {
       socket.send(JSON.stringify({ type: "input", data: payload }));
@@ -140,8 +137,8 @@ export function useTerminalSocket({
   }, [enhancedSessionRef]);
 
   const announceThemeColors = React.useCallback(
-    (isDark: boolean) => {
-      themeRef.current = isDark ? "dark" : "light";
+    (_isDark: boolean) => {
+      themeRef.current = "dark";
       sendThemeAnnouncement();
     },
     [sendThemeAnnouncement]
@@ -403,11 +400,8 @@ export function useTerminalSocket({
         return;
       }
 
-      const savedTheme = localStorage.getItem("theme");
-      const initialTheme = savedTheme === "light" ? "light" : "dark";
-
       term = new Terminal({
-        theme: initialTheme === "light" ? lightTerminalTheme : darkTerminalTheme,
+        theme: darkTerminalTheme,
         fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
         fontSize: 15,
         lineHeight: 1.3,
