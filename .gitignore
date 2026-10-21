@@ -42,6 +42,8 @@ frontend/data/
 .coverage
 coverage/
 htmlcov/
+frontend/playwright-report/
+frontend/test-results/
 
 # Tasks (local only)
 tasks/

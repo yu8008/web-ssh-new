@@ -1,0 +1,204 @@
+import type { IBufferLine, Terminal } from "xterm";
+
+export type SelectionPoint = { row: number; col: number };
+export type SelectionRow = { text: string; wrapped: boolean; offsets: number[] };
+
+export function captureSelectionRows(term: Terminal): SelectionRow[] {
+  const buffer = term.buffer.active;
+  return Array.from({ length: term.rows }, (_, index) => {
+    const line = buffer.getLine(buffer.viewportY + index);
+    return captureRow(line, term.cols);
+  });
+}
+
+function captureRow(line: IBufferLine | undefined, cols: number): SelectionRow {
+  let text = "";
+  const offsets = [0];
+  for (let col = 0; col < cols; col += 1) {
+    const cell = line?.getCell(col);
+    offsets[col] = text.length;
+    if (cell?.getWidth() !== 0) {
+      text += cell?.getChars() || " ";
+    }
+    offsets[col + 1] = text.length;
+  }
+  return { text: text.trimEnd(), wrapped: line?.isWrapped ?? false, offsets };
+}
+
+function sameRow(a: SelectionRow, b: SelectionRow): boolean {
+  return a.text === b.text && a.wrapped === b.wrapped;
+}
+
+type ScrollMatch = { oldStart: number; newStart: number; length: number };
+
+/** Find a moving block, ignoring stationary TUI headers/footers. Never guess a
+ * displacement from blank/repeated rows alone: that could corrupt copied text. */
+function findScrollMatch(previous: SelectionRow[], next: SelectionRow[], direction: number): ScrollMatch | null {
+  const previousCounts = new Map<string, number>();
+  const nextCounts = new Map<string, number>();
+  for (const row of previous) if (row.text.trim()) previousCounts.set(row.text, (previousCounts.get(row.text) ?? 0) + 1);
+  for (const row of next) if (row.text.trim()) nextCounts.set(row.text, (nextCounts.get(row.text) ?? 0) + 1);
+  // A half-painted downward scroll repeats rows across the old/new boundary.
+  // Wait for the complete frame rather than inserting those stale rows twice.
+  if ([...nextCounts].some(([text, count]) => previousCounts.get(text) === 1 && count > 1)) return null;
+  let best: ScrollMatch | null = null;
+  let bestScore = 0;
+  let ambiguous = false;
+  for (let distance = 1; distance < previous.length; distance += 1) {
+    const delta = distance * direction;
+    let start = 0;
+    while (start < next.length) {
+      const oldStart = start + delta;
+      if (oldStart < 0 || oldStart >= previous.length || !sameRow(previous[oldStart], next[start])) {
+        start += 1;
+        continue;
+      }
+      let length = 0;
+      const distinct = new Set<string>();
+      let meaningful = 0;
+      while (start + length < next.length && oldStart + length < previous.length &&
+        sameRow(previous[oldStart + length], next[start + length])) {
+        const text = next[start + length].text.trim();
+        if (text) {
+          meaningful += 1;
+          distinct.add(text);
+        }
+        length += 1;
+      }
+      if (distinct.size >= 2) {
+        const top = Math.min(oldStart, start);
+        const bottom = Math.max(oldStart, start) + length;
+        const changedOutside = next.some((row, index) =>
+          (index < top || index >= bottom) && index > 0 && index < next.length - 1 && !sameRow(row, previous[index]));
+        if (changedOutside) {
+          start += Math.max(1, length);
+          continue;
+        }
+        const score = meaningful * (previous.length + 1) + length;
+        if (score > bestScore) {
+          best = { oldStart, newStart: start, length };
+          bestScore = score;
+          ambiguous = false;
+        } else if (score === bestScore) {
+          ambiguous = true;
+        }
+      }
+      start += Math.max(1, length);
+    }
+  }
+  return ambiguous ? null : best;
+}
+
+/** Immutable rows outlive TUI repaints. Frame rows point into the captured
+ * document, so scrolling back reuses rows and fixed chrome is included once. */
+export class SelectionTranscript {
+  private rows: SelectionRow[];
+  private frame: SelectionRow[];
+  private anchor: { row: SelectionRow; col: number };
+  private end: { row: SelectionRow; col: number };
+
+  constructor(frame: SelectionRow[], point: SelectionPoint, private readonly columnMode = false) {
+    this.rows = [...frame];
+    this.frame = [...frame];
+    this.anchor = { row: frame[point.row], col: point.col };
+    this.end = { ...this.anchor };
+  }
+
+  move(point: SelectionPoint): void {
+    this.end = { row: this.frame[point.row], col: point.col };
+  }
+
+  scroll(next: SelectionRow[], direction: -1 | 1): "moved" | "unchanged" | "unmatched" | "limit" {
+    if (next.length !== this.frame.length) return "unmatched";
+    if (next.every((row, index) => sameRow(row, this.frame[index]))) return "unchanged";
+    const match = findScrollMatch(this.frame, next, direction);
+    if (!match) return "unmatched";
+    const { oldStart, newStart, length } = match;
+    const top = Math.min(oldStart, newStart);
+    const bottom = Math.max(oldStart, newStart) + length;
+    const mapped = [...this.frame];
+    for (let index = 0; index < length; index += 1) {
+      mapped[newStart + index] = this.frame[oldStart + index];
+    }
+
+    // Reuse already captured neighbours when reversing the scroll direction.
+    // Stationary chrome outside the moving block must not become a neighbour.
+    const fixed = new Set([...this.frame.slice(0, top), ...this.frame.slice(bottom)]);
+    const document = [...this.rows];
+    if (direction > 0) {
+      let position = document.indexOf(mapped[newStart + length - 1]) + 1;
+      for (let index = newStart + length; index < bottom; index += 1) {
+        const existing = document[position];
+        if (existing && !fixed.has(existing) && sameRow(existing, next[index])) {
+          mapped[index] = existing;
+        } else {
+          mapped[index] = next[index];
+          document.splice(position, 0, next[index]);
+        }
+        position += 1;
+      }
+    } else {
+      let position = document.indexOf(mapped[newStart]);
+      for (let index = newStart - 1; index >= top; index -= 1) {
+        const existing = document[position - 1];
+        if (existing && !fixed.has(existing) && sameRow(existing, next[index])) {
+          mapped[index] = existing;
+          position -= 1;
+        } else {
+          mapped[index] = next[index];
+          document.splice(position, 0, next[index]);
+        }
+      }
+    }
+    if (document.length > 10000 || document.reduce((size, row) => size + row.text.length + 1, 0) > 1024 * 1024) {
+      return "limit";
+    }
+    this.rows = document;
+    this.frame = mapped;
+    return "moved";
+  }
+
+  private range() {
+    const anchor = { row: this.rows.indexOf(this.anchor.row), col: this.anchor.col };
+    const end = { row: this.rows.indexOf(this.end.row), col: this.end.col };
+    return anchor.row < end.row || (anchor.row === end.row && anchor.col <= end.col)
+      ? { start: anchor, end } : { start: end, end: anchor };
+  }
+
+  getText(): string {
+    const { start, end } = this.range();
+    const selected = this.rows.slice(start.row, end.row + 1);
+    const left = Math.min(this.anchor.col, this.end.col);
+    const right = Math.max(this.anchor.col, this.end.col);
+    return selected.map((row, index) => {
+      const first = this.columnMode ? left : index === 0 ? start.col : 0;
+      const last = this.columnMode ? right : index === selected.length - 1 ? end.col : row.offsets.length - 1;
+      const text = row.text.slice(row.offsets[first] ?? row.text.length, row.offsets[last] ?? row.text.length);
+      return `${index > 0 && (this.columnMode || !row.wrapped) ? "\n" : ""}${text}`;
+    }).join("");
+  }
+
+  /** Visible part of the frozen selection, using xterm's public select API. */
+  getVisibleRange(): { start: SelectionPoint; end: SelectionPoint } | null {
+    const { start, end } = this.range();
+    let first = -1;
+    let last = -1;
+    this.frame.forEach((row, index) => {
+      const position = this.rows.indexOf(row);
+      if (position >= start.row && position <= end.row) {
+        if (first < 0) first = index;
+        last = index;
+      }
+    });
+    if (first < 0) return null;
+    if (this.columnMode) {
+      return {
+        start: { row: first, col: Math.min(this.anchor.col, this.end.col) },
+        end: { row: last, col: Math.max(this.anchor.col, this.end.col) },
+      };
+    }
+    const startCol = this.rows.indexOf(this.frame[first]) === start.row ? start.col : 0;
+    const endCol = this.rows.indexOf(this.frame[last]) === end.row ? end.col : this.frame[last].offsets.length - 1;
+    return { start: { row: first, col: startCol }, end: { row: last, col: endCol } };
+  }
+}

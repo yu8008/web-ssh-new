@@ -88,23 +88,26 @@ export function useTerminalSession(sessionId?: string) {
     }
   }, [isDark, terminalInstanceRef, announceThemeColors, push, t]);
 
+  const { clearSelectionSnapshot, getSelectionText } = socketState;
   const handleClear = React.useCallback(() => {
     const term = socketState.terminalInstance.current;
     if (!term) {
       return;
     }
+    clearSelectionSnapshot();
     term.clear();
     push(t("已清屏", "Screen cleared"));
-  }, [push, t, socketState.terminalInstance]);
+  }, [push, t, socketState.terminalInstance, clearSelectionSnapshot]);
 
   const handleSelectAll = React.useCallback(() => {
     const term = socketState.terminalInstance.current;
     if (!term) {
       return;
     }
+    clearSelectionSnapshot();
     term.selectAll();
     push(t("已全选", "Selected all"));
-  }, [push, t, socketState.terminalInstance]);
+  }, [push, t, socketState.terminalInstance, clearSelectionSnapshot]);
 
   const copyText = React.useCallback(async (text: string): Promise<boolean> => {
     if (!text) {
@@ -129,10 +132,10 @@ export function useTerminalSession(sessionId?: string) {
   }, [copyText]);
 
   const handleCopySelection = React.useCallback(async (): Promise<boolean> => {
-    const termSelection = socketState.terminalInstance.current?.getSelection() ?? "";
+    const termSelection = getSelectionText();
     const domSelection = window.getSelection()?.toString() ?? "";
     return copyText(resolveCopyText(termSelection, domSelection));
-  }, [copyText, socketState.terminalInstance]);
+  }, [copyText, getSelectionText]);
 
   const connectionLabel =
     socketState.connectionState === "open"

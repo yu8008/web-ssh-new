@@ -2,6 +2,7 @@ import React from "react";
 import { Terminal } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
 import { clearAuthStorage, getSession, getStoredToken, openTerminalSocket } from "../../lib/api";
+import { attachTerminalSelection } from "./terminalSelection";
 import {
   buildDefaultColorAnnouncement,
   clampSelectionAnchor,
@@ -44,7 +45,7 @@ export function useTerminalSocket({
   const reconnectCountdownIntervalRef = React.useRef<number | null>(null);
   const reconnectAttemptRef = React.useRef(0);
   const lastResizeStateRef = React.useRef<ResizeState | null>(null);
-  const suppressMouseReportRef = React.useRef(false);
+  const selectionControllerRef = React.useRef<ReturnType<typeof attachTerminalSelection> | null>(null);
   const [connectionState, setConnectionState] = React.useState<"connecting" | "open" | "closed">("connecting");
   const [autoReconnect, setAutoReconnect] = React.useState(true);
   const [reconnectCountdown, setReconnectCountdown] = React.useState<number | null>(null);
@@ -55,10 +56,12 @@ export function useTerminalSocket({
     typeof window !== "undefined" && localStorage.getItem("theme") === "light" ? "light" : "dark"
   );
   const copyRequestRef = React.useRef(onCopyRequest);
+  const selectionLimitRef = React.useRef(() => {});
 
   React.useEffect(() => {
     copyRequestRef.current = onCopyRequest;
-  }, [onCopyRequest]);
+    selectionLimitRef.current = () => push(t("选中内容已达上限，请分段复制", "Selection limit reached. Copy in smaller sections."));
+  }, [onCopyRequest, push, t]);
 
   const clearReconnectTimer = React.useCallback(() => {
     if (reconnectTimerRef.current) {
@@ -307,6 +310,9 @@ export function useTerminalSocket({
   const connectSocketRef = React.useRef(connectSocket);
   const sendInputRef = React.useRef(sendInput);
   const syncTerminalSizeRef = React.useRef(syncTerminalSize);
+  const getSelectionText = React.useCallback(() =>
+    selectionControllerRef.current?.getText() ?? terminalInstance.current?.getSelection() ?? "", []);
+  const clearSelectionSnapshot = React.useCallback(() => selectionControllerRef.current?.clear(), []);
   const scrollTerminal = React.useCallback((direction: "up" | "down", mode: "auto" | "remote" = "auto") => {
     const term = terminalInstance.current;
     const container = terminalRef.current;
@@ -380,14 +386,8 @@ export function useTerminalSocket({
     let disposed = false;
     let term: Terminal | null = null;
     let handleTerminalWheel: ((event: WheelEvent) => void) | null = null;
-    let handleTerminalMouseDown: ((event: MouseEvent) => void) | null = null;
-    let handleTerminalMouseMove: ((event: MouseEvent) => void) | null = null;
-    let selectionScrollTimer: number | null = null;
-    const shiftDragPoint = { x: 0, y: 0 };
-    let pendingMouseDown: MouseEvent | null = null;
-    let handleTerminalMouseUp: ((event: MouseEvent) => void) | null = null;
     let handleResize: (() => void) | null = null;
-    let selectionDisposable: { dispose: () => void } | null = null;
+    let selectionController: ReturnType<typeof attachTerminalSelection> | null = null;
 
     // 会话切换时清空上一个会话遗留的选区状态。
     setSelectionText("");
@@ -427,29 +427,24 @@ export function useTerminalSocket({
 
       connectSocketRef.current(term);
 
-      const coreMouseService = (term as unknown as { _core?: { coreMouseService?: { triggerMouseEvent: (event: unknown) => boolean } } })._core
-        ?.coreMouseService as { triggerMouseEvent: (event: unknown) => boolean; _wsghTriggerMouseEvent?: (event: unknown) => boolean } | undefined;
-      if (coreMouseService && !coreMouseService._wsghTriggerMouseEvent) {
-        coreMouseService._wsghTriggerMouseEvent = coreMouseService.triggerMouseEvent.bind(coreMouseService);
-        coreMouseService.triggerMouseEvent = (event) => {
-          if (suppressMouseReportRef.current) {
-            return false;
-          }
-          return coreMouseService._wsghTriggerMouseEvent?.(event) ?? false;
-        };
-      }
-
       term.onData((data) => {
         sendInputRef.current(data);
       });
 
-      selectionDisposable = term.onSelectionChange(() => {
-        const text = term?.getSelection() ?? "";
-        setSelectionText(text);
-        if (!text) {
-          setSelectionAnchor(null);
-        }
+      selectionController = attachTerminalSelection(term, terminalContainer, {
+        onChange: (text) => {
+          setSelectionText(text);
+          if (!text) setSelectionAnchor(null);
+        },
+        onFinish: (clientX, clientY) => {
+          const rect = terminalContainer.getBoundingClientRect();
+          setSelectionAnchor(clampSelectionAnchor(clientX - rect.left, clientY - rect.top, {
+            width: rect.width, height: rect.height,
+          }));
+        },
+        onLimit: () => selectionLimitRef.current(),
       });
+      selectionControllerRef.current = selectionController;
 
       // 复制快捷键：Windows/Linux 用 Ctrl+Shift+C，macOS 用 Cmd+C。
       term.attachCustomKeyEventHandler((event) => {
@@ -463,7 +458,7 @@ export function useTerminalSocket({
         if (!copyCombo) {
           return true;
         }
-        const selection = term?.getSelection() ?? "";
+        const selection = getSelectionText();
         if (selection) {
           copyRequestRef.current?.(selection);
         }
@@ -543,121 +538,6 @@ export function useTerminalSocket({
       };
 
       terminalContainer.addEventListener("wheel", handleTerminalWheel, { capture: true, passive: false });
-      // 应用开启鼠标上报（如 Codex）时：单击仍发给远端（TUI 按钮可点），
-      // 按下后拖动超过阈值再转成本地选区，并支持拖到边缘自动滚动。
-      const startEdgeScroll = () => {
-        if (selectionScrollTimer !== null) {
-          return;
-        }
-        selectionScrollTimer = window.setInterval(() => {
-          const host = terminalRef.current;
-          if (!host || !term || !suppressMouseReportRef.current) {
-            return;
-          }
-          const rect = host.getBoundingClientRect();
-          let scrolled = false;
-          if (shiftDragPoint.y < rect.top + 8) {
-            term.scrollLines(-1);
-            scrolled = true;
-          } else if (shiftDragPoint.y > rect.bottom - 8) {
-            term.scrollLines(1);
-            scrolled = true;
-          }
-          if (scrolled) {
-            // 指针停在边缘不再产生 mousemove，主动补发一次让选区端点跟着视口移动
-            host.dispatchEvent(
-              new MouseEvent("mousemove", {
-                bubbles: true,
-                cancelable: true,
-                clientX: shiftDragPoint.x,
-                clientY: shiftDragPoint.y,
-                buttons: 1,
-              })
-            );
-          }
-        }, 45);
-      };
-
-      const beginLocalSelection = (origin: MouseEvent) => {
-        suppressMouseReportRef.current = true;
-        shiftDragPoint.x = origin.clientX;
-        shiftDragPoint.y = origin.clientY;
-        const selectionService = (term as unknown as {
-          _core?: { _selectionService?: { enable?: () => void; handleMouseDown?: (event: MouseEvent) => void } };
-        })._core?._selectionService;
-        if (selectionService?.enable && selectionService?.handleMouseDown) {
-          selectionService.enable();
-          selectionService.handleMouseDown(origin);
-        }
-        startEdgeScroll();
-      };
-
-      handleTerminalMouseDown = (event: MouseEvent) => {
-        if (!term || term.modes.mouseTrackingMode === "none") {
-          return;
-        }
-        if (event.button === 2) {
-          suppressMouseReportRef.current = true;
-          return;
-        }
-        if (event.button !== 0) {
-          return;
-        }
-        if (event.shiftKey || event.altKey) {
-          pendingMouseDown = null;
-          beginLocalSelection(event);
-          return;
-        }
-        // 先放行给远端：单击就是点应用里的按钮；拖动再切换为选区。
-        pendingMouseDown = event;
-      };
-
-      handleTerminalMouseMove = (event: MouseEvent) => {
-        if (pendingMouseDown && (event.buttons & 1) === 1) {
-          const dx = event.clientX - pendingMouseDown.clientX;
-          const dy = event.clientY - pendingMouseDown.clientY;
-          if (dx * dx + dy * dy > 16) {
-            const origin = pendingMouseDown;
-            pendingMouseDown = null;
-            beginLocalSelection(origin);
-          }
-        }
-        if (suppressMouseReportRef.current) {
-          shiftDragPoint.x = event.clientX;
-          shiftDragPoint.y = event.clientY;
-        }
-      };
-      document.addEventListener("mousemove", handleTerminalMouseMove, { capture: true });
-
-      handleTerminalMouseUp = (event: MouseEvent) => {
-        const clientX = event.clientX;
-        const clientY = event.clientY;
-        // 放到下一轮事件循环：此时 xterm 才把选区状态收敛完毕。
-        if (selectionScrollTimer !== null) {
-          window.clearInterval(selectionScrollTimer);
-          selectionScrollTimer = null;
-        }
-        window.setTimeout(() => {
-          suppressMouseReportRef.current = false;
-          const container = terminalRef.current;
-          const current = terminalInstance.current;
-          // 点气泡/工具栏本身时不重新定位，否则气泡会跳到点击处。
-          const target = event.target as HTMLElement | null;
-          if (!container || !current || target?.closest?.("[data-wsg-overlay]") || !current.getSelection()) {
-            return;
-          }
-          const rect = container.getBoundingClientRect();
-          setSelectionAnchor(
-            clampSelectionAnchor(clientX - rect.left, clientY - rect.top, {
-              width: rect.width,
-              height: rect.height,
-            })
-          );
-        }, 0);
-      };
-      terminalContainer.addEventListener("mousedown", handleTerminalMouseDown, { capture: true });
-      document.addEventListener("mouseup", handleTerminalMouseUp, { capture: true });
-
       handleResize = () => {
         if (!term) {
           return;
@@ -675,28 +555,16 @@ export function useTerminalSocket({
       if (handleTerminalWheel) {
         terminalContainer.removeEventListener("wheel", handleTerminalWheel, { capture: true });
       }
-      if (handleTerminalMouseDown) {
-        terminalContainer.removeEventListener("mousedown", handleTerminalMouseDown, { capture: true });
-      }
-      if (handleTerminalMouseUp) {
-        document.removeEventListener("mouseup", handleTerminalMouseUp, { capture: true });
-      }
-      if (handleTerminalMouseMove) {
-        document.removeEventListener("mousemove", handleTerminalMouseMove, { capture: true });
-      }
-      if (selectionScrollTimer !== null) {
-        window.clearInterval(selectionScrollTimer);
-        selectionScrollTimer = null;
-      }
       if (handleResize) {
         window.removeEventListener("resize", handleResize);
       }
-      selectionDisposable?.dispose();
+      selectionController?.dispose();
+      if (selectionControllerRef.current === selectionController) selectionControllerRef.current = null;
       clearReconnectTimer();
       socketRef.current?.close();
       term?.dispose();
     };
-  }, [sessionId, clearReconnectTimer, enhancedSessionRef]);
+  }, [sessionId, clearReconnectTimer, enhancedSessionRef, getSelectionText]);
 
   return {
     terminalRef,
@@ -711,6 +579,8 @@ export function useTerminalSocket({
     handleReconnect,
     handleCancelReconnect,
     selectionText,
+    getSelectionText,
+    clearSelectionSnapshot,
     selectionAnchor,
     announceThemeColors,
   };

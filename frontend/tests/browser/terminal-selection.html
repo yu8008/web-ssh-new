@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+  <head><meta charset="UTF-8"><title>Terminal selection regression fixture</title></head>
+  <body style="margin: 24px; background: #111827; color: white">
+    <div id="terminal" style="width: 700px; height: 260px"></div>
+    <button id="copy">Copy selection</button>
+    <button id="repaint">Unrelated repaint</button>
+    <button id="dispose">Dispose</button>
+    <div>Wheel reports: <span id="wheels">0</span></div>
+    <div>Completed selection: <span id="finished">0</span></div>
+    <pre id="selection"></pre>
+    <pre id="copied"></pre>
+    <pre id="inputs"></pre>
+    <script type="module" src="./terminal-selection-fixture.ts"></script>
+  </body>
+</html>
