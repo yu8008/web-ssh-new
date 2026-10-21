@@ -555,10 +555,25 @@ export function useTerminalSocket({
             return;
           }
           const rect = host.getBoundingClientRect();
+          let scrolled = false;
           if (shiftDragPoint.y < rect.top + 8) {
             term.scrollLines(-1);
+            scrolled = true;
           } else if (shiftDragPoint.y > rect.bottom - 8) {
             term.scrollLines(1);
+            scrolled = true;
+          }
+          if (scrolled) {
+            // 指针停在边缘不再产生 mousemove，主动补发一次让选区端点跟着视口移动
+            host.dispatchEvent(
+              new MouseEvent("mousemove", {
+                bubbles: true,
+                cancelable: true,
+                clientX: shiftDragPoint.x,
+                clientY: shiftDragPoint.y,
+                buttons: 1,
+              })
+            );
           }
         }, 45);
       };
