@@ -1,4 +1,4 @@
-import type { Terminal } from "xterm";
+import type { IDisposable, Terminal } from "xterm";
 import { CanvasAddon } from "xterm-addon-canvas";
 import { WebglAddon } from "xterm-addon-webgl";
 
@@ -20,9 +20,24 @@ function hardwareWebglAvailable(doc: Document): boolean {
 }
 
 /** Batch colored glyphs on the GPU; keep Canvas/DOM available when WebGL is
- * restricted or its context is lost while a terminal is open. */
-export function configureTerminalRendering(term: Terminal, { preferWebgl }: { preferWebgl?: boolean } = {}): void {
+ * restricted or its context is lost while a terminal is open.
+ * Dispose this controller before the terminal: renderer addons restore the DOM
+ * renderer on disposal and need xterm's render service to still be alive. */
+export function configureTerminalRendering(term: Terminal, { preferWebgl }: { preferWebgl?: boolean } = {}): IDisposable {
   term.options.smoothScrollDuration = 100;
+  let renderer: CanvasAddon | WebglAddon | undefined;
+  let lossListener: IDisposable | undefined;
+  let disposed = false;
+  const rendering: IDisposable = {
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      lossListener?.dispose();
+      lossListener = undefined;
+      renderer?.dispose();
+      renderer = undefined;
+    },
+  };
   const mark = (renderer: string) => {
     if (term.element) term.element.dataset.terminalRenderer = renderer;
   };
@@ -30,6 +45,7 @@ export function configureTerminalRendering(term: Terminal, { preferWebgl }: { pr
     const canvas = new CanvasAddon();
     try {
       term.loadAddon(canvas);
+      renderer = canvas;
       mark("canvas");
     } catch {
       canvas.dispose();
@@ -38,35 +54,35 @@ export function configureTerminalRendering(term: Terminal, { preferWebgl }: { pr
   };
   if (preferWebgl ?? hardwareWebglAvailable(term.element!.ownerDocument)) {
     let webgl: WebglAddon | undefined;
-    let lossListener: { dispose(): void } | undefined;
     const recover = () => {
+      if (disposed) return;
       lossListener?.dispose();
       lossListener = undefined;
       webgl?.dispose();
       webgl = undefined;
+      renderer = undefined;
       fallback();
     };
     try {
       webgl = new WebglAddon();
       webgl.onContextLoss(recover);
       term.loadAddon(webgl);
+      renderer = webgl;
       const element = term.element!;
       // The addon waits three seconds for context restoration. Recover on the
-      // DOM event immediately, with listener cleanup owned by the terminal.
+      // DOM event immediately, with listener cleanup owned by this controller.
       const onLoss = (event: Event) => { event.preventDefault(); recover(); };
       lossListener = {
         dispose: () => element.removeEventListener("webglcontextlost", onLoss, true),
       };
-      term.loadAddon({
-        activate: () => element.addEventListener("webglcontextlost", onLoss, true),
-        dispose: () => lossListener?.dispose(),
-      });
+      element.addEventListener("webglcontextlost", onLoss, true);
       mark("webgl");
-      return;
+      return rendering;
     } catch {
       lossListener?.dispose();
       webgl?.dispose();
     }
   }
   fallback();
+  return rendering;
 }

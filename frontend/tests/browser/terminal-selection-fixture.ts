@@ -2,6 +2,7 @@ import { Terminal } from "xterm";
 import "xterm/css/xterm.css";
 import { attachTerminalSelection } from "../../src/pages/terminal/terminalSelection";
 import { configureTerminalRendering } from "../../src/pages/terminal/terminalRendering";
+import { disposeTerminal } from "../../src/pages/terminal/terminalLifecycle";
 import { createTerminalInputWriter } from "../../src/pages/terminal/terminalInput";
 import { SelectionTranscript } from "../../src/pages/terminal/selectionTranscript";
 import { attachTerminalWheel } from "../../src/pages/terminal/terminalWheel";
@@ -33,9 +34,9 @@ const terminal = new Terminal({
   fontSize: 16, scrollback: 500, theme: { background: "#111827" },
 });
 terminal.open(element("terminal"));
-if (parameters.get("renderer") !== "dom") configureTerminalRendering(terminal, {
+const rendering = parameters.get("renderer") !== "dom" ? configureTerminalRendering(terminal, {
   preferWebgl: parameters.get("renderer") === "webgl" ? true : parameters.get("renderer") === "canvas" ? false : undefined,
-});
+}) : undefined;
 const viewport = attachTerminalViewport(terminal, element("terminal"));
 const output = createTerminalOutput({
   write: (data, done) => terminal.write(data, done),
@@ -100,7 +101,23 @@ attachTerminalShortcuts(terminal, selection.getText, (text) => { element("copied
 const wheelController = attachTerminalWheel(terminal, element("terminal"), () => parameters.has("enhanced"), inputWriter.write);
 element("copy").addEventListener("click", () => { element("copied").textContent = selection.getText(); });
 element("repaint").addEventListener("click", () => render(true));
-element("dispose").addEventListener("click", () => { clearInterval(steadyOutput); selection.dispose(); inputWriter.dispose(); wheelController.dispose(); output.dispose(); viewport.dispose(); });
+element("dispose").addEventListener("click", () => {
+  clearInterval(steadyOutput);
+  selection.dispose();
+  inputWriter.dispose();
+  wheelController.dispose();
+  output.dispose();
+  viewport.dispose();
+  disposeTerminal(terminal, rendering);
+});
+window.resizeTerminalForTest = () => terminal.resize(terminal.cols + 1, terminal.rows + 1);
+
+declare global {
+  interface Window {
+    resizeTerminalForTest(): void;
+  }
+}
+
 const steadyOutput = parameters.has("steady") ? setInterval(() => writeOutput("\x1b[0m"), 8) : undefined;
 if (shell) {
   terminal.write(Array.from({ length: 100 }, (_, index) => `Shell row ${String(index).padStart(3, "0")}`).join("\r\n"), () => {

@@ -5,6 +5,7 @@ import { clearAuthStorage, getSession, getStoredToken, openTerminalSocket } from
 import { attachTerminalSelection } from "./terminalSelection";
 import { createTerminalInputWriter } from "./terminalInput";
 import { configureTerminalRendering } from "./terminalRendering";
+import { disposeTerminal } from "./terminalLifecycle";
 import { attachTerminalWheel } from "./terminalWheel";
 import { createTerminalOutput, decodeTerminalOutput, TERMINAL_OUTPUT_PROTOCOL } from "./terminalOutput";
 import { attachTerminalViewport } from "./terminalViewport";
@@ -445,6 +446,7 @@ export function useTerminalSocket({
     let outputWriter: ReturnType<typeof createTerminalOutput> | null = null;
     let viewport: ReturnType<typeof attachTerminalViewport> | null = null;
     let rendered: { dispose(): void } | null = null;
+    let rendering: ReturnType<typeof configureTerminalRendering> | null = null;
 
     // 会话切换时清空上一个会话遗留的选区状态。
     setHasSelection(false);
@@ -478,7 +480,7 @@ export function useTerminalSocket({
       const fit = new FitAddon();
       term.loadAddon(fit);
       term.open(terminalContainer);
-      configureTerminalRendering(term);
+      rendering = configureTerminalRendering(term);
       fit.fit();
 
       terminalInstance.current = term;
@@ -566,7 +568,7 @@ export function useTerminalSocket({
       clearReconnectTimer();
       socketRef.current?.close();
       socketRef.current = null;
-      term?.dispose();
+      if (term) disposeTerminal(term, rendering);
       if (terminalInstance.current === term) terminalInstance.current = null;
     };
   }, [sessionId, clearReconnectTimer, enhancedSessionRef, getSelectionText]);

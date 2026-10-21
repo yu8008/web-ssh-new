@@ -1,5 +1,24 @@
 import { expect, test } from "@playwright/test";
 
+for (const renderer of ["canvas", "webgl"]) {
+  test(`${renderer} rendering can be disposed repeatedly without errors`, async ({ page }) => {
+    const errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.stack ?? error.message));
+    await page.goto(`/tests/browser/terminal-selection.html?renderer=${renderer}`);
+    await expect(page.locator(".xterm")).toHaveAttribute("data-terminal-renderer", renderer);
+    await expect(page.locator("#terminal")).toHaveAttribute("data-ready", "true");
+    // Resize and dispose in one task to leave a viewport refresh queued.
+    await page.locator("#dispose").evaluate(button => {
+      window.resizeTerminalForTest();
+      (button as HTMLButtonElement).click();
+    });
+    await page.locator("#dispose").click();
+    await expect(page.locator(".xterm")).toHaveCount(0);
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
+    expect(errors).toEqual([]);
+  });
+}
+
 test("unavailable WebGL falls back to Canvas and keeps selection usable", async ({ page }) => {
   await page.addInitScript(() => {
     const original = HTMLCanvasElement.prototype.getContext;
@@ -39,5 +58,7 @@ test("a lost GPU context immediately restores Canvas without replacing terminal 
   await page.mouse.move(screen.x + 160, screen.y + screen.height / 12 * 3.5, { steps: 4 });
   await page.mouse.up();
   await expect(page.locator("#selection")).toContainText("Output 021 中文 😀");
+  await page.locator("#dispose").click();
+  await expect(page.locator(".xterm")).toHaveCount(0);
   expect(errors).toEqual([]);
 });
