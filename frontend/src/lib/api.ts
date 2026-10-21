@@ -935,6 +935,24 @@ export async function getDiskList(sessionId: string): Promise<DiskList> {
   return response.json();
 }
 
+export type ServerClock = {
+  epoch: number;
+  zone: string;
+  offset: string;
+  zone_name: string | null;
+};
+
+export async function getServerClock(sessionId: string): Promise<ServerClock> {
+  const response = await fetch(`${HTTP_BASE}/system/clock/${sessionId}`, {
+    headers: { ...getAuthHeader() }
+  });
+  if (!response.ok) {
+    const detail = await safeError(response, "读取服务器时间失败");
+    throw new Error(detail);
+  }
+  return response.json();
+}
+
 export async function getSystemOverview(sessionId: string): Promise<SystemOverview> {
   const response = await fetch(`${HTTP_BASE}/system/overview/${sessionId}`, {
     headers: { ...getAuthHeader() }

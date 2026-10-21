@@ -294,6 +294,34 @@ def parse_ls_output(ls_output: str, base_path: str) -> List[FileInfo]:
     return dirs + regular_files
 
 
+@router.get("/clock/{session_id}")
+async def read_server_clock(
+    session_id: str,
+    state: AppState = Depends(get_state),
+    user=Depends(get_current_user),
+    db=Depends(get_db),
+) -> dict:
+    """返回目标机器的当前时间、时区名与 UTC 偏移。"""
+    async with resolve_ssh_client(session_id, state, user, db) as client:
+        output = await run_ssh_command(
+            client,
+            "date '+%s|%Z|%z' 2>/dev/null; cat /etc/timezone 2>/dev/null | head -n 1",
+        )
+
+    lines = [line.strip() for line in output.splitlines() if line.strip()]
+    if not lines:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="无法读取服务器时间")
+    parts = lines[0].split("|")
+    try:
+        epoch = int(parts[0])
+    except (ValueError, IndexError):
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="无法解析服务器时间")
+    zone = parts[1] if len(parts) > 1 else ""
+    offset = parts[2] if len(parts) > 2 else ""
+    zone_name = lines[1] if len(lines) > 1 else None
+    return {"epoch": epoch, "zone": zone, "offset": offset, "zone_name": zone_name}
+
+
 @router.get("/files/{session_id}", response_model=DirectoryListing)
 async def list_directory(
     session_id: str,

@@ -2,6 +2,7 @@ import React from "react";
 import { ArrowLeft, Copy, Folder, Moon, RefreshCw, Sun, X } from "lucide-react";
 import { Button } from "../../components/Button";
 import { FileViewer } from "../../components/FileViewer";
+import { getServerClock, type ServerClock } from "../../lib/api";
 import type { FileInfo } from "../../lib/api";
 import type { TerminalSessionState } from "./useTerminalSession";
 
@@ -21,6 +22,66 @@ type TerminalDesktopProps = {
   onBack: () => void;
 };
 
+function clampZoneLabel(clock: ServerClock): string {
+  const name = clock.zone_name || clock.zone || "";
+  return name.length > 18 ? name.slice(0, 18) + "…" : name;
+}
+
+function parseUtcOffset(offset: string): number {
+  const match = /^([+-])(\d{2}):?(\d{2})$/.exec(offset.trim());
+  if (!match) {
+    return 0;
+  }
+  const sign = match[1] === "-" ? -1 : 1;
+  return sign * (Number(match[2]) * 60 + Number(match[3]));
+}
+
+function formatServerTime(ms: number, offsetMinutes: number): string {
+  const shifted = new Date(ms + offsetMinutes * 60_000);
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return pad(shifted.getUTCHours()) + ":" + pad(shifted.getUTCMinutes()) + ":" + pad(shifted.getUTCSeconds());
+}
+
+function useServerClock(sessionId?: string) {
+  const [clock, setClock] = React.useState<ServerClock | null>(null);
+  const [skewMs, setSkewMs] = React.useState(0);
+  const [now, setNow] = React.useState(() => Date.now());
+
+  React.useEffect(() => {
+    if (!sessionId) {
+      return;
+    }
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const startedAt = Date.now();
+        const data = await getServerClock(sessionId);
+        if (cancelled) {
+          return;
+        }
+        setClock(data);
+        const roundTrip = Date.now() - startedAt;
+        setSkewMs(data.epoch * 1000 + roundTrip / 2 - Date.now());
+      } catch {
+        // 时钟是辅助信息，读取失败时保持占位
+      }
+    };
+    void load();
+    const poll = window.setInterval(load, 60_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(poll);
+    };
+  }, [sessionId]);
+
+  React.useEffect(() => {
+    const tick = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(tick);
+  }, []);
+
+  return { clock, serverMs: now + skewMs };
+}
+
 function TerminalPanelFallback({ isDark }: { isDark: boolean }) {
   return (
     <div className={`flex h-full min-h-[120px] items-center justify-center rounded-lg border text-sm ${isDark ? "border-slate-800 bg-slate-900/40 text-slate-400" : "border-slate-200 bg-white text-slate-500"}`}>
@@ -38,6 +99,7 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
   });
   const [isDragging, setIsDragging] = React.useState(false);
   const [filesOpen, setFilesOpen] = React.useState(false);
+  const { clock, serverMs } = useServerClock(state.sessionId);
   const [openedFile, setOpenedFile] = React.useState<FileInfo | null>(null);
   const closeViewer = React.useCallback(() => setOpenedFile(null), []);
 
@@ -301,6 +363,16 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
           style={{ width: sidebarWidth }}
           className="hidden min-h-0 flex-shrink-0 flex-col overflow-hidden border-l border-line bg-chrome p-3 md:flex"
         >
+          <div className="mb-2 flex shrink-0 items-center justify-between gap-2 rounded-lg border border-line bg-surface px-3 py-2">
+            <span className="text-2xs font-medium text-muted">{state.t("服务器时间", "Server time")}</span>
+            <span className="flex items-baseline gap-1.5 font-mono text-xs tabular-nums text-ink">
+              {clock ? formatServerTime(serverMs, parseUtcOffset(clock.offset)) : "--:--:--"}
+              <span className="font-sans text-2xs text-muted">
+                {clock ? clampZoneLabel(clock) : state.t("同步中", "syncing")}
+              </span>
+            </span>
+          </div>
+
           <div className="min-h-0 flex-1 overflow-y-auto pr-1">
             {state.sessionId ? (
               <React.Suspense fallback={<TerminalPanelFallback isDark={state.isDark} />}>
