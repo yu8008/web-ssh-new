@@ -1,5 +1,8 @@
 import React from "react";
+import { Copy, ScanText } from "lucide-react";
 import { Button } from "../../components/Button";
+import { TerminalCopyPanel } from "./TerminalCopyPanel";
+import { createTerminalBufferSnapshot, type TerminalBufferSnapshot } from "./terminalUtils";
 import type { TerminalSessionState } from "./useTerminalSession";
 
 const FileBrowser = React.lazy(() =>
@@ -29,7 +32,32 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
     return saved ? Number(saved) : 256;
   });
   const [isDragging, setIsDragging] = React.useState(false);
+  const [copySnapshot, setCopySnapshot] = React.useState<TerminalBufferSnapshot | null>(null);
   const containerRef = React.useRef<HTMLDivElement | null>(null);
+
+  const openCopyPanel = React.useCallback(() => {
+    const buffer = terminalInstance.current?.buffer.active;
+    if (!buffer) {
+      return;
+    }
+    setCopySnapshot(createTerminalBufferSnapshot(buffer));
+  }, [terminalInstance]);
+
+  const closeCopyPanel = React.useCallback(() => {
+    setCopySnapshot(null);
+    window.requestAnimationFrame(() => terminalInstance.current?.focus());
+  }, [terminalInstance]);
+
+  const { selectionText, handleCopySelection } = state;
+
+  const handleCopyClick = React.useCallback(() => {
+    if (selectionText) {
+      void handleCopySelection();
+      return;
+    }
+    // 没有选区时直接打开快照面板：TUI 里拖动经常选不中，硬复制只会得到空内容。
+    openCopyPanel();
+  }, [selectionText, handleCopySelection, openCopyPanel]);
 
   const handleMouseDown = React.useCallback((event: React.MouseEvent) => {
     event.preventDefault();
@@ -150,13 +178,90 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
       </div>
       <div ref={containerRef} className="flex flex-1 overflow-hidden">
         <div className="flex-1 flex flex-col min-w-0">
-          <div className="flex-1 p-4 pb-2 min-h-0">
+          <div className="relative flex-1 p-4 pb-2 min-h-0">
             <div
               ref={state.terminalRef}
               className={`h-full w-full rounded-lg border ${state.isDark ? "border-slate-800" : "border-slate-300 xterm-light"} ${state.sessionInfo?.enhanced_enabled ? "xterm-tmux-enhanced" : ""}`}
               tabIndex={-1}
               onClick={() => state.terminalInstance.current?.focus()}
             />
+            {state.screenFrozen ? (
+              <div
+                className={`pointer-events-none absolute left-1/2 top-6 z-10 -translate-x-1/2 rounded-full border px-3 py-1 text-xs shadow-lg ${
+                  state.isDark
+                    ? "border-amber-500/50 bg-amber-500/15 text-amber-200"
+                    : "border-amber-400 bg-amber-50 text-amber-700"
+                }`}
+              >
+                {state.t(
+                  "已暂停刷新，可自由选中文本后复制（Esc 退出）",
+                  "Refresh paused — select text freely, then copy (Esc to exit)"
+                )}
+              </div>
+            ) : null}
+            <div className="pointer-events-none absolute bottom-4 right-6 z-10 flex flex-col items-end gap-2">
+              {state.selectionText ? (
+                <div
+                  className={`pointer-events-auto rounded-full border px-3 py-1 text-[11px] shadow-sm ${
+                    state.isDark
+                      ? "border-slate-700 bg-slate-900/90 text-slate-300"
+                      : "border-slate-300 bg-white/95 text-slate-600"
+                  }`}
+                >
+                  {state.t(
+                    `已选 ${state.selectionText.length} 字符`,
+                    `${state.selectionText.length} chars selected`
+                  )}
+                </div>
+              ) : null}
+              <div
+                className={`pointer-events-auto flex items-center gap-1 rounded-lg border p-1 shadow-lg backdrop-blur ${
+                  state.isDark ? "border-slate-700 bg-slate-900/90" : "border-slate-300 bg-white/95"
+                }`}
+              >
+                <Button
+                  variant={state.selectionText ? "primary" : "ghost"}
+                  lightMode={!state.isDark}
+                  className="h-8 px-2.5 text-xs"
+                  onClick={handleCopyClick}
+                  title={state.t("复制选中文本；未选中时打开选择复制面板", "Copy selection, or open the copy panel")}
+                >
+                  <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                  {state.t("复制", "Copy")}
+                </Button>
+                <Button
+                  variant="ghost"
+                  lightMode={!state.isDark}
+                  className="h-8 px-2.5 text-xs"
+                  onClick={openCopyPanel}
+                  title={state.t("从终端输出快照中选择复制", "Copy from a text snapshot of the terminal")}
+                >
+                  <ScanText className="h-3.5 w-3.5" aria-hidden="true" />
+                  {state.t("选择复制", "Select")}
+                </Button>
+                <Button
+                  variant={state.screenFrozen ? "primary" : "ghost"}
+                  lightMode={!state.isDark}
+                  className="h-8 px-2.5 text-xs"
+                  onClick={state.toggleScreenFrozen}
+                  title={state.t(
+                    "冻结画面并接管鼠标，TUI 重绘时也能稳定选中文本",
+                    "Freeze the screen and take over the mouse so TUI redraws cannot clear the selection"
+                  )}
+                >
+                  {state.screenFrozen ? state.t("恢复刷新", "Resume") : state.t("选择模式", "Freeze")}
+                </Button>
+              </div>
+            </div>
+            {copySnapshot ? (
+              <TerminalCopyPanel
+                snapshot={copySnapshot}
+                isDark={state.isDark}
+                t={state.t}
+                onCopy={state.copyText}
+                onClose={closeCopyPanel}
+              />
+            ) : null}
           </div>
           <div className={`p-4 pt-2 ${state.isDark ? "border-t border-slate-800" : "border-t border-slate-200"}`} style={{ height: "280px" }}>
             {state.sessionId ? (

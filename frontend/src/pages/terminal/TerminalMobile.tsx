@@ -1,4 +1,5 @@
 import React from "react";
+import { Copy } from "lucide-react";
 import { Button } from "../../components/Button";
 import { TerminalCopyPanel } from "./TerminalCopyPanel";
 import { createTerminalBufferSnapshot, type TerminalBufferSnapshot } from "./terminalUtils";
@@ -174,6 +175,21 @@ export function TerminalMobile({ state, onBack }: TerminalMobileProps) {
               onClick={() => state.terminalInstance.current?.focus()}
             />
             <div className="absolute right-4 bottom-4 flex flex-col gap-2">
+              {state.selectionText ? (
+                <button
+                  type="button"
+                  onClick={() => void state.handleCopySelection()}
+                  className={`flex h-11 items-center justify-center gap-1 rounded-full border px-3 text-xs font-medium ${
+                    state.isDark
+                      ? "border-indigo-400/60 bg-indigo-500 text-white"
+                      : "border-indigo-300 bg-indigo-500 text-white"
+                  }`}
+                  aria-label={state.t("复制选中内容", "Copy selected text")}
+                >
+                  <Copy className="h-4 w-4" aria-hidden="true" />
+                  {state.t("复制", "Copy")}
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={() => scrollTerminal("up", "remote")}

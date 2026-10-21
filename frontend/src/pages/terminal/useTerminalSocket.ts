@@ -3,6 +3,8 @@ import { Terminal } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
 import { clearAuthStorage, getSession, getStoredToken, openTerminalSocket } from "../../lib/api";
 import {
+  appendFrozenOutput,
+  buildDefaultColorAnnouncement,
   darkTerminalTheme,
   lightTerminalTheme,
   normalizeWheelDeltaToLines,
@@ -18,6 +20,8 @@ type TerminalSocketOptions = {
   clearNetworkHint: () => void;
   enhancedSessionRef: React.MutableRefObject<boolean>;
   setCurrentDir: (dir: string) => void;
+  /** 用户在终端里触发了复制快捷键时的回调（Ctrl/Cmd+Shift+C 等）。 */
+  onCopyRequest?: (text: string) => void;
 };
 
 type ResizeState = { socket: WebSocket; rows: number; cols: number };
@@ -30,6 +34,7 @@ export function useTerminalSocket({
   clearNetworkHint,
   enhancedSessionRef,
   setCurrentDir,
+  onCopyRequest,
 }: TerminalSocketOptions) {
   const terminalRef = React.useRef<HTMLDivElement | null>(null);
   const terminalInstance = React.useRef<Terminal | null>(null);
@@ -43,6 +48,20 @@ export function useTerminalSocket({
   const [connectionState, setConnectionState] = React.useState<"connecting" | "open" | "closed">("connecting");
   const [autoReconnect, setAutoReconnect] = React.useState(true);
   const [reconnectCountdown, setReconnectCountdown] = React.useState<number | null>(null);
+  const [selectionText, setSelectionText] = React.useState("");
+  // 选择模式：冻结画面刷新并屏蔽鼠标上报，让 TUI 重绘不再冲掉本地选区。
+  const [screenFrozen, setScreenFrozen] = React.useState(false);
+  const frozenRef = React.useRef(false);
+  const frozenChunksRef = React.useRef<string[]>([]);
+  const frozenCharsRef = React.useRef(0);
+  const themeRef = React.useRef<"dark" | "light">(
+    typeof window !== "undefined" && localStorage.getItem("theme") === "light" ? "light" : "dark"
+  );
+  const copyRequestRef = React.useRef(onCopyRequest);
+
+  React.useEffect(() => {
+    copyRequestRef.current = onCopyRequest;
+  }, [onCopyRequest]);
 
   const clearReconnectTimer = React.useCallback(() => {
     if (reconnectTimerRef.current) {
@@ -100,6 +119,64 @@ export function useTerminalSocket({
     [push, t]
   );
 
+  const flushFrozenOutput = React.useCallback((term: Terminal | null) => {
+    const chunks = frozenChunksRef.current;
+    frozenChunksRef.current = [];
+    frozenCharsRef.current = 0;
+    if (term && chunks.length > 0) {
+      term.write(chunks.join(""));
+    }
+  }, []);
+
+  const setScreenFrozenState = React.useCallback(
+    (frozen: boolean) => {
+      if (frozenRef.current === frozen) {
+        return;
+      }
+      frozenRef.current = frozen;
+      setScreenFrozen(frozen);
+      if (!frozen) {
+        flushFrozenOutput(terminalInstance.current);
+      }
+    },
+    [flushFrozenOutput]
+  );
+
+  const toggleScreenFrozen = React.useCallback(() => {
+    setScreenFrozenState(!frozenRef.current);
+  }, [setScreenFrozenState]);
+
+  /**
+   * 把当前主题的默认前景/背景色作为颜色应答送回会话。
+   *
+   * 走 tmux 的增强会话里，TUI（如 Codex）的 OSC 10/11 查询由 tmux 代答，
+   * 而 tmux 缓存的是它启动时从浏览器终端拿到的配色。主题切换后不刷新缓存，
+   * TUI 就会按旧配色（常见是浅色）绘制输入框，在深色终端里出现白色条带。
+   * 这里主动补发一次应答，让 tmux 的缓存与界面保持一致。
+   */
+  const sendThemeAnnouncement = React.useCallback(() => {
+    const socket = socketRef.current;
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      return;
+    }
+    if (!enhancedSessionRef.current) {
+      return;
+    }
+    const theme = themeRef.current === "light" ? lightTerminalTheme : darkTerminalTheme;
+    const payload = buildDefaultColorAnnouncement(theme);
+    if (payload) {
+      socket.send(JSON.stringify({ type: "input", data: payload }));
+    }
+  }, [enhancedSessionRef]);
+
+  const announceThemeColors = React.useCallback(
+    (isDark: boolean) => {
+      themeRef.current = isDark ? "dark" : "light";
+      sendThemeAnnouncement();
+    },
+    [sendThemeAnnouncement]
+  );
+
   const connectSocket = React.useCallback(
     (term: Terminal, isReconnect: boolean = false) => {
       if (!sessionId) {
@@ -134,6 +211,19 @@ export function useTerminalSocket({
         );
         sanitizePendingSuffix = sanitized.pendingSuffix;
         const output = sanitized.output;
+
+        if (frozenRef.current) {
+          const buffered = appendFrozenOutput(frozenChunksRef.current, output, frozenCharsRef.current);
+          frozenCharsRef.current = buffered.usedChars;
+          if (buffered.overflow) {
+            // 长时间冻结会吃掉过多内存，达到上限时自动恢复刷新。
+            frozenRef.current = false;
+            setScreenFrozen(false);
+            flushFrozenOutput(term);
+          }
+          return;
+        }
+
         term.write(output);
 
         // 检测目录变化：解析提示符中的路径
@@ -151,6 +241,7 @@ export function useTerminalSocket({
         reconnectAttemptRef.current = 0;
         clearNetworkHint();
         syncTerminalSize(term, { force: true });
+        sendThemeAnnouncement();
         [300, 1200].forEach((delay) => {
           window.setTimeout(() => {
             if (socketRef.current === socket && socket.readyState === WebSocket.OPEN) {
@@ -224,7 +315,20 @@ export function useTerminalSocket({
         }
       };
     },
-    [sessionId, clearReconnectTimer, t, syncTerminalSize, push, reportNetworkHint, clearNetworkHint, autoReconnect, enhancedSessionRef, setCurrentDir]
+    [
+      sessionId,
+      clearReconnectTimer,
+      t,
+      syncTerminalSize,
+      sendThemeAnnouncement,
+      push,
+      reportNetworkHint,
+      clearNetworkHint,
+      autoReconnect,
+      enhancedSessionRef,
+      setCurrentDir,
+      flushFrozenOutput,
+    ]
   );
 
   const handleReconnect = React.useCallback(() => {
@@ -322,6 +426,14 @@ export function useTerminalSocket({
     let handleTerminalMouseDown: ((event: MouseEvent) => void) | null = null;
     let handleTerminalMouseUp: ((event: MouseEvent) => void) | null = null;
     let handleResize: (() => void) | null = null;
+    let selectionDisposable: { dispose: () => void } | null = null;
+
+    // 会话切换时清空上一个会话遗留的选择/冻结状态。
+    frozenRef.current = false;
+    setScreenFrozen(false);
+    frozenChunksRef.current = [];
+    frozenCharsRef.current = 0;
+    setSelectionText("");
 
     const initTerminal = async () => {
       try {
@@ -362,7 +474,8 @@ export function useTerminalSocket({
       if (coreMouseService && !coreMouseService._wsghTriggerMouseEvent) {
         coreMouseService._wsghTriggerMouseEvent = coreMouseService.triggerMouseEvent.bind(coreMouseService);
         coreMouseService.triggerMouseEvent = (event) => {
-          if (suppressMouseReportRef.current) {
+          // 选择模式下一律不把鼠标事件上报给远端 TUI，让浏览器原生选区接管拖动。
+          if (suppressMouseReportRef.current || frozenRef.current) {
             return false;
           }
           return coreMouseService._wsghTriggerMouseEvent?.(event) ?? false;
@@ -371,6 +484,35 @@ export function useTerminalSocket({
 
       term.onData((data) => {
         sendInputRef.current(data);
+      });
+
+      selectionDisposable = term.onSelectionChange(() => {
+        setSelectionText(term?.getSelection() ?? "");
+      });
+
+      // 复制快捷键：Windows/Linux 用 Ctrl+Shift+C，macOS 用 Cmd+C。
+      // 选择模式下 Esc 退出，避免用户被困在冻结画面里。
+      term.attachCustomKeyEventHandler((event) => {
+        if (event.type !== "keydown") {
+          return true;
+        }
+        if (event.key === "Escape" && frozenRef.current) {
+          setScreenFrozenState(false);
+          return false;
+        }
+        const key = event.key.toLowerCase();
+        const copyCombo =
+          (event.metaKey && !event.ctrlKey && key === "c") ||
+          (event.ctrlKey && event.shiftKey && key === "c");
+        if (!copyCombo) {
+          return true;
+        }
+        const selection = term?.getSelection() ?? "";
+        if (selection) {
+          copyRequestRef.current?.(selection);
+        }
+        // 无论有没有选区都不把 Ctrl/Cmd+Shift+C 当输入发给远端。
+        return false;
       });
 
       let wheelRemainder = 0;
@@ -449,6 +591,10 @@ export function useTerminalSocket({
         if (!term || term.modes.mouseTrackingMode === "none") {
           return;
         }
+        if (frozenRef.current) {
+          // 选择模式：鼠标上报已被关闭，交给 xterm 原生选区。
+          return;
+        }
         if (event.button === 0) {
           suppressMouseReportRef.current = true;
           const selectionService = (term as unknown as { _core?: { _selectionService?: { enable?: () => void; handleMouseDown?: (e: MouseEvent) => void } } })._core
@@ -503,11 +649,12 @@ export function useTerminalSocket({
       if (handleResize) {
         window.removeEventListener("resize", handleResize);
       }
+      selectionDisposable?.dispose();
       clearReconnectTimer();
       socketRef.current?.close();
       term?.dispose();
     };
-  }, [sessionId, clearReconnectTimer, enhancedSessionRef]);
+  }, [sessionId, clearReconnectTimer, enhancedSessionRef, flushFrozenOutput, setScreenFrozenState]);
 
   return {
     terminalRef,
@@ -521,5 +668,10 @@ export function useTerminalSocket({
     scrollTerminal,
     handleReconnect,
     handleCancelReconnect,
+    selectionText,
+    screenFrozen,
+    setScreenFrozen: setScreenFrozenState,
+    toggleScreenFrozen,
+    announceThemeColors,
   };
 }

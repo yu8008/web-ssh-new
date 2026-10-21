@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { createTerminalBufferSnapshot } from "./terminalUtils";
+import {
+  appendFrozenOutput,
+  buildDefaultColorAnnouncement,
+  createTerminalBufferSnapshot,
+  resolveCopyText,
+  toX11RgbColor,
+} from "./terminalUtils";
 
 type FakeLine = {
   isWrapped: boolean;
@@ -195,5 +201,70 @@ describe("createTerminalBufferSnapshot", () => {
 
     expect(result.initialScrollRatio).toBe(0);
     expect(Number.isFinite(result.initialScrollRatio)).toBe(true);
+  });
+});
+
+describe("toX11RgbColor", () => {
+  it("把 #rrggbb 转成 X11 rgb 描述并重复通道", () => {
+    expect(toX11RgbColor("#020617")).toBe("rgb:0202/0606/1717");
+    expect(toX11RgbColor("#E2E8F0")).toBe("rgb:e2e2/e8e8/f0f0");
+  });
+
+  it("非法颜色返回 null", () => {
+    expect(toX11RgbColor("red")).toBeNull();
+    expect(toX11RgbColor("#12345")).toBeNull();
+    expect(toX11RgbColor("")).toBeNull();
+  });
+});
+
+describe("buildDefaultColorAnnouncement", () => {
+  it("依次输出 OSC 10/11/12 应答并以 ST 结尾", () => {
+    const payload = buildDefaultColorAnnouncement({
+      foreground: "#e2e8f0",
+      background: "#020617",
+      cursor: "#e2e8f0",
+    });
+    const escape = "\u001b";
+    expect(payload).toBe(
+      escape + "]10;rgb:e2e2/e8e8/f0f0" + escape + "\\" +
+        escape + "]11;rgb:0202/0606/1717" + escape + "\\" +
+        escape + "]12;rgb:e2e2/e8e8/f0f0" + escape + "\\"
+    );
+  });
+
+  it("没有合法颜色时返回空串", () => {
+    expect(buildDefaultColorAnnouncement({ foreground: "", background: "", cursor: "" })).toBe("");
+  });
+});
+
+describe("appendFrozenOutput", () => {
+  it("累计字符数并在达到上限时报告溢出", () => {
+    const chunks: string[] = [];
+    const first = appendFrozenOutput(chunks, "abc", 0, 10);
+    expect(first).toEqual({ usedChars: 3, overflow: false });
+
+    const second = appendFrozenOutput(chunks, "defghij", first.usedChars, 10);
+    expect(second).toEqual({ usedChars: 10, overflow: true });
+    expect(chunks).toEqual(["abc", "defghij"]);
+  });
+
+  it("空片段不改变缓冲", () => {
+    const chunks: string[] = [];
+    expect(appendFrozenOutput(chunks, "", 5, 100)).toEqual({ usedChars: 5, overflow: false });
+    expect(chunks).toEqual([]);
+  });
+});
+
+describe("resolveCopyText", () => {
+  it("优先返回终端选区", () => {
+    expect(resolveCopyText("terminal", "dom")).toBe("terminal");
+  });
+
+  it("终端没有选区时回退到 DOM 选区", () => {
+    expect(resolveCopyText("", "dom")).toBe("dom");
+  });
+
+  it("两者都为空返回空串", () => {
+    expect(resolveCopyText("", "")).toBe("");
   });
 });

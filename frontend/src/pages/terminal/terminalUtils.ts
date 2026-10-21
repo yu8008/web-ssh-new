@@ -212,6 +212,87 @@ export function createTerminalBufferSnapshot(
   };
 }
 
+/* ------------------------------------------------------------------
+ * 终端配色上报
+ *
+ * Codex 等 TUI 会先发 OSC 10/11 查询终端默认前景/背景色，再据此决定
+ * 输入框与消息块的底色。查询没被及时应答时，它们会退回浅色方案，
+ * 在深色终端里就表现为刺眼的白色条带。
+ *
+ * xterm.js 自身会用当前 theme 应答，但应答是“输入流”里的一条普通消息；
+ * 增强会话里它还要先经过 tmux。这里额外提供两个能力：
+ * 1. 生成标准 xterm 格式的颜色应答，供终端主动上报；
+ * 2. 在主题切换后把新的默认色重新告诉 tmux，避免 tmux 缓存旧配色。
+ * ------------------------------------------------------------------ */
+
+export type TerminalThemePalette = {
+  foreground: string;
+  background: string;
+  cursor: string;
+};
+
+const OSC_INTRODUCER = "\x1b]";
+const STRING_TERMINATOR = "\x1b\\";
+
+/**
+ * 把 #rrggbb 转成 X11 rgb 描述。每个通道重复两位，
+ * 与 tmux/iTerm 等终端使用的 4 位/通道写法一致，兼容 1~4 位解析。
+ */
+export function toX11RgbColor(hexColor: string): string | null {
+  const match = /^#([0-9a-fA-F]{6})$/.exec(hexColor.trim());
+  if (!match) {
+    return null;
+  }
+  const value = match[1].toLowerCase();
+  const red = value.slice(0, 2);
+  const green = value.slice(2, 4);
+  const blue = value.slice(4, 6);
+  return `rgb:${red}${red}/${green}${green}/${blue}${blue}`;
+}
+
+/** 生成 OSC 10/11/12 默认色应答（窗口标题/颜色查询的标准回复格式）。 */
+export function buildDefaultColorAnnouncement(theme: TerminalThemePalette): string {
+  const entries: Array<[number, string]> = [
+    [10, theme.foreground],
+    [11, theme.background],
+    [12, theme.cursor],
+  ];
+  const replies: string[] = [];
+  for (const [code, color] of entries) {
+    const rgb = toX11RgbColor(color);
+    if (rgb) {
+      replies.push(`${OSC_INTRODUCER}${code};${rgb}${STRING_TERMINATOR}`);
+    }
+  }
+  return replies.join("");
+}
+
+/** 冻结期间最多缓存多少字符的输出，超出后自动恢复刷新，避免长时间冻结吃满内存。 */
+export const TERMINAL_FROZEN_OUTPUT_LIMIT = 2 * 1024 * 1024;
+
+/**
+ * 把一段输出追加到冻结缓冲。返回累计字符数与是否溢出；
+ * 溢出时调用方应立即恢复刷新，丢弃或冲刷缓冲由调用方决定。
+ */
+export function appendFrozenOutput(
+  chunks: string[],
+  chunk: string,
+  usedChars: number,
+  limit: number = TERMINAL_FROZEN_OUTPUT_LIMIT
+): { usedChars: number; overflow: boolean } {
+  if (!chunk) {
+    return { usedChars, overflow: false };
+  }
+  chunks.push(chunk);
+  const nextUsed = usedChars + chunk.length;
+  return { usedChars: nextUsed, overflow: nextUsed >= limit };
+}
+
+/** 复制时优先取终端选区，其次取浏览器 DOM 选区。 */
+export function resolveCopyText(terminalSelection: string, domSelection: string): string {
+  return terminalSelection || domSelection || "";
+}
+
 export function normalizeWheelDeltaToLines(event: WheelEvent, terminalRows: number): number {
   let lineDelta = event.deltaY;
   if (event.deltaMode === 0) {

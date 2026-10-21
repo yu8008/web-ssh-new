@@ -2,7 +2,7 @@ import React from "react";
 import { useToast } from "../../components/ToastContext";
 import { useApp } from "../../context/AppContextCore";
 import { copyTextToClipboard } from "./clipboardUtils";
-import { darkTerminalTheme, lightTerminalTheme } from "./terminalUtils";
+import { darkTerminalTheme, lightTerminalTheme, resolveCopyText } from "./terminalUtils";
 import { useTerminalSocket } from "./useTerminalSocket";
 import { useTerminalSessionInfo } from "./useTerminalSessionInfo";
 
@@ -41,6 +41,7 @@ export function useTerminalSession(sessionId?: string) {
   const [currentDir, setCurrentDir] = React.useState<string>("/");
   const [selectedFilePath, setSelectedFilePath] = React.useState<string | null>(null);
   const enhancedSessionRef = React.useRef(false);
+  const copyTextRef = React.useRef<(text: string) => Promise<boolean>>(async () => false);
 
   const socketState = useTerminalSocket({
     sessionId,
@@ -50,6 +51,9 @@ export function useTerminalSession(sessionId?: string) {
     clearNetworkHint,
     enhancedSessionRef,
     setCurrentDir,
+    onCopyRequest: (text) => {
+      void copyTextRef.current(text);
+    },
   });
 
   const sessionInfoState = useTerminalSessionInfo({
@@ -65,12 +69,16 @@ export function useTerminalSession(sessionId?: string) {
     setCurrentDir("/");
   }, [sessionId]);
 
+  const { terminalInstance: terminalInstanceRef, announceThemeColors } = socketState;
+
   React.useEffect(() => {
-    const term = socketState.terminalInstance.current;
+    const term = terminalInstanceRef.current;
     if (!term) return;
     term.options.theme = isDark ? darkTerminalTheme : lightTerminalTheme;
     term.refresh(0, term.rows - 1);
-  }, [isDark, socketState.terminalInstance]);
+    // 主题切换后同步给 tmux，避免 TUI（如 Codex）继续按旧配色绘制输入框。
+    announceThemeColors(isDark);
+  }, [isDark, terminalInstanceRef, announceThemeColors]);
 
   const handleClear = React.useCallback(() => {
     const term = socketState.terminalInstance.current;
@@ -108,10 +116,14 @@ export function useTerminalSession(sessionId?: string) {
     return false;
   }, [push, t]);
 
+  React.useEffect(() => {
+    copyTextRef.current = copyText;
+  }, [copyText]);
+
   const handleCopySelection = React.useCallback(async () => {
     const termSelection = socketState.terminalInstance.current?.getSelection() ?? "";
     const domSelection = window.getSelection()?.toString() ?? "";
-    await copyText(termSelection || domSelection);
+    await copyText(resolveCopyText(termSelection, domSelection));
   }, [copyText, socketState.terminalInstance]);
 
   const connectionLabel =
@@ -174,6 +186,10 @@ export function useTerminalSession(sessionId?: string) {
     handleSelectAll,
     handleCopySelection,
     copyText,
+    selectionText: socketState.selectionText,
+    screenFrozen: socketState.screenFrozen,
+    setScreenFrozen: socketState.setScreenFrozen,
+    toggleScreenFrozen: socketState.toggleScreenFrozen,
   };
 }
 
