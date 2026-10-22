@@ -22,6 +22,7 @@ from app.core.logging import get_logger, get_recent_logs
 from app.models.connection import Connection
 from app.models.session import SessionRecord
 from app.services.crypto import CryptoService, EncryptedPayload
+from app.services.clipboard_image import MAX_CLIPBOARD_IMAGE_BYTES, image_extension, store_clipboard_image
 from app.schemas.system_metrics import (
     DiskList, NetworkInfo, ProcessList, SystemOverview, SystemStats,
 )
@@ -423,6 +424,25 @@ async def write_file(
             os.unlink(tmp_path)
 
         return {"status": "ok"}
+
+
+@router.post("/clipboard-image/{session_id}")
+async def upload_clipboard_image(
+    session_id: str,
+    file: UploadFile = File(...),
+    state: AppState = Depends(get_state),
+    user=Depends(get_current_user),
+    db=Depends(get_db),
+) -> dict[str, str]:
+    content = await file.read(MAX_CLIPBOARD_IMAGE_BYTES + 1)
+    extension = image_extension(content, file.content_type)
+    async with resolve_ssh_client(session_id, state, user, db) as client:
+        try:
+            path = await store_clipboard_image(client, content, extension)
+        except Exception as error:
+            logger.warning("clipboard-image-upload-failed session_id=%s error_type=%s", session_id, type(error).__name__)
+            raise HTTPException(status_code=502, detail="Could not save clipboard image on the SSH target") from error
+    return {"path": path}
 
 
 @router.post("/upload/{session_id}")

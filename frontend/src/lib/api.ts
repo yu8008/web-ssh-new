@@ -41,6 +41,10 @@ const CLIENT_TEXT_MAP: Record<string, { zh: string; en: string }> = {
   "上传失败，请检查网络": { zh: "上传失败，请检查网络", en: "Upload failed. Please check your network." },
   "上传失败：响应格式无效": { zh: "上传失败：响应格式无效", en: "Upload failed: invalid response format" },
   "批量上传失败": { zh: "批量上传失败", en: "Batch upload failed" },
+  "Clipboard image is empty": { zh: "剪贴板图片为空", en: "Clipboard image is empty" },
+  "Clipboard image exceeds 20 MiB": { zh: "剪贴板图片不能超过 20 MiB", en: "Clipboard image exceeds 20 MiB" },
+  "Unsupported clipboard image; use PNG, JPEG, WebP or GIF": { zh: "请粘贴 PNG、JPEG、WebP 或 GIF 图片", en: "Unsupported clipboard image; use PNG, JPEG, WebP or GIF" },
+  "Could not save clipboard image on the SSH target": { zh: "无法将剪贴板图片保存到 SSH 目标，请检查临时目录权限和可用空间", en: "Could not save clipboard image on the SSH target" },
   "创建目录失败": { zh: "创建目录失败", en: "Failed to create directory" },
   "删除失败": { zh: "删除失败", en: "Delete failed" },
   "创建文件失败": { zh: "创建文件失败", en: "Failed to create file" },
@@ -772,6 +776,20 @@ async function parseXhrErrorDetail(responseText: string, fallback: string): Prom
     // ignore parse failures
   }
   return localizedFallback;
+}
+
+export async function uploadClipboardImage(sessionId: string, file: File, signal: AbortSignal): Promise<string> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await fetch(`${HTTP_BASE}/system/clipboard-image/${encodeURIComponent(sessionId)}`, {
+    method: "POST", headers: { ...getAuthHeader() }, body: formData, signal,
+  });
+  if (!response.ok) throw new Error(await safeError(response, "上传失败"));
+  const result = await response.json();
+  if (typeof result.path !== "string" || !/^\/tmp\/webssh-clipboard\.[A-Za-z0-9]+\/image\.(png|jpg|webp|gif)$/.test(result.path)) {
+    throw new Error(localizeClientText("上传失败"));
+  }
+  return result.path;
 }
 
 export async function uploadFile(sessionId: string, path: string, file: File, compress: boolean): Promise<UploadResult> {

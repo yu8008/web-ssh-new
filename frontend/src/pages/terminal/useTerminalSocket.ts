@@ -1,7 +1,7 @@
 import React from "react";
 import { Terminal } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
-import { clearAuthStorage, getSession, getStoredToken, openTerminalSocket } from "../../lib/api";
+import { clearAuthStorage, getSession, getStoredToken, openTerminalSocket, uploadClipboardImage } from "../../lib/api";
 import { attachTerminalSelection } from "./terminalSelection";
 import { createTerminalInputWriter } from "./terminalInput";
 import { createTerminalLatencyProbe } from "./terminalLatency";
@@ -11,6 +11,7 @@ import { attachTerminalWheel } from "./terminalWheel";
 import { createTerminalOutput, decodeTerminalOutput, TERMINAL_OUTPUT_PROTOCOL } from "./terminalOutput";
 import { attachTerminalViewport } from "./terminalViewport";
 import { attachTerminalShortcuts } from "./terminalShortcuts";
+import { attachTerminalPaste } from "./terminalPaste";
 import { getTerminalScrollback } from "./terminalPreferences";
 import {
   buildDefaultColorAnnouncement,
@@ -72,8 +73,10 @@ export function useTerminalSocket({
   );
   const copyRequestRef = React.useRef(onCopyRequest);
   const selectionLimitRef = React.useRef(() => {});
+  const pasteFeedbackRef = React.useRef({ t, push });
 
   React.useEffect(() => {
+    pasteFeedbackRef.current = { t, push };
     copyRequestRef.current = onCopyRequest;
     selectionLimitRef.current = () => push(t("选中内容已达上限，请分段复制", "Selection limit reached. Copy in smaller sections."));
   }, [onCopyRequest, push, t]);
@@ -471,6 +474,7 @@ export function useTerminalSocket({
     let viewport: ReturnType<typeof attachTerminalViewport> | null = null;
     let rendered: { dispose(): void } | null = null;
     let rendering: ReturnType<typeof configureTerminalRendering> | null = null;
+    let pasteController: ReturnType<typeof attachTerminalPaste> | null = null;
 
     // 会话切换时清空上一个会话遗留的选区状态。
     setHasSelection(false);
@@ -559,6 +563,33 @@ export function useTerminalSocket({
       });
       selectionControllerRef.current = selectionController;
 
+      pasteController = attachTerminalPaste(term, terminalContainer, {
+        connection: () => socketRef.current?.readyState === WebSocket.OPEN ? socketRef.current : null,
+        upload: (file, signal) => uploadClipboardImage(sessionId, file, signal),
+        onPaste: () => selectionController?.clear(),
+        onUploading: () => {
+          const { t, push } = pasteFeedbackRef.current;
+          push(t("图片上传中，请稍候…", "Uploading clipboard image, please wait…"));
+        },
+        onUploaded: (count) => {
+          const { t, push } = pasteFeedbackRef.current;
+          push(t(`已粘贴 ${count} 张图片`, `Pasted ${count} image(s)`));
+        },
+        onError: (error) => {
+          const { t, push } = pasteFeedbackRef.current;
+          const message = error.name === "AbortError"
+            ? t("图片上传已超时或取消，请重试", "Image upload timed out or was canceled. Try again.")
+            : error.message === "Terminal is not connected"
+            ? t("终端未连接", "Terminal is not connected")
+            : error.message === "Terminal connection changed; paste again"
+            ? t("终端连接已变化，请重新粘贴", "Terminal connection changed; paste again")
+            : error.message === "Clipboard image exceeds 20 MiB"
+            ? t("剪贴板图片不能超过 20 MiB", "Clipboard image exceeds 20 MiB")
+            : error.message;
+          push(t("粘贴失败：", "Paste failed: ") + message);
+        },
+      });
+
       attachTerminalShortcuts(term, getSelectionText, (text) => copyRequestRef.current?.(text));
 
       wheelController = attachTerminalWheel(term, terminalContainer, () => enhancedSessionRef.current, inputWriter.write);
@@ -582,6 +613,7 @@ export function useTerminalSocket({
         window.removeEventListener("resize", handleResize);
       }
       selectionController?.dispose();
+      pasteController?.dispose();
       inputWriter?.dispose();
       outputWriter?.dispose();
       viewport?.dispose();

@@ -59,6 +59,10 @@ flowchart LR
 3. 前端连接 `/sessions/ws/terminal/{session_id}`。
 4. 终端输入通过 WebSocket 下发到 SSH，输出实时回传。
 
+Ctrl/Cmd+V 与 Ctrl+Shift+V 保留浏览器的粘贴事件，不把 Ctrl+V 控制字符转发给远端读取剪贴板。文本通过 xterm 的 `paste` API 发送，保留换行规范化和远端 bracketed-paste 模式。剪贴板图片优先于同时存在的文本元数据，经带会话所有权校验的 `/system/clipboard-image/{session_id}` 上传；单张上限 20 MiB，校验 PNG/JPEG/WebP/GIF 类型及文件头。图片通过独立 SSH 连接的二进制 stdin 写入随机私有 `/tmp/webssh-clipboard.*/image.*` 文件（目录 0700、文件 0600），无需 SFTP 或 X11，再将路径逐张粘贴到终端。Codex 图片输入方式见 [OpenAI 官方文档](https://learn.chatgpt.com/docs/image-inputs?surface=cli)。
+
+图片上传期间保留后续粘贴的顺序，阻止 Enter 提前提交；上传超时、失败或连接变化时提示重试，不向新连接注入旧图片路径。关闭终端会取消待完成上传。成功上传的图片保留在目标机器的临时目录供远端程序读取，后续清理由目标系统的临时目录策略负责。
+
 每个终端 WebSocket 使用独立的尺寸更新队列，串行执行 SSH/tmux 尺寸命令，等待期间合并为最新尺寸，避免阻塞后续键盘与滚轮输入；连接断开时取消未完成的尺寸任务。顶部“网页”延迟来自浏览器到网关的 HTTP 健康检查，“SSH”延迟来自网关到目标的命令探测。两者均包含对应请求的处理耗时，不代表按键到画面显示的完整延迟。
 
 支持探测的新客户端每 5 秒在终端现有 WebSocket 上发送一次 `ping`，收到匹配的 `pong` 后，顶部优先显示“终端”往返延迟；原 HTTP 健康检查值保留在提示中。旧服务端不回复时继续显示“网页”HTTP 探测，不能将其等同于终端长连接延迟。探测只保留一个未完成请求，15 秒超时后清除旧值，后台标签页不采样。`pong` 使用同一个输出 writer 发送，最多保留一个待发回复，可越过排队的输出片段但不会打断正在发送的消息。该指标包括浏览器和网关调度，不包括 SSH、Codex 处理和终端解析/绘制。

@@ -50,9 +50,10 @@ let measuredTerminal: unknown;
 export function Harness() {
   const enhancedSessionRef = React.useRef(false);
   const [copied, setCopied] = React.useState("");
+  const [notice, setNotice] = React.useState("");
   const t = React.useCallback((zh: string) => zh, []);
   const noop = React.useCallback(() => {}, []);
-  const state = useTerminalSocket({ sessionId: "pipeline", t, enhancedSessionRef, push: noop, reportNetworkHint: noop, clearNetworkHint: noop, setCurrentDir: noop, onCopyRequest: setCopied });
+  const state = useTerminalSocket({ sessionId: "pipeline", t, enhancedSessionRef, push: setNotice, reportNetworkHint: noop, clearNetworkHint: noop, setCurrentDir: noop, onCopyRequest: setCopied });
   React.useEffect(() => {
     const term = state.terminalInstance.current;
     if (term && measuredTerminal !== term) {
@@ -80,12 +81,14 @@ export function Harness() {
       history: () => state.terminalInstance.current!.options.scrollback,
       dimensions: () => ({ rows: state.terminalInstance.current!.rows, cols: state.terminalInstance.current!.cols }),
       writes: () => parseWrites,
+      pasteMode: () => state.terminalInstance.current!.modes.bracketedPasteMode,
     };
   }, [state]);
   return <>
     <div id="connection">{state.connectionState}</div>
     <div id="latency">{state.terminalLatencyMs ?? "unknown"}</div>
     <div id="painted">{String(state.hasRenderedOutput)}</div>
+    <div id="notice">{notice}</div>
     <div style={{ position: "relative", height: "65vh", minHeight: 200, padding: 12 }}>
       <div ref={state.terminalRef} style={{ height: "100%", width: "100%" }} />
       <TerminalLoading state={{ ...state, t }} />
@@ -104,6 +107,7 @@ declare global {
       select(): void; selectAll(): void; selected(): string; inputs(): Array<{ type: string; data?: string }>;
       count(): number; history(): number | undefined; dimensions(): { rows: number; cols: number };
       writes(): number;
+      pasteMode(): boolean;
     };
   }
 }
