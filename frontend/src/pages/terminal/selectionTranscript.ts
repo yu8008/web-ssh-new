@@ -1,6 +1,7 @@
 import type { IBufferCell, IBufferLine, Terminal } from "xterm";
 
 export type SelectionPoint = { row: number; col: number };
+export type SelectionRange = { start: SelectionPoint; end: SelectionPoint };
 export type SelectionRow = { text: string; wrapped: boolean; offsets: number[] };
 export type SelectionScrollMotion = { top: number; bottom: number; lines: number };
 
@@ -251,6 +252,15 @@ export class SelectionTranscript {
       return `${index > 0 && (this.columnMode || !row.wrapped) ? "\n" : ""}${text}`;
     }).join("");
     return this.cachedText;
+  }
+
+  /** Full range relative to the moving viewport, including rows retained by
+   * the animation after the native selection anchor has left the screen. */
+  getScrollRange(): SelectionRange {
+    const reference = this.scrollRegion?.top ?? 0;
+    const offset = this.positions.get(this.frame[reference])! - reference;
+    const { start, end } = this.range();
+    return { start: { row: start.row - offset, col: start.col }, end: { row: end.row - offset, col: end.col } };
   }
 
   /** Visible part of the frozen selection, using xterm's public select API. */

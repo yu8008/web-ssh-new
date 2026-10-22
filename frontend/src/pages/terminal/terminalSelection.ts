@@ -16,7 +16,7 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
   const view = doc.defaultView!;
   const screen = host.querySelector<HTMLElement>(".xterm-screen")!;
   const viewport = host.querySelector<HTMLElement>(".xterm-viewport")!;
-  const animation = createSelectionAnimation(term, screen);
+  const animation = createSelectionAnimation(term, screen, () => transcript?.getScrollRange() ?? null);
   let nativeScrolling = false;
   let nativeViewportY = term.buffer.active.viewportY;
   let nativeScrollAt = view.performance.now();
@@ -37,8 +37,10 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
   let notifiedSelection = false;
   let parseTimer: number | undefined;
   let finishTimer: number | undefined;
-  let remote: { direction: -1 | 1; started: number; retryAt: number; attempts: number } | null = null;
+  let remote: { direction: -1 | 1; started: number; retryAt: number; attempts: number; reports: number; expected: number; moved: number } | null = null;
   let responseTime = 0;
+  let scrollStep = 0;
+  let scrollHeight = 0;
   let sendingWheel = false;
   let lastRequestAt = -Infinity;
   let synchronizedRepaint = false;
@@ -116,6 +118,7 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
     customGesture = false;
     transcript = null;
     remote = null;
+    scrollStep = scrollHeight = 0;
     captureStopped = false;
     stopTimer();
     view.clearTimeout(parseTimer);
@@ -126,31 +129,40 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
     notify();
   };
 
-  const requestScroll = (direction: -1 | 1, retry = false) => {
+  const requestScroll = (direction: -1 | 1, retry = false, drag = true) => {
     if (!active || disposed || captureStopped || !transcript || (remote && !retry)) return;
     if (view.performance.now() - lastRequestAt < 16) return;
     if (term.modes.mouseTrackingMode === "none" || term.modes.mouseTrackingMode === "x10") return;
     lastRequestAt = view.performance.now();
     const now = Date.now();
     const attempts = retry && remote ? remote.attempts + 1 : 1;
+    const rect = screen.getBoundingClientRect();
+    const outside = Math.max(rect.top - point.y, point.y - rect.bottom);
+    // Learn the TUI's actual wheel distance before accelerating. Keep at least
+    // three overlapping rows, allow headroom for TUI wheel acceleration, and
+    // wait for the entire burst before sending more.
+    const reports = !retry && drag && scrollStep
+      ? Math.max(1, Math.min(outside > 2 * rect.height / term.rows ? 3 : 2, Math.floor((scrollHeight - 3) / (scrollStep * 1.5)))) : 1;
     remote = {
       direction, started: retry && remote ? remote.started : now, attempts,
       retryAt: now + Math.max(responseTime * 4, Math.min(10000, 2500 * 2 ** Math.min(attempts - 1, 2))),
+      reports: retry && remote ? remote.reports : reports,
+      expected: retry && remote ? remote.expected : scrollStep * reports,
+      moved: retry && remote ? remote.moved : 0,
     };
     animation.prepare();
     // Use xterm's wheel encoder rather than hardcoding an escape sequence.
     // A line-mode delta emits one wheel report, with no held button/modifiers.
-    const rect = screen.getBoundingClientRect();
     sendingWheel = true;
     try {
-      screen.dispatchEvent(new WheelEvent("wheel", {
+      for (let report = 0; report < reports; report++) screen.dispatchEvent(new WheelEvent("wheel", {
         bubbles: true, cancelable: true, deltaMode: 1, deltaY: direction,
         clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2,
       }));
     } finally {
       sendingWheel = false;
     }
-    // Normally this gesture has one outstanding report. Waiting for the normal
+    // Normally this gesture has one outstanding burst. Waiting for the normal
     // wheel-burst frame would add another display frame to every SSH round trip.
     options.flushInput?.();
   };
@@ -316,7 +328,7 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
     if (active && transcript) {
       event.preventDefault();
       event.stopImmediatePropagation();
-      if (event.deltaY) requestScroll(event.deltaY < 0 ? -1 : 1);
+      if (event.deltaY) requestScroll(event.deltaY < 0 ? -1 : 1, false, false);
     } else if (transcript) {
       clear();
     }
@@ -341,14 +353,24 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
     const result = transcript.scroll(nextFrame, remote.direction, complete);
     if (result === "moved") {
       const elapsed = Date.now() - remote.started;
-      if (remote.attempts === 1) responseTime = responseTime ? responseTime * 0.75 + elapsed * 0.25 : elapsed;
-      if (transcript.scrollMotion) animation.move(transcript.scrollMotion, remote.attempts === 1 ? elapsed : responseTime || 100, nextFrame);
-      remote = null;
+      const motion = transcript.scrollMotion!;
+      const lines = Math.abs(motion.lines);
+      remote.moved += lines;
+      const completeBurst = remote.reports === 1 || remote.moved >= remote.expected;
+      if (completeBurst && remote.attempts === 1) {
+        responseTime = responseTime ? responseTime * 0.75 + elapsed * 0.25 : elapsed;
+        scrollStep = Math.max(scrollStep, remote.moved / remote.reports);
+      }
+      scrollHeight = motion.bottom - motion.top;
+      const interval = elapsed * Math.min(1, lines / Math.max(lines, remote.expected));
+      animation.move(motion, remote.attempts === 1 ? interval : responseTime || 100, nextFrame);
+      if (completeBurst) remote = null;
+      else animation.prepare();
       needsDraw = true;
       frameChanged = true;
       finishAfterDraw = !active;
       // Continue as soon as the complete response is verified. Highlighting
-      // still draws once per frame, and requests remain bounded to one at a time.
+      // still draws once per frame, and bursts remain bounded to one at a time.
       tick();
       scheduleFrame();
     } else if (result === "limit") {

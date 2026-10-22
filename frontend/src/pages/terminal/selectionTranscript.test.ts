@@ -39,6 +39,23 @@ it("reuses column offsets across moved rows without sharing duplicate row identi
 });
 
 describe("TUI selection transcript", () => {
+  it("keeps an offscreen anchor in the full animation range while clipping native selection", () => {
+    const selection = new SelectionTranscript(frame("H", "A", "B", "C", "F"), { row: 1, col: 2 });
+    selection.scroll(frame("H", "B", "C", "D", "F"), 1);
+    selection.scroll(frame("H", "C", "D", "E", "F"), 1);
+    selection.move({ row: 4, col: 80 });
+    expect(selection.getVisibleRange()).toEqual({ start: { row: 1, col: 0 }, end: { row: 4, col: 80 } });
+    expect(selection.getScrollRange()).toEqual({ start: { row: -1, col: 2 }, end: { row: 4, col: 80 } });
+  });
+
+  it("keeps the lower anchor beyond the viewport when animating an upward selection", () => {
+    const selection = new SelectionTranscript(frame("H", "C", "D", "E", "F"), { row: 3, col: 1 });
+    selection.scroll(frame("H", "B", "C", "D", "F"), -1);
+    selection.scroll(frame("H", "A", "B", "C", "F"), -1);
+    selection.move({ row: 0, col: 0 });
+    expect(selection.getScrollRange()).toEqual({ start: { row: 0, col: 0 }, end: { row: 5, col: 1 } });
+  });
+
   for (const direction of [-1, 1] as const) {
     it(`retains 9,010 consecutive rows during a long ${direction < 0 ? "upward" : "downward"} drag`, () => {
       const visible = (offset: number) => frame("Header", ...Array.from({ length: 10 }, (_, index) =>

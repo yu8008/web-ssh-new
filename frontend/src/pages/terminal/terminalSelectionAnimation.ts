@@ -1,16 +1,17 @@
 import type { IBufferCell, Terminal } from "xterm";
-import type { SelectionRow, SelectionScrollMotion } from "./selectionTranscript";
+import type { SelectionRange, SelectionRow, SelectionScrollMotion } from "./selectionTranscript";
 import { xtermPaletteColor } from "./terminalUtils";
 
 const ANSI_NAMES = ["black", "red", "green", "yellow", "blue", "magenta", "cyan", "white", "brightBlack", "brightRed", "brightGreen", "brightYellow", "brightBlue", "brightMagenta", "brightCyan", "brightWhite"] as const;
 const ANSI_DEFAULTS = ["#2e3436", "#cc0000", "#4e9a06", "#c4a000", "#3465a4", "#75507b", "#06989a", "#d3d7cf", "#555753", "#ef2929", "#8ae234", "#fce94f", "#729fcf", "#ad7fa8", "#34e2e2", "#eeeeec"];
-type PaintedRow = { element: HTMLDivElement; text: string; nodes: number; highlight: HTMLDivElement; selected: string };
+type ForegroundRun = { element: HTMLSpanElement; start: number; end: number; text: string; ascii: boolean; dim: boolean };
+type PaintedRow = { element: HTMLDivElement; text: string; nodes: number; highlight: HTMLDivElement; selected: string; foreground: ForegroundRun[] };
 
 /** xterm paints text at integer rows even when its scrollbar moves in pixels.
  * Interpolate a bounded window of verified text during selection. Reuse rows,
  * retain cell coordinates/styles and leave copying with the original buffer.
  * No viewport bitmap copies or React renders are needed for animation. */
-export function createSelectionAnimation(term: Terminal, screen: HTMLElement) {
+export function createSelectionAnimation(term: Terminal, screen: HTMLElement, getRange?: () => SelectionRange | null) {
   const doc = screen.ownerDocument;
   const view = doc.defaultView!;
   let enabled = false;
@@ -33,6 +34,9 @@ export function createSelectionAnimation(term: Terminal, screen: HTMLElement) {
   let cellWidth = 0;
   let nodeCount = 0;
   let base = 0;
+  let opaqueSelection = false;
+  let selectionFill = "";
+  let selectionOpacity = "";
   const rows = new Map<number, PaintedRow>();
   const spacing = new Map<string, number>();
   let measure: CanvasRenderingContext2D | null = null;
@@ -70,6 +74,7 @@ export function createSelectionAnimation(term: Terminal, screen: HTMLElement) {
     Object.assign(element.style, { position: "absolute", left: "0", top: `${(index - base) * rowHeight}px`, width: `${width}px`, height: `${rowHeight}px`, contain: "layout paint" });
     const line = term.buffer.active.getLine(term.buffer.active.viewportY + screenRow);
     const cell = term.buffer.active.getNullCell();
+    const foreground: ForegroundRun[] = [];
     let run: { element: HTMLSpanElement; textElement: HTMLSpanElement; text: string; start: number; end: number; key: string } | null = null;
     let background: { element: HTMLSpanElement; start: number; end: number; color: string } | null = null;
     const flushBackground = () => {
@@ -79,6 +84,9 @@ export function createSelectionAnimation(term: Terminal, screen: HTMLElement) {
       if (!run) return;
       run.textElement.textContent = run.text;
       run.element.style.width = `${(run.end - run.start) * cellWidth}px`;
+      if (run.textElement !== run.element || term.options.theme?.selectionForeground) {
+        foreground.push({ element: run.textElement, text: run.text, start: run.start, end: run.end, ascii: true, dim: run.textElement !== run.element });
+      }
     };
     let nodes = 1;
     const paintBackground = (color: string, col: number, columns: number) => {
@@ -137,6 +145,9 @@ export function createSelectionAnimation(term: Terminal, screen: HTMLElement) {
         span.textContent = chars;
         run = null;
       }
+      if (!ascii && (cell.isDim() || term.options.theme?.selectionForeground)) {
+        foreground.push({ element: cell.isDim() ? span.firstElementChild as HTMLSpanElement : span, text: chars, start: col, end: col + cell.getWidth(), ascii: false, dim: !!cell.isDim() });
+      }
       element.appendChild(span);
       nodes++;
       if (nodeCount + nodes > 4096) throw new Error("Selection paint budget exceeded");
@@ -144,25 +155,27 @@ export function createSelectionAnimation(term: Terminal, screen: HTMLElement) {
     flushRun();
     flushBackground();
     const highlight = doc.createElement("div");
-    Object.assign(highlight.style, { position: "absolute", top: "0", height: `${rowHeight}px`, pointerEvents: "none", display: "none", zIndex: "2" });
-    const color = term.options.theme?.selectionBackground ?? "rgba(255,255,255,0.3)";
-    highlight.style.backgroundColor = color;
-    // xterm also applies 30% opacity to opaque selection background colors.
-    if (/^#(?:[\da-f]{3}|[\da-f]{6})$/i.test(color)) highlight.style.opacity = "0.3";
+    Object.assign(highlight.style, { position: "absolute", top: "0", height: `${rowHeight}px`, pointerEvents: "none", display: "none", zIndex: opaqueSelection ? "0" : "2" });
+    highlight.style.backgroundColor = selectionFill;
+    highlight.style.opacity = selectionOpacity;
     element.appendChild(highlight);
-    return { element, highlight, text, nodes: nodes + 1, selected: "" };
+    return { element, highlight, text, nodes: nodes + 1, selected: "", foreground };
   };
   const updateSelection = () => {
     if (!enabled || !content) return;
-    const selected = term.getSelectionPosition();
-    const start = selected ? target + selected.start.y - term.buffer.active.viewportY : Infinity;
-    const end = selected ? target + selected.end.y - term.buffer.active.viewportY : -Infinity;
+    const native = term.getSelectionPosition();
+    const selected = getRange?.() ?? (native ? {
+      start: { row: native.start.y - term.buffer.active.viewportY, col: native.start.x },
+      end: { row: native.end.y - term.buffer.active.viewportY, col: native.end.x },
+    } : null);
+    const start = selected ? target + selected.start.row : Infinity;
+    const end = selected ? target + selected.end.row : -Infinity;
     const column = screen.querySelector<HTMLElement>(".wsg-column-selection");
     const columnRect = column?.getBoundingClientRect();
     const screenRect = columnRect ? screen.getBoundingClientRect() : null;
     for (const [index, row] of rows) {
-      let first = index === start ? selected!.start.x : 0;
-      let last = index === end ? selected!.end.x : term.cols;
+      let first = index === start ? selected!.start.col : 0;
+      let last = index === end ? selected!.end.col : term.cols;
       let visible = index >= start && index <= end;
       if (columnRect && screenRect) {
         const screenRow = index - target;
@@ -176,6 +189,26 @@ export function createSelectionAnimation(term: Terminal, screen: HTMLElement) {
       row.highlight.style.display = visible ? "block" : "none";
       row.highlight.style.left = `${first * cellWidth}px`;
       row.highlight.style.width = `${Math.max(0, last - first) * cellWidth}px`;
+      for (const run of row.foreground) {
+        const left = visible ? Math.max(0, Math.min(run.end - run.start, first - run.start)) : 0;
+        const right = visible ? Math.max(left, Math.min(run.end - run.start, last - run.start)) : 0;
+        const selected = right > left;
+        // Native selected glyphs lose ANSI dim. Preserve partial ASCII runs,
+        // so selecting half a line doesn't brighten its unselected prefix.
+        run.element.style.opacity = run.dim && !selected ? "0.5" : "1";
+        run.element.style.color = selected ? term.options.theme?.selectionForeground ?? "" : "";
+        if (selected && run.ascii && (left > 0 || right < run.end - run.start)) {
+          run.element.style.color = "";
+          const parts = [run.text.slice(0, left), run.text.slice(left, right), run.text.slice(right)].map((text, index) => {
+            const part = doc.createElement("span");
+            part.textContent = text;
+            if (index !== 1 && run.dim) part.style.opacity = "0.5";
+            if (index === 1) part.style.color = term.options.theme?.selectionForeground ?? "";
+            return part;
+          });
+          run.element.replaceChildren(...parts);
+        } else if (run.element.textContent !== run.text || run.element.childElementCount) run.element.textContent = run.text;
+      }
     }
   };
   const prune = () => {
@@ -205,11 +238,11 @@ export function createSelectionAnimation(term: Terminal, screen: HTMLElement) {
     // between packets and an abrupt speed change at every repaint. This clock
     // retains its velocity across packets and slows gently if the reserve runs
     // low. It never advances past text actually received from the terminal.
-    const reserve = Math.min((region ? region.bottom - region.top : term.rows) / 3, stepLines * 1.5);
+    const reserve = Math.min((region ? region.bottom - region.top : term.rows) / 3, stepLines * 0.75);
     const cruise = rate * Math.max(0.3, 1 + (Math.abs(gap) - reserve) / Math.max(1, stepLines) * 0.2);
-    const desired = Math.sign(gap) * Math.min(cruise, Math.abs(gap) / (ending ? 60 : waiting ? Math.max(40, responseWindow * 0.55) : 80));
+    const desired = Math.sign(gap) * Math.min(cruise, Math.abs(gap) / (ending ? 40 : waiting ? Math.max(32, responseWindow * 0.35) : 50));
     if (velocity * gap < 0) velocity = 0;
-    velocity += (desired - velocity) * (1 - Math.exp(-elapsed / Math.max(32, Math.min(160, responseWindow * 0.5))));
+    velocity += (desired - velocity) * (1 - Math.exp(-elapsed / Math.max(24, Math.min(100, responseWindow * 0.3))));
     position += Math.sign(gap) * Math.min(Math.abs(gap), Math.abs(velocity * elapsed));
     if (Math.abs(target - position) < 0.001) { position = target; velocity = 0; }
     content.style.setProperty("--selection-scroll-position", `${-position * rowHeight}px`);
@@ -230,7 +263,10 @@ export function createSelectionAnimation(term: Terminal, screen: HTMLElement) {
     content.style.top = `${-motion.top * rowHeight}px`;
     if (!layer.isConnected) screen.appendChild(layer);
   };
-  const rendered = term.onRender(updateSelection);
+  const rendered = term.onRender(() => {
+    if (enabled && opaqueSelection !== (term.element?.dataset.terminalRenderer === "webgl")) cancel();
+    else updateSelection();
+  });
 
   return {
     start() {
@@ -239,6 +275,7 @@ export function createSelectionAnimation(term: Terminal, screen: HTMLElement) {
       const bounds = screen.getBoundingClientRect();
       if (!bounds.width || !bounds.height) return;
       enabled = true;
+      opaqueSelection = term.element?.dataset.terminalRenderer === "webgl";
       width = bounds.width;
       rowHeight = bounds.height / term.rows;
       cellWidth = width / term.cols;
@@ -246,6 +283,22 @@ export function createSelectionAnimation(term: Terminal, screen: HTMLElement) {
       measurementCanvas.width = measurementCanvas.height = 1;
       measure = measurementCanvas.getContext("2d");
       if (!measure) return cancel();
+      selectionFill = term.options.theme?.selectionBackground ?? "rgba(255,255,255,0.3)";
+      measure.fillStyle = selectionFill;
+      measure.fillRect(0, 0, 1, 1);
+      selectionOpacity = measure.getImageData(0, 0, 1, 1).data[3] === 255 ? "0.3" : "";
+      if (opaqueSelection) {
+        // WebGL replaces selected cell backgrounds with a color blended against
+        // the terminal background. Canvas instead overlays a translucent fill.
+        measure.clearRect(0, 0, 1, 1);
+        measure.fillStyle = term.options.theme?.background ?? "#000000";
+        measure.fillRect(0, 0, 1, 1);
+        measure.fillStyle = selectionFill;
+        measure.fillRect(0, 0, 1, 1);
+        const [r, g, b] = measure.getImageData(0, 0, 1, 1).data;
+        selectionFill = `rgb(${r}, ${g}, ${b})`;
+        selectionOpacity = "";
+      }
       layer = doc.createElement("div");
       layer.className = "wsg-selection-scroll";
       layer.setAttribute("aria-hidden", "true");

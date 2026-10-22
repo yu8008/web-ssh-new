@@ -20,6 +20,14 @@ const synchronized = parameters.has("synchronized") && parameters.get("synchroni
 let offset = Number(parameters.get("offset") || "20");
 let wheelCount = 0;
 let dropped = false;
+let responsePending = false;
+let responseOffset = offset;
+let holdResponses = parameters.has("holdAfter");
+const heldReplies: Array<() => void> = [];
+const scheduleResponse = (reply: () => void, milliseconds: number) => {
+  if (holdResponses && wheelCount > Number(parameters.get("holdAfter"))) heldReplies.push(reply);
+  else setTimeout(reply, milliseconds);
+};
 let finished = 0;
 let changes = 0;
 let textReads = 0;
@@ -64,31 +72,43 @@ const selection = attachTerminalSelection(terminal, element("terminal"), {
   onLimit: () => { element("selection").dataset.limit = "true"; },
   flushInput: () => inputWriter.flush(),
 });
-const render = (unrelated = false) => {
+const repaints: Array<{ first: string; second: string; offset: number }> = [];
+let repainting = false;
+const drainRepaints = () => {
+  if (repainting || !repaints.length) return;
+  repainting = true;
+  const repaint = repaints.shift()!;
+  writeOutput(repaint.first);
+  setTimeout(() => output.enqueue(repaint.second, () => {
+    element("terminal").dataset.offset = String(repaint.offset);
+    repainting = false;
+    drainRepaints();
+  }), chunkDelay);
+};
+const render = (unrelated = false, renderOffset = offset) => {
+  const style = (text: string) => parameters.has("styled")
+    ? `\x1b[1;4;${parameters.has("dim") ? "2;" : ""}38;2;96;165;250;48;5;236m${text}\x1b[0m` : text;
   const footer = parameters.has("dynamicFooter")
-    ? [`Status ${offset >= Number(parameters.get("dynamicFrom") ?? 40) ? offset : "idle"}`, `Prompt ${offset >= Number(parameters.get("dynamicFrom") ?? 40) ? "running" : "ready"}`, "Fixed footer"]
+    ? [`Status ${renderOffset >= Number(parameters.get("dynamicFrom") ?? 40) ? renderOffset : "idle"}`, `Prompt ${renderOffset >= Number(parameters.get("dynamicFrom") ?? 40) ? "running" : "ready"}`, "Fixed footer"]
     : ["Fixed footer"];
   const lines = unrelated
     ? Array.from({ length: terminal.rows }, (_, index) => `Repainted unrelated row ${index}`)
     : ["Fixed header", ...Array.from({ length: terminal.rows - 1 - footer.length }, (_, index) => {
-      const absolute = offset + index;
+      const absolute = renderOffset + index;
       const number = parameters.get("repeat") === "boundary"
         ? absolute % 10 === 4 || absolute % 10 === 5 ? absolute - 2 : absolute
         : parameters.has("repeat") && absolute % 10 === 4 ? absolute - 6 : absolute;
       const text = `Output ${String(number).padStart(3, "0")} 中文 😀`;
       const colored = parameters.has("dense") ? Array.from({ length: Math.max(0, terminal.cols - 20) }, (_, col) =>
         `\x1b[38;5;${32 + col % 180}m${String.fromCharCode(97 + col % 26)}`).join("") + "\x1b[0m" : "";
-      return (parameters.has("styled") ? `\x1b[1;4;38;2;96;165;250;48;5;236m${text}\x1b[0m` : text) + colored;
-    }), ...footer];
+      return style(text) + colored;
+    }), ...footer.map((text) => parameters.has("footerStyled") ? style(text) : text)];
   // Split a remote repaint into two asynchronous batches to exercise SSH chunks.
   const halfway = Math.floor(lines.length / 2);
   const first = (synchronized ? "\x1b[?2026h" : "") + "\x1b[H" + lines.slice(0, halfway).map((text) => "\x1b[2K" + text).join("\r\n") + "\r\n";
   const second = lines.slice(halfway).map((text) => "\x1b[2K" + text).join("\r\n") + (synchronized ? "\x1b[?2026l" : "");
-  writeOutput(first);
-  const frameOffset = offset;
-  setTimeout(() => output.enqueue(second, () => {
-    element("terminal").dataset.offset = String(frameOffset);
-  }), chunkDelay);
+  repaints.push({ first, second, offset: renderOffset });
+  drainRepaints();
 };
 const inputWriter = createTerminalInputWriter(window, (data) => {
   packets.push(data);
@@ -105,11 +125,27 @@ const inputWriter = createTerminalInputWriter(window, (data) => {
       dropped = true;
       continue;
     }
-    const nextOffset = Math.max(0, Math.min(Number(parameters.get("maxOffset") || "90"), offset + (wheel[1] === "64" ? -2 : 2)));
+    const wheelStep = Number(parameters.get("wheelStep") || "2");
+    const nextOffset = Math.max(0, Math.min(Number(parameters.get("maxOffset") || "90"), offset + (wheel[1] === "64" ? -wheelStep : wheelStep)));
     if (nextOffset !== offset) {
       offset = nextOffset;
       const delays = parameters.get("delays")?.split(",").map(Number);
-      setTimeout(render, delays?.[(wheelCount - 1) % delays.length] ?? delay);
+      const frameOffset = offset;
+      const responseDelay = delays?.[(wheelCount - 1) % delays.length] ?? delay;
+      const reportGap = wheelCount > 1 && wheelCount % 2 === 1 ? Number(parameters.get("reportGap") ?? 0) : 0;
+      if (parameters.has("separateReports")) scheduleResponse(() => render(false, frameOffset), responseDelay + reportGap);
+      else {
+        // A coalesced TUI repaint acknowledges one input burst. Late callbacks
+        // must not render future wheel inputs ahead of their response delay.
+        responseOffset = frameOffset;
+        if (!responsePending) {
+          responsePending = true;
+          scheduleResponse(() => {
+            responsePending = false;
+            render(false, responseOffset);
+          }, responseDelay);
+        }
+      }
     }
   }
 });
@@ -128,10 +164,17 @@ element("dispose").addEventListener("click", () => {
   disposeTerminal(terminal, rendering);
 });
 window.resizeTerminalForTest = () => terminal.resize(terminal.cols + 1, terminal.rows + 1);
+window.selectTerminalForTest = (first, last) => terminal.select(0, terminal.buffer.active.viewportY + first, (last - first + 1) * terminal.cols);
+window.releaseTerminalRepliesForTest = () => {
+  holdResponses = false;
+  heldReplies.splice(0).forEach((reply) => reply());
+};
 
 declare global {
   interface Window {
     resizeTerminalForTest(): void;
+    selectTerminalForTest(first: number, last: number): void;
+    releaseTerminalRepliesForTest(): void;
   }
 }
 
