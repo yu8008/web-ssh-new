@@ -1,5 +1,7 @@
 ﻿from __future__ import annotations
 
+import asyncio
+from contextlib import suppress
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
@@ -8,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import update
 from starlette.responses import JSONResponse, Response
 
-from app.api import auth, connections, health, session_status, sessions, system, system_settings, ws_sessions
+from app.api import auth, clipboard_cache, connections, health, session_status, sessions, system, system_settings, ws_sessions
 from app.api.dependencies import AppState, get_state
 from app.api.middleware import RequestLoggingMiddleware
 from app.core.db import utc_now
@@ -16,6 +18,7 @@ from app.core.i18n import localize_detail, resolve_http_language
 from app.core.logging import get_logger, setup_logging
 from app.core.state import build_state
 from app.models.session import SessionRecord
+from app.services.clipboard_cache import run_clipboard_cleanup_worker
 from app.services.bootstrap import (
     ensure_admin_user,
     ensure_connection_arch_columns,
@@ -95,6 +98,7 @@ def create_app() -> FastAPI:
 
     app = FastAPI(title="WebSSH Gateway", version="0.1.0")
     app.dependency_overrides[get_state] = lambda: app_state
+    clipboard_cleanup_task: asyncio.Task | None = None
 
     @app.exception_handler(HTTPException)
     async def _localized_http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
@@ -108,10 +112,19 @@ def create_app() -> FastAPI:
 
     @app.on_event("startup")
     async def _start_retry_worker() -> None:
+        nonlocal clipboard_cleanup_task
         if app_state.start_enhanced_retry_worker:
             app_state.start_enhanced_retry_worker()
         if app_state.start_session_sync_worker:
             app_state.start_session_sync_worker()
+        clipboard_cleanup_task = asyncio.create_task(run_clipboard_cleanup_worker(app_state))
+
+    @app.on_event("shutdown")
+    async def _stop_clipboard_cleanup() -> None:
+        if clipboard_cleanup_task:
+            clipboard_cleanup_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await clipboard_cleanup_task
 
     # 添加请求日志中间件
     app.add_middleware(RequestLoggingMiddleware)
@@ -130,6 +143,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(system.router)
     app.include_router(system_settings.router)
+    app.include_router(clipboard_cache.router)
     app.include_router(session_status.router)
 
     static_dir = Path(__file__).resolve().parent.parent / "frontend" / "dist"

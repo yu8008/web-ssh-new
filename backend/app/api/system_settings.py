@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -23,6 +25,7 @@ class SystemSettingsResponse(BaseModel):
     session_status_refresh_interval_seconds: int
     default_enable_enhanced_session: bool
     show_session_status_summary: bool
+    clipboard_image_retention_days: Literal[3, 7]
 
 
 class SystemSettingsUpdateRequest(BaseModel):
@@ -31,6 +34,7 @@ class SystemSettingsUpdateRequest(BaseModel):
     session_status_refresh_interval_seconds: int = Field(..., ge=1)
     default_enable_enhanced_session: bool
     show_session_status_summary: bool
+    clipboard_image_retention_days: Literal[3, 7] | None = None
 
     @field_validator("enhanced_retry_max_attempts")
     @classmethod
@@ -62,6 +66,7 @@ def _build_response(db) -> SystemSettingsResponse:
         session_status_refresh_interval_seconds=settings.session_status_refresh_interval_seconds,
         default_enable_enhanced_session=settings.default_enable_enhanced_session,
         show_session_status_summary=settings.show_session_status_summary,
+        clipboard_image_retention_days=settings.clipboard_image_retention_days,
     )
 
 
@@ -85,4 +90,6 @@ def update_system_settings(
     record.session_status_refresh_interval_seconds = payload.session_status_refresh_interval_seconds
     record.default_enable_enhanced_session = payload.default_enable_enhanced_session
     record.show_session_status_summary = payload.show_session_status_summary
+    if payload.clipboard_image_retention_days is not None:
+        record.clipboard_image_retention_days = payload.clipboard_image_retention_days
     return _build_response(db)

@@ -45,6 +45,10 @@ const CLIENT_TEXT_MAP: Record<string, { zh: string; en: string }> = {
   "Clipboard image exceeds 20 MiB": { zh: "剪贴板图片不能超过 20 MiB", en: "Clipboard image exceeds 20 MiB" },
   "Unsupported clipboard image; use PNG, JPEG, WebP or GIF": { zh: "请粘贴 PNG、JPEG、WebP 或 GIF 图片", en: "Unsupported clipboard image; use PNG, JPEG, WebP or GIF" },
   "Could not save clipboard image on the SSH target": { zh: "无法将剪贴板图片保存到 SSH 目标，请检查临时目录权限和可用空间", en: "Could not save clipboard image on the SSH target" },
+  "Could not read clipboard image cache; check the SSH connection": { zh: "无法读取图片缓存，请检查 SSH 连接", en: "Could not read clipboard image cache; check the SSH connection" },
+  "Could not clean clipboard image cache": { zh: "无法清理图片缓存，请检查 SSH 连接和目录权限", en: "Could not clean clipboard image cache" },
+  "Clipboard cache image no longer exists": { zh: "缓存图片已被清理或不存在", en: "Clipboard cache image no longer exists" },
+  "Invalid clipboard cache image id": { zh: "缓存图片标识无效", en: "Invalid clipboard cache image id" },
   "创建目录失败": { zh: "创建目录失败", en: "Failed to create directory" },
   "删除失败": { zh: "删除失败", en: "Delete failed" },
   "创建文件失败": { zh: "创建文件失败", en: "Failed to create file" },
@@ -609,7 +613,59 @@ export type GlobalSystemSettings = {
   session_status_refresh_interval_seconds: number;
   default_enable_enhanced_session: boolean;
   show_session_status_summary: boolean;
+  clipboard_image_retention_days: 3 | 7;
 };
+
+export type ClipboardCacheImage = {
+  id: string;
+  path: string;
+  size: number;
+  created_at: string;
+  expires_at: string;
+  expired: boolean;
+};
+
+export type ClipboardCacheInventory = {
+  images: ClipboardCacheImage[];
+  total_count: number;
+  total_bytes: number;
+  expired_count: number;
+  retention_days: number;
+  offset: number;
+  limit: number;
+};
+
+export async function getClipboardCache(connectionId: number, offset: number, signal: AbortSignal): Promise<ClipboardCacheInventory> {
+  const response = await fetch(`${HTTP_BASE}/system/clipboard-cache/${connectionId}?offset=${offset}&limit=20`, {
+    headers: { ...getAuthHeader() }, signal,
+  });
+  if (!response.ok) throw new Error(await safeError(response, "Could not read clipboard image cache; check the SSH connection"));
+  return response.json();
+}
+
+export async function cleanClipboardCache(connectionId: number): Promise<{ deleted: number; freed_bytes: number }> {
+  const response = await fetch(`${HTTP_BASE}/system/clipboard-cache/${connectionId}/cleanup`, {
+    method: "POST", headers: { ...getAuthHeader() },
+  });
+  if (!response.ok) throw new Error(await safeError(response, "Could not clean clipboard image cache"));
+  return response.json();
+}
+
+export async function deleteClipboardCacheImages(connectionId: number, imageIds: string[]): Promise<{ deleted_ids: string[] }> {
+  const response = await fetch(`${HTTP_BASE}/system/clipboard-cache/${connectionId}`, {
+    method: "DELETE", headers: { "Content-Type": "application/json", ...getAuthHeader() }, body: JSON.stringify({ image_ids: imageIds }),
+  });
+  if (!response.ok) throw new Error(await safeError(response, "Could not clean clipboard image cache"));
+  return response.json();
+}
+
+export async function readClipboardCacheImage(connectionId: number, imageId: string, signal: AbortSignal): Promise<Blob> {
+  const response = await fetch(`${HTTP_BASE}/system/clipboard-cache/${connectionId}/image/${encodeURIComponent(imageId)}`, {
+    headers: { ...getAuthHeader() }, signal,
+  });
+  if (!response.ok) throw new Error(await safeError(response, "Could not read clipboard image cache; check the SSH connection"));
+  return response.blob();
+}
 
 export type SystemLogEntry = {
   sequence: number;

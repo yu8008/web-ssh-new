@@ -15,3 +15,4 @@ class SystemSetting(TimestampMixin, Base):
     session_status_refresh_interval_seconds: Mapped[int] = mapped_column(Integer, default=3)
     default_enable_enhanced_session: Mapped[bool] = mapped_column(Boolean, default=False)
     show_session_status_summary: Mapped[bool] = mapped_column(Boolean, default=True)
+    clipboard_image_retention_days: Mapped[int] = mapped_column(Integer, default=3)

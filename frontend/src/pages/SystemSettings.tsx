@@ -2,6 +2,7 @@ import React from "react";
 import { Button } from "../components/Button";
 import { Card } from "../components/Card";
 import { Input } from "../components/Input";
+import { ClipboardImageCache } from "../components/ClipboardImageCache";
 import { useToast } from "../components/ToastContext";
 import { useApp } from "../context/AppContextCore";
 import { updateSystemSettings } from "../lib/api";
@@ -50,6 +51,7 @@ export function SystemSettingsPage() {
     showSessionStatusSummary: true,
     sessionStatusRefreshIntervalSeconds: "3",
     defaultEnableEnhancedSession: false,
+    clipboardImageRetentionDays: 3 as 3 | 7,
   });
   const [saving, setSaving] = React.useState(false);
   const [terminalScrollback, setTerminalScrollback] = React.useState(getTerminalScrollback);
@@ -67,6 +69,7 @@ export function SystemSettingsPage() {
       showSessionStatusSummary: systemSettings.show_session_status_summary,
       sessionStatusRefreshIntervalSeconds: String(systemSettings.session_status_refresh_interval_seconds),
       defaultEnableEnhancedSession: systemSettings.default_enable_enhanced_session,
+      clipboardImageRetentionDays: systemSettings.clipboard_image_retention_days ?? 3,
     });
   }, [systemSettings]);
 
@@ -129,6 +132,7 @@ export function SystemSettingsPage() {
         show_session_status_summary: form.showSessionStatusSummary,
         session_status_refresh_interval_seconds: sessionStatusRefreshIntervalSeconds,
         default_enable_enhanced_session: form.defaultEnableEnhancedSession,
+        clipboard_image_retention_days: form.clipboardImageRetentionDays,
       });
       applySystemSettings(saved);
       saveTerminalScrollback(terminalScrollback);
@@ -153,7 +157,7 @@ export function SystemSettingsPage() {
           <div>
             <h1 className="text-2xl font-semibold">{t("系统设置", "System Settings")}</h1>
             <p className={`mt-1 text-sm ${isDark ? "text-slate-400" : "text-slate-500"}`}>
-              {t("保存后立即应用到新建会话、增强会话自动重试以及会话管理页状态展示。", "Saved settings apply immediately to new sessions, enhanced retry behavior, and session status display.")}
+              {t("管理会话行为、终端显示和粘贴图片缓存，保存后应用。", "Manage session behavior, terminal display, and pasted image caching, then save to apply.")}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -186,6 +190,26 @@ export function SystemSettingsPage() {
             <div className={`text-sm ${isDark ? "text-slate-400" : "text-slate-500"}`}>{t("加载系统设置中...", "Loading system settings...")}</div>
           ) : (
             <form className="space-y-5" onSubmit={handleSave}>
+              <div className={`rounded-xl border p-4 ${sectionClassName}`}>
+                <label htmlFor="clipboard-retention" className="text-sm font-medium">
+                  {t("粘贴图片自动清理", "Pasted image cleanup")}
+                </label>
+                <select
+                  id="clipboard-retention"
+                  value={form.clipboardImageRetentionDays}
+                  onChange={(event) => setForm((prev) => ({ ...prev, clipboardImageRetentionDays: Number(event.target.value) as 3 | 7 }))}
+                  className={`mt-2 block w-full rounded-md border px-3 py-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand ${sectionClassName}`}
+                >
+                  <option value={3}>{t("保留 3 天", "Keep for 3 days")}</option>
+                  <option value={7}>{t("保留 7 天", "Keep for 7 days")}</option>
+                </select>
+                <p className={`mt-2 text-xs ${hintClassName}`}>
+                  {t("默认保留 3 天，可改为 7 天。后台每小时检查并删除过期图片；目标离线时下次重试，无需保持终端打开。需要长期保留的图片请先下载。", "Defaults to 3 days, with a 7-day option. Expired images are checked hourly, including when terminals are closed. Offline targets are retried later. Download images you want to keep.")}
+                </p>
+                <a href="#clipboard-image-cache" className="mt-2 inline-block text-xs text-brand underline">
+                  {t("查看和管理缓存图片", "View and manage cached images")}
+                </a>
+              </div>
               <div className={`rounded-xl border p-4 ${sectionClassName}`}>
                 <label htmlFor="terminal-scrollback" className="text-sm font-medium">
                   {t("终端历史保留行数", "Terminal scrollback lines")}
@@ -331,6 +355,9 @@ export function SystemSettingsPage() {
             </form>
           )}
         </Card>
+        <section id="clipboard-image-cache" className="scroll-mt-6">
+          <ClipboardImageCache />
+        </section>
       </div>
     </div>
   );

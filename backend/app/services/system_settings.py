@@ -24,6 +24,7 @@ class RuntimeSystemSettings:
     session_status_refresh_interval_seconds: int
     default_enable_enhanced_session: bool
     show_session_status_summary: bool
+    clipboard_image_retention_days: int = 3
 
 
 def default_runtime_system_settings() -> RuntimeSystemSettings:
@@ -151,4 +152,5 @@ def load_runtime_system_settings(db: Session) -> RuntimeSystemSettings:
             if record.show_session_status_summary is None
             else bool(record.show_session_status_summary)
         ),
+        clipboard_image_retention_days=(7 if record.clipboard_image_retention_days == 7 else 3),
     )

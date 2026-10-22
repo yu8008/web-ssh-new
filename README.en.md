@@ -42,6 +42,7 @@ A dedicated mobile layout provides touch-friendly interactions for terminal work
 - System monitoring for CPU, memory, network, process, and disk
 - System log viewer from the session management page, showing recent backend process logs for troubleshooting login, session, and system API issues
 - File management: browse, upload/download, rename, delete, chmod, batch upload
+- Pasted image cache: Settings provides per-connection image lists, disk usage, expiration times, previews, downloads, deletion, and manual expiry cleanup. Retention defaults to 3 days with a 7-day option. A background worker cleans expired images at startup and hourly, even with no open terminal, and retries offline targets on subsequent checks. Older `/tmp/webssh-clipboard.*` images are supported; only cache images owned by the remote account are removed. Connections sharing an SSH account share its cache. Download images you want to keep; removing a saved connection prevents further Gateway cleanup through that connection.
 - Security baseline: JWT auth, password policy, lockout policy, request-id logging
 
 ## Tech Stack
