@@ -42,7 +42,8 @@ type ScrollMatch = { oldStart: number; newStart: number; length: number };
 
 /** Find a moving block, ignoring stationary TUI headers/footers. Never guess a
  * displacement from blank/repeated rows alone: that could corrupt copied text. */
-function findScrollMatch(previous: SelectionRow[], next: SelectionRow[], direction: number, complete: boolean): ScrollMatch | null {
+function findScrollMatch(previous: SelectionRow[], next: SelectionRow[], direction: number, complete: boolean,
+  region: { top: number; bottom: number } | null): ScrollMatch | null {
   const previousCounts = new Map<string, number>();
   const nextCounts = new Map<string, number>();
   for (const row of previous) if (row.text.trim()) previousCounts.set(row.text, (previousCounts.get(row.text) ?? 0) + 1);
@@ -86,7 +87,18 @@ function findScrollMatch(previous: SelectionRow[], next: SelectionRow[], directi
           start += Math.max(1, length);
           continue;
         }
-        const changedOutside = next.some((row, index) =>
+        // A prompt/status area may occupy several rows and update independently
+        // of the scrolling output. Once its bounds are verified, don't mistake
+        // those updates for an incomplete body repaint. An explicit synchronized
+        // repaint can establish new bounds without a preceding static frame.
+        const knownRegion = region?.top === top && region?.bottom === bottom;
+        // During live output there may never be a static prompt to learn from.
+        // A majority-sized unique overlap with a fully replaced entering edge
+        // also establishes the body. Keep the stale-edge check above: a half
+        // repaint must never be accepted just because its prompt changed.
+        const strongOverlap = length >= Math.ceil(next.length / 2) &&
+          next.slice(enteringTop, enteringBottom).every((row, offset) => !sameRow(row, previous[enteringTop + offset]));
+        const changedOutside = !complete && !knownRegion && !strongOverlap && next.some((row, index) =>
           (index < top || index >= bottom) && index > 0 && index < next.length - 1 && !sameRow(row, previous[index]));
         if (changedOutside) {
           start += Math.max(1, length);
@@ -119,6 +131,7 @@ export class SelectionTranscript {
   private cachedText: string | undefined;
   private cachedHasSelection: boolean | undefined;
   private capturedChars: number;
+  private scrollRegion: { top: number; bottom: number } | null = null;
 
   constructor(frame: SelectionRow[], point: SelectionPoint, private readonly columnMode = false) {
     this.rows = [...frame];
@@ -157,7 +170,7 @@ export class SelectionTranscript {
     this.scrollMotion = null;
     if (next.length !== this.frame.length) return "unmatched";
     if (next.every((row, index) => sameRow(row, this.frame[index]))) return "unchanged";
-    const match = findScrollMatch(this.frame, next, direction, complete);
+    const match = findScrollMatch(this.frame, next, direction, complete, this.scrollRegion);
     if (!match) return "unmatched";
     const { oldStart, newStart, length } = match;
     const top = Math.min(oldStart, newStart);
@@ -208,6 +221,7 @@ export class SelectionTranscript {
     this.rows = document;
     this.frame = mapped;
     this.scrollMotion = { top, bottom, lines: oldStart - newStart };
+    this.scrollRegion = { top, bottom };
     this.capturedChars += addedChars;
     for (let index = firstInserted; index < document.length; index++) {
       this.positions.set(document[index], index);

@@ -39,6 +39,54 @@ it("reuses column offsets across moved rows without sharing duplicate row identi
 });
 
 describe("TUI selection transcript", () => {
+  for (const direction of [-1, 1] as const) {
+    it(`retains 9,010 consecutive rows during a long ${direction < 0 ? "upward" : "downward"} drag`, () => {
+      const visible = (offset: number) => frame("Header", ...Array.from({ length: 10 }, (_, index) =>
+        `Line ${String(offset + index).padStart(5, "0")}`.padEnd(70, ".")), "Footer");
+      const initial = direction < 0 ? 9000 : 0;
+      const selection = new SelectionTranscript(visible(initial), { row: direction < 0 ? 10 : 1, col: direction < 0 ? 80 : 0 });
+      for (let distance = 2; distance <= 9000; distance += 2) {
+        expect(selection.scroll(visible(initial + distance * direction), direction)).toBe("moved");
+        selection.move({ row: direction < 0 ? 1 : 10, col: direction < 0 ? 0 : 80 });
+      }
+      const lines = selection.getText().split("\n");
+      expect(lines).toHaveLength(9010);
+      expect(lines.every((line, index) => line === `Line ${String(index).padStart(5, "0")}`.padEnd(70, "."))).toBe(true);
+    }, 10000);
+  }
+
+  it("keeps scrolling when a known multiline footer changes during output", () => {
+    const selection = new SelectionTranscript(frame("H", "A", "B", "C", "D", "status", "prompt", "F"), { row: 1, col: 0 });
+    expect(selection.scroll(frame("H", "B", "C", "D", "E", "status", "prompt", "F"), 1)).toBe("moved");
+    expect(selection.scroll(frame("H", "C", "D", "E", "F", "running", "new prompt", "F"), 1)).toBe("moved");
+    selection.move({ row: 7, col: 80 });
+    expect(selection.getText()).toBe("A\nB\nC\nD\nE\nF\nstatus\nprompt\nF");
+  });
+
+  it("accepts a complete scroll with changing chrome before any region is known", () => {
+    const selection = new SelectionTranscript(frame("H", "A", "B", "C", "D", "status", "prompt", "F"), { row: 1, col: 0 });
+    expect(selection.scroll(frame("H", "B", "C", "D", "E", "running", "new prompt", "F"), 1, true)).toBe("moved");
+    expect(selection.scrollMotion).toEqual({ top: 1, bottom: 5, lines: 1 });
+  });
+
+  it("can learn the body while a multiline prompt changes from the very first scroll", () => {
+    const visible = (offset: number) => frame("H", ...Array.from({ length: 8 }, (_, index) => `Line ${offset + index}`), `Status ${offset}`, `Prompt ${offset}`, "F");
+    const selection = new SelectionTranscript(visible(0), { row: 1, col: 0 });
+    expect(selection.scroll(visible(2), 1)).toBe("moved");
+    expect(selection.scrollMotion).toEqual({ top: 1, bottom: 9, lines: 2 });
+    selection.move({ row: 8, col: 80 });
+    expect(selection.getText()).toBe(Array.from({ length: 10 }, (_, index) => `Line ${index}`).join("\n"));
+  });
+
+  it("still rejects a partial body repaint after learning the prompt boundaries", () => {
+    const selection = new SelectionTranscript(frame("H", "A", "B", "C", "D", "status", "prompt", "F"), { row: 1, col: 0 });
+    expect(selection.scroll(frame("H", "B", "C", "D", "E", "status", "prompt", "F"), 1)).toBe("moved");
+    expect(selection.scroll(frame("H", "C", "D", "D", "E", "running", "new prompt", "F"), 1)).toBe("unmatched");
+    expect(selection.scroll(frame("H", "C", "D", "E", "F", "running", "new prompt", "F"), 1)).toBe("moved");
+    selection.move({ row: 4, col: 80 });
+    expect(selection.getText()).toBe("A\nB\nC\nD\nE\nF");
+  });
+
   it("keeps selected text across remote repaints and includes fixed chrome once", () => {
     const selection = new SelectionTranscript(frame("header", "line 1", "line 2", "line 3", "footer"), { row: 1, col: 0 });
     selection.move({ row: 4, col: 80 });

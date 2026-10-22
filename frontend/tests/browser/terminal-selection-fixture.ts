@@ -16,9 +16,10 @@ const parameters = new URLSearchParams(location.search);
 const shell = parameters.get("mode") === "shell";
 const delay = Number(parameters.get("delay") || "50");
 const chunkDelay = Number(parameters.get("chunkDelay") || "20");
-const synchronized = parameters.has("synchronized");
+const synchronized = parameters.has("synchronized") && parameters.get("synchronized") !== "0";
 let offset = Number(parameters.get("offset") || "20");
 let wheelCount = 0;
+let dropped = false;
 let finished = 0;
 let changes = 0;
 let textReads = 0;
@@ -64,9 +65,12 @@ const selection = attachTerminalSelection(terminal, element("terminal"), {
   flushInput: () => inputWriter.flush(),
 });
 const render = (unrelated = false) => {
+  const footer = parameters.has("dynamicFooter")
+    ? [`Status ${offset >= Number(parameters.get("dynamicFrom") ?? 40) ? offset : "idle"}`, `Prompt ${offset >= Number(parameters.get("dynamicFrom") ?? 40) ? "running" : "ready"}`, "Fixed footer"]
+    : ["Fixed footer"];
   const lines = unrelated
     ? Array.from({ length: terminal.rows }, (_, index) => `Repainted unrelated row ${index}`)
-    : ["Fixed header", ...Array.from({ length: terminal.rows - 2 }, (_, index) => {
+    : ["Fixed header", ...Array.from({ length: terminal.rows - 1 - footer.length }, (_, index) => {
       const absolute = offset + index;
       const number = parameters.get("repeat") === "boundary"
         ? absolute % 10 === 4 || absolute % 10 === 5 ? absolute - 2 : absolute
@@ -75,7 +79,7 @@ const render = (unrelated = false) => {
       const colored = parameters.has("dense") ? Array.from({ length: Math.max(0, terminal.cols - 20) }, (_, col) =>
         `\x1b[38;5;${32 + col % 180}m${String.fromCharCode(97 + col % 26)}`).join("") + "\x1b[0m" : "";
       return (parameters.has("styled") ? `\x1b[1;4;38;2;96;165;250;48;5;236m${text}\x1b[0m` : text) + colored;
-    }), "Fixed footer"];
+    }), ...footer];
   // Split a remote repaint into two asynchronous batches to exercise SSH chunks.
   const halfway = Math.floor(lines.length / 2);
   const first = (synchronized ? "\x1b[?2026h" : "") + "\x1b[H" + lines.slice(0, halfway).map((text) => "\x1b[2K" + text).join("\r\n") + "\r\n";
@@ -97,10 +101,15 @@ const inputWriter = createTerminalInputWriter(window, (data) => {
     const wheel = /\x1b\[<(64|65);/.exec(data);
     if (!wheel) continue;
     element("wheels").textContent = String(++wheelCount);
+    if (parameters.has("dropAt") && !dropped && offset === Number(parameters.get("dropAt"))) {
+      dropped = true;
+      continue;
+    }
     const nextOffset = Math.max(0, Math.min(Number(parameters.get("maxOffset") || "90"), offset + (wheel[1] === "64" ? -2 : 2)));
     if (nextOffset !== offset) {
       offset = nextOffset;
-      setTimeout(render, delay);
+      const delays = parameters.get("delays")?.split(",").map(Number);
+      setTimeout(render, delays?.[(wheelCount - 1) % delays.length] ?? delay);
     }
   }
 });

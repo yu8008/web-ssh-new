@@ -37,8 +37,8 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
   let notifiedSelection = false;
   let parseTimer: number | undefined;
   let finishTimer: number | undefined;
-  let remote: { direction: -1 | 1; started: number } | null = null;
-  let stoppedDirection = 0;
+  let remote: { direction: -1 | 1; started: number; retryAt: number; attempts: number } | null = null;
+  let responseTime = 0;
   let sendingWheel = false;
   let lastRequestAt = -Infinity;
   let synchronizedRepaint = false;
@@ -116,7 +116,6 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
     customGesture = false;
     transcript = null;
     remote = null;
-    stoppedDirection = 0;
     captureStopped = false;
     stopTimer();
     view.clearTimeout(parseTimer);
@@ -127,12 +126,17 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
     notify();
   };
 
-  const requestScroll = (direction: -1 | 1) => {
-    if (!active || disposed || captureStopped || !transcript || remote || direction === stoppedDirection) return;
+  const requestScroll = (direction: -1 | 1, retry = false) => {
+    if (!active || disposed || captureStopped || !transcript || (remote && !retry)) return;
     if (view.performance.now() - lastRequestAt < 16) return;
     if (term.modes.mouseTrackingMode === "none" || term.modes.mouseTrackingMode === "x10") return;
     lastRequestAt = view.performance.now();
-    remote = { direction, started: Date.now() };
+    const now = Date.now();
+    const attempts = retry && remote ? remote.attempts + 1 : 1;
+    remote = {
+      direction, started: retry && remote ? remote.started : now, attempts,
+      retryAt: now + Math.max(responseTime * 4, Math.min(10000, 2500 * 2 ** Math.min(attempts - 1, 2))),
+    };
     animation.prepare();
     // Use xterm's wheel encoder rather than hardcoding an escape sequence.
     // A line-mode delta emits one wheel report, with no held button/modifiers.
@@ -146,7 +150,7 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
     } finally {
       sendingWheel = false;
     }
-    // This gesture has only one outstanding report. Waiting for the normal
+    // Normally this gesture has one outstanding report. Waiting for the normal
     // wheel-burst frame would add another display frame to every SSH round trip.
     options.flushInput?.();
   };
@@ -154,20 +158,14 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
     if (!active) return false;
     const rect = screen.getBoundingClientRect();
     const direction = point.y <= rect.top + 12 ? -1 : point.y >= rect.bottom - 12 ? 1 : 0;
-    if (!direction) {
-      stoppedDirection = 0;
-      return false;
-    }
-    if (stoppedDirection !== direction) stoppedDirection = 0;
-    // Wait for a response instead of flooding a slow SSH link or skipping pages.
-    if (remote && Date.now() - remote.started > 1200) {
-      stoppedDirection = remote.direction;
-      // Retain the in-flight snapshot so even a late SSH response can finish
-      // this selection. A deliberate direction change can retry at a boundary.
-      if (direction !== remote.direction) {
-        remote = null;
-        stoppedDirection = 0;
-      }
+    if (!direction) return false;
+    // A TUI may ignore a wheel (or repaint without moving). Keep the verified
+    // snapshot for late responses, but don't permanently latch the gesture.
+    // Back off at boundaries and on slow links; never retry inside a split
+    // synchronized repaint, where another wheel could skip uncaptured output.
+    if (remote && Date.now() >= remote.retryAt && !synchronizedRepaint) {
+      if (direction === remote.direction) requestScroll(direction, true);
+      else remote = null;
     }
     requestScroll(direction);
     return true;
@@ -199,7 +197,6 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
     nativeScrolling = false;
     animation.start();
     pendingDown = null;
-    stoppedDirection = 0;
     term.focus();
     stopTimer();
     scheduleFrame();
@@ -343,9 +340,10 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
     const nextFrame = captureFrame();
     const result = transcript.scroll(nextFrame, remote.direction, complete);
     if (result === "moved") {
-      if (transcript.scrollMotion) animation.move(transcript.scrollMotion, Date.now() - remote.started, nextFrame);
+      const elapsed = Date.now() - remote.started;
+      if (remote.attempts === 1) responseTime = responseTime ? responseTime * 0.75 + elapsed * 0.25 : elapsed;
+      if (transcript.scrollMotion) animation.move(transcript.scrollMotion, remote.attempts === 1 ? elapsed : responseTime || 100, nextFrame);
       remote = null;
-      stoppedDirection = 0;
       needsDraw = true;
       frameChanged = true;
       finishAfterDraw = !active;

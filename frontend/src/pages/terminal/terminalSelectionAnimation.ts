@@ -23,9 +23,11 @@ export function createSelectionAnimation(term: Terminal, screen: HTMLElement) {
   let region: SelectionScrollMotion | null = null;
   let target = 0;
   let position = 0;
-  let origin = 0;
-  let started = 0;
-  let duration = 0;
+  let lastAdvance = 0;
+  let responseWindow = 0;
+  let rate = 0;
+  let velocity = 0;
+  let stepLines = 0;
   let width = 0;
   let rowHeight = 0;
   let cellWidth = 0;
@@ -47,7 +49,7 @@ export function createSelectionAnimation(term: Terminal, screen: HTMLElement) {
     spacing.clear();
     measure = null;
     nodeCount = 0;
-    position = target = origin = duration = 0;
+    position = target = lastAdvance = responseWindow = rate = velocity = stepLines = 0;
     base = 0;
   };
   const palette = (index: number) => index < 16
@@ -195,8 +197,21 @@ export function createSelectionAnimation(term: Terminal, screen: HTMLElement) {
   };
   const advance = (now: number) => {
     if (!content) return;
-    const fraction = Math.min(1, Math.max(0, (now - started) / duration));
-    position = origin + (target - origin) * fraction;
+    const elapsed = Math.max(0, Math.min(64, now - lastAdvance));
+    lastAdvance = now;
+    const gap = target - position;
+    // Keep a small reserve of verified rows and consume it at a filtered rate.
+    // Restarting a fixed-duration tween for each SSH response produces a stop
+    // between packets and an abrupt speed change at every repaint. This clock
+    // retains its velocity across packets and slows gently if the reserve runs
+    // low. It never advances past text actually received from the terminal.
+    const reserve = Math.min((region ? region.bottom - region.top : term.rows) / 3, stepLines * 1.5);
+    const cruise = rate * Math.max(0.3, 1 + (Math.abs(gap) - reserve) / Math.max(1, stepLines) * 0.2);
+    const desired = Math.sign(gap) * Math.min(cruise, Math.abs(gap) / (ending ? 60 : waiting ? Math.max(40, responseWindow * 0.55) : 80));
+    if (velocity * gap < 0) velocity = 0;
+    velocity += (desired - velocity) * (1 - Math.exp(-elapsed / Math.max(32, Math.min(160, responseWindow * 0.5))));
+    position += Math.sign(gap) * Math.min(Math.abs(gap), Math.abs(velocity * elapsed));
+    if (Math.abs(target - position) < 0.001) { position = target; velocity = 0; }
     content.style.setProperty("--selection-scroll-position", `${-position * rowHeight}px`);
     content.style.transform = `translate3d(0, calc(${base * rowHeight}px + var(--selection-scroll-position)), 0)`;
   };
@@ -254,7 +269,9 @@ export function createSelectionAnimation(term: Terminal, screen: HTMLElement) {
     move(motion: SelectionScrollMotion, elapsed: number, verifiedRows?: SelectionRow[]) {
       if (!enabled || !content) return;
       try {
-        if (duration) advance(view.performance.now());
+        const now = view.performance.now();
+        if (lastAdvance) advance(now);
+        lastAdvance = now;
         const oldTarget = target;
         if (region?.top !== motion.top || region?.bottom !== motion.bottom) {
           for (const [index, row] of rows) if (index < oldTarget + motion.top || index >= oldTarget + motion.bottom) {
@@ -280,9 +297,11 @@ export function createSelectionAnimation(term: Terminal, screen: HTMLElement) {
         }
         waiting = false;
         updateSelection();
-        origin = position;
-        started = view.performance.now();
-        duration = Math.max(32, Math.min(100, elapsed * 1.25));
+        const interval = Math.max(16, Math.min(2000, elapsed));
+        const nextRate = Math.abs(motion.lines) / interval;
+        responseWindow = responseWindow ? responseWindow * 0.8 + interval * 0.2 : interval;
+        rate = rate ? rate * 0.8 + nextRate * 0.2 : nextRate;
+        stepLines = Math.abs(motion.lines);
         if (frame === undefined) frame = view.requestAnimationFrame(animate);
       } catch { cancel(); }
     },

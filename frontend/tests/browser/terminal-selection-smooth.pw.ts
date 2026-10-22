@@ -1,7 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 
 async function open(page: Page, query = "") {
-  await page.goto(`/tests/browser/terminal-selection.html?maxOffset=10000&delay=30&chunkDelay=0&synchronized=1${query}`);
+  const parameters = new URLSearchParams("maxOffset=10000&delay=30&chunkDelay=0&synchronized=1");
+  new URLSearchParams(query).forEach((value, name) => parameters.set(name, value));
+  await page.goto(`/tests/browser/terminal-selection.html?${parameters}`);
   await expect(page.locator("#terminal")).toHaveAttribute("data-ready", "true");
   const box = await page.locator(".xterm-screen").boundingBox();
   if (!box) throw new Error("Missing terminal screen");
@@ -83,6 +85,36 @@ test("continuous unrelated output does not starve pixel animation", async ({ pag
   expect(new Set((await sampleMotion(page)).map((value) => value.toFixed(2))).size).toBeGreaterThan(8);
   await page.mouse.up();
 });
+
+test("selection maintains continuous motion through slow, uneven remote repaints", async ({ page }) => {
+  await drag(page, "down", "&renderer=canvas&delays=240,320,260,300&offset=500");
+  await expect(page.locator(".wsg-selection-scroll")).toBeVisible();
+  await page.waitForTimeout(1200);
+  const values = await sampleMotion(page, 2200);
+  const steps = values.slice(1).map((value, index) => values[index] - value);
+  expect(steps.filter((step) => step < 0.01).length / steps.length).toBeLessThan(0.05);
+  await page.mouse.up();
+  await expect(page.locator(".wsg-selection-scroll")).toHaveCount(0);
+  const numbers = [...(await page.locator("#selection").textContent())!.matchAll(/Output (\d+)/g)].map((match) => Number(match[1]));
+  expect(numbers).toEqual(Array.from({ length: numbers.length }, (_, index) => numbers[0] + index));
+});
+
+for (const synchronized of [false, true]) {
+  test(`long selection survives a changing multiline prompt (${synchronized ? "synchronized" : "split"}) and an ignored wheel`, async ({ page }) => {
+    const box = await open(page, `&renderer=canvas&dynamicFooter=1&dynamicFrom=0&dropAt=60&maxOffset=160&delay=15&chunkDelay=5&synchronized=${synchronized ? 1 : 0}`);
+    await page.mouse.move(box.x + 1, box.y + box.line * 2.5);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 40, box.y + box.height - 2, { steps: 4 });
+    await expect(page.locator("#terminal")).toHaveAttribute("data-offset", "160", { timeout: 15000 });
+    await page.mouse.up();
+    await expect(page.locator("#selection")).toContainText("Output 167");
+    const text = (await page.locator("#selection").textContent())!;
+    const numbers = [...text.matchAll(/Output (\d+)/g)].map((match) => Number(match[1]));
+    expect(numbers).toEqual(Array.from({ length: 147 }, (_, index) => 21 + index));
+    expect(text.match(/Status 20\n/g)).toHaveLength(1);
+    expect(text.match(/Prompt running/g)).toHaveLength(1);
+  });
+}
 
 test("native selection highlighting follows the pointer after scrolling and stops on blur", async ({ page }) => {
   const box = await open(page, "&mode=shell&renderer=canvas&scrollLine=20");
