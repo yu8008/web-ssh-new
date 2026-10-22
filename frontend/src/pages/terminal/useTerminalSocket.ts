@@ -59,7 +59,6 @@ export function useTerminalSocket({
   const viewportRef = React.useRef<ReturnType<typeof attachTerminalViewport> | null>(null);
   const latencyProbeRef = React.useRef<ReturnType<typeof createTerminalLatencyProbe> | null>(null);
   const browserLagRef = React.useRef<ReturnType<typeof createBrowserLagMonitor> | null>(null);
-  const pasteControllerRef = React.useRef<ReturnType<typeof attachTerminalPaste> | null>(null);
   const [terminalLatencyMs, setTerminalLatencyMs] = React.useState<number | null>(null);
   const [terminalDiagnostics, setTerminalDiagnostics] = React.useState<TerminalDiagnostics | null>(null);
   const replayingRef = React.useRef(false);
@@ -631,13 +630,10 @@ export function useTerminalSocket({
             ? t("终端连接已变化，请重新粘贴", "Terminal connection changed; paste again")
             : error.message === "Clipboard image exceeds 20 MiB"
             ? t("剪贴板图片不能超过 20 MiB", "Clipboard image exceeds 20 MiB")
-            : error.message === "Multiline draft requires bracketed paste"
-            ? t("当前程序未启用安全多行粘贴，请使用单行输入，或先进入 Codex 等支持多行粘贴的程序", "This program has not enabled bracketed paste. Use a single line or open a program such as Codex that supports multiline paste.")
             : error.message;
           push(t("粘贴失败：", "Paste failed: ") + message);
         },
       });
-      pasteControllerRef.current = pasteController;
 
       shortcuts = attachTerminalShortcuts(term, getSelectionText, (text) => copyRequestRef.current?.(text));
 
@@ -668,7 +664,6 @@ export function useTerminalSocket({
       }
       selectionController?.dispose();
       pasteController?.dispose();
-      if (pasteControllerRef.current === pasteController) pasteControllerRef.current = null;
       resizeObserver?.disconnect();
       browserLagRef.current?.dispose();
       browserLagRef.current = null;
@@ -689,18 +684,6 @@ export function useTerminalSocket({
     };
   }, [sessionId, clearReconnectTimer, enhancedSessionRef, getSelectionText]);
 
-  const fillTerminalDraft = React.useCallback(async (text: string, images: File[] = []) => {
-      const controller = pasteControllerRef.current;
-      if (!controller || socketRef.current?.readyState !== WebSocket.OPEN) {
-        const { t, push } = pasteFeedbackRef.current;
-        push(t("终端未连接，草稿已保留", "Terminal is not connected. Your draft is preserved."));
-        return false;
-      }
-      const applied = await controller.pasteDraft(text, images);
-      if (applied) terminalInstance.current?.focus();
-      return applied;
-    }, []);
-
   return {
     terminalRef,
     terminalInstance,
@@ -708,7 +691,6 @@ export function useTerminalSocket({
     connectionState,
     terminalLatencyMs,
     terminalDiagnostics,
-    fillTerminalDraft,
     hasRenderedOutput,
     reconnectCountdown,
     autoReconnect,

@@ -187,7 +187,6 @@ export function useTerminalSession(sessionId?: string) {
     browserLatencyMs: networkLatency,
     terminalLatencyMs: socketState.terminalLatencyMs,
     terminalDiagnostics: socketState.terminalDiagnostics,
-    fillTerminalDraft: socketState.fillTerminalDraft,
     targetLatencyMs: sessionInfoState.targetLatencyMs,
     latencyBarHeights: sessionInfoState.latencyBarHeights,
     latencyHistoryMaxMs: sessionInfoState.latencyHistoryMaxMs,

@@ -17,25 +17,18 @@ export function attachTerminalPaste(term: Terminal, host: HTMLElement, options: 
   let disposed = false;
   let pending = 0;
   let queue = Promise.resolve();
-  const paste = (text: string, images: File[], draft = false): Promise<boolean> => {
-    if (disposed || (!images.length && !text)) return Promise.resolve(false);
-    const validateDraft = () => {
-      if (draft && /[\r\n]/.test(text) && !term.modes.bracketedPasteMode) throw new Error("Multiline draft requires bracketed paste");
-    };
+  const paste = (text: string, images: File[]) => {
+    if (disposed || (!images.length && !text)) return;
     const connection = options.connection();
-    if (!connection) { options.onError(new Error("Terminal is not connected")); return Promise.resolve(false); }
-    try { validateDraft(); }
-    catch (error) { options.onError(error as Error); return Promise.resolve(false); }
+    if (!connection) { options.onError(new Error("Terminal is not connected")); return; }
     options.onPaste();
-    if (!images.length && !pending) { term.paste(text); return Promise.resolve(true); }
+    if (!images.length && !pending) { term.paste(text); return; }
     pending++;
-    let applied = false;
     // Preserve paste order when another paste arrives during image upload.
     queue = queue.then(async () => {
       if (disposed) return;
       if (options.connection() !== connection) throw new Error("Terminal connection changed; paste again");
-      validateDraft();
-      if (!images.length) { term.paste(text); applied = true; return; }
+      if (!images.length) { term.paste(text); return; }
       if (images.some(file => file.size > MAX_IMAGE_BYTES)) throw new Error("Clipboard image exceeds 20 MiB");
       options.onUploading();
       const controller = new AbortController();
@@ -46,12 +39,9 @@ export function attachTerminalPaste(term: Terminal, host: HTMLElement, options: 
         for (const file of images) paths.push(await options.upload(file, controller.signal));
         if (disposed) return;
         if (options.connection() !== connection) throw new Error("Terminal connection changed; paste again");
-        validateDraft();
         // Paste each image separately so Codex recognizes each path as an
         // attachment. xterm preserves the remote bracketed-paste mode.
         for (const path of paths) term.paste(path + " ");
-        if (draft && text) term.paste(text);
-        applied = true;
         options.onUploaded(paths.length);
       } finally {
         view.clearTimeout(timeout);
@@ -60,7 +50,6 @@ export function attachTerminalPaste(term: Terminal, host: HTMLElement, options: 
     }).catch((error: unknown) => {
       if (!disposed) options.onError(error instanceof Error ? error : new Error(String(error)));
     }).finally(() => { pending--; });
-    return queue.then(() => applied);
   };
   const onPaste = (event: ClipboardEvent) => {
     const clipboard = event.clipboardData;
@@ -84,7 +73,6 @@ export function attachTerminalPaste(term: Terminal, host: HTMLElement, options: 
   host.addEventListener("paste", onPaste, true);
   host.addEventListener("keydown", onKey, true);
   return {
-    pasteDraft(text: string, images: File[] = []) { return paste(text, images, true); },
     dispose() {
       disposed = true;
       for (const controller of controllers) controller.abort();

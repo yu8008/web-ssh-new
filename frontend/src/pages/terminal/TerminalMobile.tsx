@@ -7,7 +7,6 @@ import { TerminalCopyPanel } from "./TerminalCopyPanel";
 import { createTerminalBufferSnapshot, type TerminalBufferSnapshot } from "./terminalUtils";
 import type { TerminalSessionState } from "./useTerminalSession";
 import { TerminalLoading } from "./TerminalLoading";
-import { TerminalComposer } from "./TerminalComposer";
 import { TerminalLatencyStatus } from "./TerminalLatencyStatus";
 
 const FileBrowser = React.lazy(() =>
@@ -228,7 +227,6 @@ export function TerminalMobile({ state, onBack }: TerminalMobileProps) {
               />
             ) : null}
           </div>
-          <TerminalComposer key={state.sessionId} connected={state.connectionState === "open"} t={state.t} onFill={state.fillTerminalDraft} />
         </div>
 
         <div className={`${activeTab === "files" ? "flex" : "hidden"} h-full flex-col`}>

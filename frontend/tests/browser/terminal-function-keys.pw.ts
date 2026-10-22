@@ -78,17 +78,21 @@ test("function keys preserve modifier encoding and held-key repeats", async ({ p
   await staysOnTerminalPage(page);
 });
 
-test("local draft keeps its focus and contents when function keys are pressed", async ({ page }) => {
+test("a local text field keeps its focus and contents when function keys are pressed", async ({ page }) => {
   await open(page);
-  await page.getByRole("button", { name: "本地输入", exact: true }).click();
-  const editor = page.getByRole("textbox", { name: "本地描述输入框" });
-  await editor.fill("保留本地草稿");
+  await page.evaluate(() => {
+    const field = document.createElement("input");
+    field.id = "local-field";
+    document.body.append(field);
+  });
+  const editor = page.locator("#local-field");
+  await editor.fill("查找文件");
   for (const [key] of functionKeys) {
     await page.keyboard.press(key);
     await expect(editor).toBeFocused();
   }
   expect(await inputs(page)).toEqual([]);
-  await expect(editor).toHaveValue("保留本地草稿");
+  await expect(editor).toHaveValue("查找文件");
   await staysOnTerminalPage(page);
 });
 

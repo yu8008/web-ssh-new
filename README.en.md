@@ -29,7 +29,6 @@ A dedicated mobile layout provides touch-friendly interactions for terminal work
 
 ## Key Features
 
-- Local drafts: expand “Local draft” below the terminal to edit multiline descriptions and attach clipboard screenshots locally. “Fill terminal” or `Ctrl/Cmd+Enter` transfers the draft; press Enter in the terminal to submit. Drafts survive folding the panel and reconnecting on the same page, but not page reloads or navigation. Multiline filling requires bracketed paste support to avoid executing descriptions as shell commands.
 - Latency details: click the gateway latency to inspect browser/gateway round trips, gateway/SSH command round trips, gateway reply queues, scheduling delays and browser output/render waits. These independent samples cannot be subtracted to obtain pure network latency. Scheduling delays show the 5-second maximum; hidden tabs are excluded from browser sampling.
 - Per-viewer output acknowledgements bound the amount of unparsed data sent to a browser while allowing input and latency probes to continue. Legacy clients/servers remain compatible; update both sides for full diagnostics and flow control.
 

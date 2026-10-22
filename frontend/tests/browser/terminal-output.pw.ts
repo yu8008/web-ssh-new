@@ -23,6 +23,37 @@ test("servers without pong support keep the terminal usable", async ({ page }) =
   await expect.poll(() => page.evaluate(() => window.pipeline.screen())).toContain("Ready");
 });
 
+test("a v1 server supports direct input without output acknowledgements", async ({ page }) => {
+  await open(page, "?v1=1");
+  await page.evaluate(() => window.pipeline.frame({ type: "output", seq: 1, data: "Ready 中文😀" }));
+  await expect(page.locator("#painted")).toHaveText("true");
+  await page.locator(".xterm-helper-textarea").focus();
+  await page.keyboard.insertText("兼容旧后端");
+  await expect.poll(() => page.evaluate(() => window.pipeline.inputs().filter(input => input.type === "input")))
+    .toEqual([{ type: "input", data: "兼容旧后端" }]);
+  expect(await page.evaluate(() => window.pipeline.inputs().filter(input => input.type === "ack"))).toEqual([]);
+});
+
+test("automatic reconnect preserves an external text field's focus and never forwards its keystrokes", async ({ page }) => {
+  await open(page);
+  await page.evaluate(() => {
+    const field = document.createElement("input");
+    field.id = "file-search";
+    document.body.append(field);
+  });
+  const editor = page.locator("#file-search");
+  await editor.fill("文件名");
+  await page.evaluate(() => window.pipeline.disconnect(true));
+  await expect(page.locator("#connection")).toHaveText("closed");
+  await editor.focus();
+  await expect.poll(() => page.evaluate(() => window.pipeline.count()), { timeout: 10000 }).toBe(2);
+  await expect(page.locator("#connection")).toHaveText("open");
+  await expect(editor).toBeFocused();
+  await page.keyboard.insertText("继续输入");
+  await expect(editor).toHaveValue("文件名继续输入");
+  expect(await page.evaluate(() => window.pipeline.inputs().filter(input => input.type === "input"))).toEqual([]);
+});
+
 test("packet completion callbacks do not serialize a burst into hundreds of parser tasks", async ({ page }) => {
   await open(page);
   const writesBefore = await page.evaluate(() => window.pipeline.writes());

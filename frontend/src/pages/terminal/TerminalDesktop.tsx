@@ -6,7 +6,6 @@ import { getServerClock, type ServerClock } from "../../lib/api";
 import type { FileInfo } from "../../lib/api";
 import type { TerminalSessionState } from "./useTerminalSession";
 import { TerminalLoading } from "./TerminalLoading";
-import { TerminalComposer } from "./TerminalComposer";
 import { TerminalLatencyStatus } from "./TerminalLatencyStatus";
 
 function cx(...values: Array<string | false | null | undefined>): string {
@@ -356,7 +355,6 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
               </div>
             ) : null}
           </div>
-          <TerminalComposer key={state.sessionId} connected={state.connectionState === "open"} t={state.t} onFill={state.fillTerminalDraft} />
         </div>
         <div
           onMouseDown={handleMouseDown}

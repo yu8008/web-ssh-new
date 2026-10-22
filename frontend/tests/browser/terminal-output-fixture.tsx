@@ -4,7 +4,6 @@ import "xterm/css/xterm.css";
 import "../../src/index.css";
 import { useTerminalSocket } from "../../src/pages/terminal/useTerminalSocket";
 import { TerminalLoading } from "../../src/pages/terminal/TerminalLoading";
-import { TerminalComposer } from "../../src/pages/terminal/TerminalComposer";
 import { TerminalLatencyStatus } from "../../src/pages/terminal/TerminalLatencyStatus";
 
 const parameters = new URLSearchParams(location.search);
@@ -99,7 +98,6 @@ export function Harness() {
       <div ref={state.terminalRef} style={{ height: "100%", width: "100%" }} />
       <TerminalLoading state={{ ...state, t }} />
     </div>
-    <TerminalComposer connected={state.connectionState === "open"} t={t} onFill={state.fillTerminalDraft} />
     <button id="reconnect" onClick={state.handleReconnect}>Reconnect</button>
     <button id="copy" onClick={() => setCopied(state.getSelectionText())}>Copy</button>
     <pre id="copied">{copied}</pre>
