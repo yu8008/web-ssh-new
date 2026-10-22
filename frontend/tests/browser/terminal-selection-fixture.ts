@@ -66,7 +66,11 @@ const render = (unrelated = false) => {
   const lines = unrelated
     ? Array.from({ length: terminal.rows }, (_, index) => `Repainted unrelated row ${index}`)
     : ["Fixed header", ...Array.from({ length: terminal.rows - 2 }, (_, index) => {
-      const text = `Output ${String(offset + index).padStart(3, "0")} 中文 😀`;
+      const absolute = offset + index;
+      const number = parameters.get("repeat") === "boundary"
+        ? absolute % 10 === 4 || absolute % 10 === 5 ? absolute - 2 : absolute
+        : parameters.has("repeat") && absolute % 10 === 4 ? absolute - 6 : absolute;
+      const text = `Output ${String(number).padStart(3, "0")} 中文 😀`;
       const colored = parameters.has("dense") ? Array.from({ length: Math.max(0, terminal.cols - 20) }, (_, col) =>
         `\x1b[38;5;${32 + col % 180}m${String.fromCharCode(97 + col % 26)}`).join("") + "\x1b[0m" : "";
       return text + colored;
@@ -76,7 +80,10 @@ const render = (unrelated = false) => {
   const first = (synchronized ? "\x1b[?2026h" : "") + "\x1b[H" + lines.slice(0, halfway).map((text) => "\x1b[2K" + text).join("\r\n") + "\r\n";
   const second = lines.slice(halfway).map((text) => "\x1b[2K" + text).join("\r\n") + (synchronized ? "\x1b[?2026l" : "");
   writeOutput(first);
-  setTimeout(() => writeOutput(second), chunkDelay);
+  const frameOffset = offset;
+  setTimeout(() => output.enqueue(second, () => {
+    element("terminal").dataset.offset = String(frameOffset);
+  }), chunkDelay);
 };
 const inputWriter = createTerminalInputWriter(window, (data) => {
   packets.push(data);

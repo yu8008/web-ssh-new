@@ -307,11 +307,11 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
     if (["shift", "alt", "control", "meta"].includes(key)) return;
     if (transcript) clear();
   };
-  const captureRemote = () => {
+  const captureRemote = (complete = false) => {
     parseTimer = undefined;
     if (!remote || !transcript || synchronizedRepaint) return;
     if (disposed) return;
-    const result = transcript.scroll(captureFrame(), remote.direction);
+    const result = transcript.scroll(captureFrame(), remote.direction, complete);
     if (result === "moved") {
       remote = null;
       stoppedDirection = 0;
@@ -336,7 +336,7 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
     if (!remote || !transcript || synchronizedRepaint) return;
     if (complete) {
       view.clearTimeout(parseTimer);
-      captureRemote();
+      captureRemote(true);
     } else if (parseTimer === undefined) {
       // A bounded trailing check also runs during continuous output. Restarting
       // a debounce on every SSH chunk could starve selection indefinitely.

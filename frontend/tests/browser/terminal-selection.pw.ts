@@ -37,6 +37,33 @@ for (const buffer of ["normal", "alternate"]) {
   });
 }
 
+for (const { synchronized, repeat } of [
+  { synchronized: false, repeat: "1" },
+  { synchronized: true, repeat: "1" },
+  { synchronized: true, repeat: "boundary" },
+]) {
+  test(`a long ${synchronized ? "synchronized" : "split"} selection reaches the final rows through repeated output (${repeat})`, async ({ page }) => {
+    const box = await open(page, `?repeat=${repeat}&delay=5&chunkDelay=0&maxOffset=150${synchronized ? "&synchronized=1" : ""}`);
+    await page.mouse.move(box.x + 1, box.y + box.line * 2.5);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.cell * 8, box.y + box.height - 2, { steps: 5 });
+    await expect(page.locator("#terminal")).toHaveAttribute("data-offset", "150", { timeout: 10000 });
+    await page.mouse.up();
+    await expect(page.locator("#selection")).toContainText("Output 159 中文 😀");
+    const captured = (await page.locator("#selection").textContent())!;
+    const numbers = [...captured.matchAll(/Output (\d+)/g)].map((match) => Number(match[1]));
+    expect(numbers).toEqual(Array.from({ length: 139 }, (_, index) => {
+      const absolute = 21 + index;
+      return repeat === "boundary"
+        ? absolute % 10 === 4 || absolute % 10 === 5 ? absolute - 2 : absolute
+        : absolute % 10 === 4 ? absolute - 6 : absolute;
+    }));
+    expect(captured.match(/Fixed footer/g)).toHaveLength(1);
+    await page.locator("#copy").click();
+    expect(await page.locator("#copied").textContent()).toBe(captured);
+  });
+}
+
 test("Shift drag scrolls upwards without sending a click", async ({ page }) => {
   const box = await open(page);
   await page.keyboard.down("Shift");

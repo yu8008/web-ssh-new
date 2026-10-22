@@ -90,6 +90,37 @@ describe("TUI selection transcript", () => {
     expect(selection.getText()).toBe("A\nB\nC\nD\nE\nF");
   });
 
+  it("continues when a newly revealed line repeats earlier visible text", () => {
+    const selection = new SelectionTranscript(frame("H", "A", "B", "C", "D", "F"), { row: 1, col: 0 });
+    expect(selection.scroll(frame("H", "B", "C", "D", "B", "F"), 1)).toBe("moved");
+    selection.move({ row: 5, col: 80 });
+    expect(selection.getText()).toBe("A\nB\nC\nD\nB\nF");
+  });
+
+  it("continues when a new output row repeats fixed header text", () => {
+    const selection = new SelectionTranscript(frame("H", "A", "B", "C", "D", "F"), { row: 1, col: 0 });
+    expect(selection.scroll(frame("H", "B", "C", "D", "H", "F"), 1)).toBe("moved");
+    selection.move({ row: 5, col: 80 });
+    expect(selection.getText()).toBe("A\nB\nC\nD\nH\nF");
+  });
+
+  it("accepts repeated rows at the entering edge after a synchronized repaint completes", () => {
+    const selection = new SelectionTranscript(frame("H", "A", "B", "C", "D", "F"), { row: 1, col: 0 });
+    const next = frame("H", "B", "C", "D", "D", "F");
+    expect(selection.scroll(next, 1)).toBe("unmatched");
+    expect(selection.scroll(next, 1, true)).toBe("moved");
+    selection.move({ row: 5, col: 80 });
+    expect(selection.getText()).toBe("A\nB\nC\nD\nD\nF");
+  });
+
+  it("keeps partial upward repaint protection while allowing legitimate repeated output", () => {
+    const selection = new SelectionTranscript(frame("H", "B", "C", "D", "E", "F"), { row: 4, col: 1 });
+    expect(selection.scroll(frame("H", "B", "B", "C", "E", "F"), -1)).toBe("unmatched");
+    expect(selection.scroll(frame("H", "D", "B", "C", "D", "F"), -1)).toBe("moved");
+    selection.move({ row: 1, col: 0 });
+    expect(selection.getText()).toBe("D\nB\nC\nD\nE");
+  });
+
   it("preserves cell offsets for CJK/emoji and joins wrapped lines", () => {
     const wide = { text: "中😀é", wrapped: false, offsets: [0, 1, 1, 3, 3, 5] };
     const selection = new SelectionTranscript([wide, row(" continuation", true)], { row: 0, col: 1 });

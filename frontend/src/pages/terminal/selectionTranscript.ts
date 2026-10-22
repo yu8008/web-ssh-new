@@ -41,14 +41,11 @@ type ScrollMatch = { oldStart: number; newStart: number; length: number };
 
 /** Find a moving block, ignoring stationary TUI headers/footers. Never guess a
  * displacement from blank/repeated rows alone: that could corrupt copied text. */
-function findScrollMatch(previous: SelectionRow[], next: SelectionRow[], direction: number): ScrollMatch | null {
+function findScrollMatch(previous: SelectionRow[], next: SelectionRow[], direction: number, complete: boolean): ScrollMatch | null {
   const previousCounts = new Map<string, number>();
   const nextCounts = new Map<string, number>();
   for (const row of previous) if (row.text.trim()) previousCounts.set(row.text, (previousCounts.get(row.text) ?? 0) + 1);
   for (const row of next) if (row.text.trim()) nextCounts.set(row.text, (nextCounts.get(row.text) ?? 0) + 1);
-  // A half-painted downward scroll repeats rows across the old/new boundary.
-  // Wait for the complete frame rather than inserting those stale rows twice.
-  if ([...nextCounts].some(([text, count]) => previousCounts.get(text) === 1 && count > 1)) return null;
   let best: ScrollMatch | null = null;
   let bestScore = 0;
   let ambiguous = false;
@@ -76,6 +73,18 @@ function findScrollMatch(previous: SelectionRow[], next: SelectionRow[], directi
       if (distinct.size >= 2) {
         const top = Math.min(oldStart, start);
         const bottom = Math.max(oldStart, start) + length;
+        // A partial repaint leaves old rows at the entering edge while also
+        // painting their shifted copies. Repeated text elsewhere (including
+        // newly revealed output) is valid and must not stop a long selection.
+        const enteringTop = direction > 0 ? start + length : oldStart;
+        const enteringBottom = direction > 0 ? bottom : start;
+        const staleEdge = !complete && next.slice(enteringTop, enteringBottom).some((row, offset) =>
+          sameRow(row, previous[enteringTop + offset]) && previousCounts.get(row.text) === 1 &&
+          (nextCounts.get(row.text) ?? 0) > 1);
+        if (staleEdge) {
+          start += Math.max(1, length);
+          continue;
+        }
         const changedOutside = next.some((row, index) =>
           (index < top || index >= bottom) && index > 0 && index < next.length - 1 && !sameRow(row, previous[index]));
         if (changedOutside) {
@@ -142,10 +151,10 @@ export class SelectionTranscript {
     return this.cachedHasSelection = false;
   }
 
-  scroll(next: SelectionRow[], direction: -1 | 1): "moved" | "unchanged" | "unmatched" | "limit" {
+  scroll(next: SelectionRow[], direction: -1 | 1, complete = false): "moved" | "unchanged" | "unmatched" | "limit" {
     if (next.length !== this.frame.length) return "unmatched";
     if (next.every((row, index) => sameRow(row, this.frame[index]))) return "unchanged";
-    const match = findScrollMatch(this.frame, next, direction);
+    const match = findScrollMatch(this.frame, next, direction, complete);
     if (!match) return "unmatched";
     const { oldStart, newStart, length } = match;
     const top = Math.min(oldStart, newStart);
