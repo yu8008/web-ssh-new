@@ -94,8 +94,8 @@ export const darkTerminalTheme = {
   blue: "#60a5fa",
   magenta: "#c084fc",
   cyan: "#22d3ee",
-  white: "#f1f5f9",
-  brightBlack: "#475569",
+  white: "#cbd5e1",
+  brightBlack: "#64748b",
   brightRed: "#fca5a5",
   brightGreen: "#86efac",
   brightYellow: "#fde047",
@@ -103,11 +103,11 @@ export const darkTerminalTheme = {
   brightMagenta: "#d8b4fe",
   brightCyan: "#67e8f9",
   brightWhite: "#ffffff",
-  // Codex 的面板底色走 256 色索引：235 是输入框、236 是消息块，
-  // 统一压到 slate-800，和页面边框/卡片保持同一色系。
+  // tmux 将 Codex 历史提问条映射到 235、输入框映射到 236。
+  // 历史条更暗，当前输入区稍亮，保持深蓝灰色的层次。
   extendedAnsi: buildExtendedAnsiPalette({
-    235: "#1e293b",
-    236: "#1e293b",
+    235: "#0b1220",
+    236: "#111c30",
   }),
 };
 
