@@ -43,6 +43,7 @@ describe("TUI selection transcript", () => {
     const selection = new SelectionTranscript(frame("header", "line 1", "line 2", "line 3", "footer"), { row: 1, col: 0 });
     selection.move({ row: 4, col: 80 });
     expect(selection.scroll(frame("header", "line 2", "line 3", "line 4", "footer"), 1)).toBe("moved");
+    expect(selection.scrollMotion).toEqual({ top: 1, bottom: 4, lines: 1 });
     selection.move({ row: 4, col: 80 });
     expect(selection.scroll(frame("header", "line 3", "line 4", "line 5", "footer changed"), 1)).toBe("moved");
     selection.move({ row: 4, col: 80 });
@@ -52,6 +53,7 @@ describe("TUI selection transcript", () => {
   it("scrolls upwards, then reverses without duplicating previously captured rows", () => {
     const selection = new SelectionTranscript(frame("header", "line 3", "line 4", "line 5", "footer"), { row: 3, col: 6 });
     expect(selection.scroll(frame("header", "line 2", "line 3", "line 4", "footer"), -1)).toBe("moved");
+    expect(selection.scrollMotion).toEqual({ top: 1, bottom: 4, lines: -1 });
     selection.move({ row: 1, col: 0 });
     expect(selection.getText()).toBe("line 2\nline 3\nline 4\nline 5");
     expect(selection.scroll(frame("header", "line 3", "line 4", "line 5", "footer"), 1)).toBe("moved");
@@ -67,6 +69,7 @@ describe("TUI selection transcript", () => {
     selection.move({ row: 3, col: 80 });
     const original = selection.getText();
     expect(selection.scroll(frame("header", "new 1", "new 2", "new 3"), 1)).toBe("unmatched");
+    expect(selection.scrollMotion).toBeNull();
     expect(selection.getText()).toBe(original);
     expect(selection.scroll(frame("header", "original 2", "original 3", "original 4"), 1)).toBe("moved");
     selection.move({ row: 3, col: 80 });

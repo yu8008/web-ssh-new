@@ -9,6 +9,7 @@ import { attachTerminalWheel } from "../../src/pages/terminal/terminalWheel";
 import { createTerminalOutput } from "../../src/pages/terminal/terminalOutput";
 import { attachTerminalViewport } from "../../src/pages/terminal/terminalViewport";
 import { attachTerminalShortcuts } from "../../src/pages/terminal/terminalShortcuts";
+import { darkTerminalTheme } from "../../src/pages/terminal/terminalUtils";
 
 const element = (id: string) => document.getElementById(id)!;
 const parameters = new URLSearchParams(location.search);
@@ -31,7 +32,7 @@ const inputs: string[] = [];
 const packets: string[] = [];
 const terminal = new Terminal({
   cols: Number(parameters.get("cols") || "64"), rows: Number(parameters.get("rows") || "12"),
-  fontSize: 16, scrollback: 500, theme: { background: "#111827" },
+  fontSize: 16, scrollback: 500, theme: parameters.has("styled") ? darkTerminalTheme : { background: "#111827" },
 });
 terminal.open(element("terminal"));
 const rendering = parameters.get("renderer") !== "dom" ? configureTerminalRendering(terminal, {
@@ -73,7 +74,7 @@ const render = (unrelated = false) => {
       const text = `Output ${String(number).padStart(3, "0")} 中文 😀`;
       const colored = parameters.has("dense") ? Array.from({ length: Math.max(0, terminal.cols - 20) }, (_, col) =>
         `\x1b[38;5;${32 + col % 180}m${String.fromCharCode(97 + col % 26)}`).join("") + "\x1b[0m" : "";
-      return text + colored;
+      return (parameters.has("styled") ? `\x1b[1;4;38;2;96;165;250;48;5;236m${text}\x1b[0m` : text) + colored;
     }), "Fixed footer"];
   // Split a remote repaint into two asynchronous batches to exercise SSH chunks.
   const halfway = Math.floor(lines.length / 2);

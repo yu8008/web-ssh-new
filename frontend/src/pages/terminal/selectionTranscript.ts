@@ -2,6 +2,7 @@ import type { IBufferCell, IBufferLine, Terminal } from "xterm";
 
 export type SelectionPoint = { row: number; col: number };
 export type SelectionRow = { text: string; wrapped: boolean; offsets: number[] };
+export type SelectionScrollMotion = { top: number; bottom: number; lines: number };
 
 export function captureSelectionRows(term: Terminal, previous: SelectionRow[] = []): SelectionRow[] {
   const buffer = term.buffer.active;
@@ -109,6 +110,7 @@ function findScrollMatch(previous: SelectionRow[], next: SelectionRow[], directi
 /** Immutable rows outlive TUI repaints. Frame rows point into the captured
  * document, so scrolling back reuses rows and fixed chrome is included once. */
 export class SelectionTranscript {
+  scrollMotion: SelectionScrollMotion | null = null;
   private rows: SelectionRow[];
   private frame: SelectionRow[];
   private anchor: { row: SelectionRow; col: number };
@@ -152,6 +154,7 @@ export class SelectionTranscript {
   }
 
   scroll(next: SelectionRow[], direction: -1 | 1, complete = false): "moved" | "unchanged" | "unmatched" | "limit" {
+    this.scrollMotion = null;
     if (next.length !== this.frame.length) return "unmatched";
     if (next.every((row, index) => sameRow(row, this.frame[index]))) return "unchanged";
     const match = findScrollMatch(this.frame, next, direction, complete);
@@ -204,6 +207,7 @@ export class SelectionTranscript {
     }
     this.rows = document;
     this.frame = mapped;
+    this.scrollMotion = { top, bottom, lines: oldStart - newStart };
     this.capturedChars += addedChars;
     for (let index = firstInserted; index < document.length; index++) {
       this.positions.set(document[index], index);

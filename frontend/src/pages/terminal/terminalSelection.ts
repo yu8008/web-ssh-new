@@ -1,5 +1,6 @@
 import type { Terminal } from "xterm";
 import { captureSelectionRows, SelectionTranscript, type SelectionPoint, type SelectionRow } from "./selectionTranscript";
+import { createSelectionAnimation } from "./terminalSelectionAnimation";
 
 type SelectionOptions = {
   onChange: (hasSelection: boolean) => void;
@@ -14,6 +15,11 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
   const doc = host.ownerDocument;
   const view = doc.defaultView!;
   const screen = host.querySelector<HTMLElement>(".xterm-screen")!;
+  const viewport = host.querySelector<HTMLElement>(".xterm-viewport")!;
+  const animation = createSelectionAnimation(term, screen);
+  let nativeScrolling = false;
+  let nativeViewportY = term.buffer.active.viewportY;
+  let nativeScrollAt = view.performance.now();
   let transcript: SelectionTranscript | null = null;
   let pendingDown: MouseEvent | null = null;
   let pendingFrame: SelectionRow[] | null = null;
@@ -89,6 +95,7 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
     } else {
       term.clearSelection();
     }
+    animation.updateSelection();
     notify();
   };
 
@@ -100,6 +107,8 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
     finishAfterDraw = false;
   };
   const clear = () => {
+    animation.cancel();
+    nativeScrolling = false;
     active = false;
     pendingDown = null;
     pendingFrame = null;
@@ -124,6 +133,7 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
     if (term.modes.mouseTrackingMode === "none" || term.modes.mouseTrackingMode === "x10") return;
     lastRequestAt = view.performance.now();
     remote = { direction, started: Date.now() };
+    animation.prepare();
     // Use xterm's wheel encoder rather than hardcoding an escape sequence.
     // A line-mode delta emits one wheel report, with no held button/modifiers.
     const rect = screen.getBoundingClientRect();
@@ -176,6 +186,7 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
         finishAfterDraw = false;
         if (hasSelection()) options.onFinish(point.x, point.y);
       }
+      if (nativeDown && nativeScrolling && !transcript) animation.updateSelection();
       if (tick()) scheduleFrame();
     });
   };
@@ -185,6 +196,8 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
     columnMode = event.altKey;
     pendingFrame = null;
     active = true;
+    nativeScrolling = false;
+    animation.start();
     pendingDown = null;
     stoppedDirection = 0;
     term.focus();
@@ -202,11 +215,21 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
     point = { x: event.clientX, y: event.clientY };
     if (term.modes.mouseTrackingMode === "none" && !transcript) {
       nativeDown = true;
+      nativeScrolling = true;
+      nativeViewportY = term.buffer.active.viewportY;
+      nativeScrollAt = view.performance.now();
+      animation.start();
       return;
     }
     clear();
     nativeDown = true;
-    if (term.modes.mouseTrackingMode === "none") return;
+    if (term.modes.mouseTrackingMode === "none") {
+      nativeScrolling = true;
+      nativeViewportY = term.buffer.active.viewportY;
+      nativeScrollAt = view.performance.now();
+      animation.start();
+      return;
+    }
     customGesture = true;
     if (event.shiftKey || event.altKey) {
       begin(event);
@@ -224,7 +247,12 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
   };
   const onMove = (event: MouseEvent) => {
     if ((event.buttons & 1) === 0) {
-      if (active || pendingDown) release();
+      if (nativeDown || active || pendingDown) release();
+      return;
+    }
+    if (nativeDown && nativeScrolling && !transcript) {
+      point = { x: event.clientX, y: event.clientY };
+      scheduleFrame();
       return;
     }
     if (pendingDown) {
@@ -270,13 +298,14 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
       transcript.move(endpoint());
       draw();
     }
+    animation.finish();
     view.clearTimeout(finishTimer);
     finishTimer = view.setTimeout(() => {
       if (!disposed && hasSelection()) options.onFinish(event.clientX, event.clientY);
     }, 0);
   };
   function release() {
-    if (!active && !pendingDown) return;
+    if (!nativeDown && !active && !pendingDown) return;
     // Cancel a pending click on blur or a missed release instead of activating
     // the TUI as the user switches windows.
     pendingDown = null;
@@ -311,8 +340,10 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
     parseTimer = undefined;
     if (!remote || !transcript || synchronizedRepaint) return;
     if (disposed) return;
-    const result = transcript.scroll(captureFrame(), remote.direction, complete);
+    const nextFrame = captureFrame();
+    const result = transcript.scroll(nextFrame, remote.direction, complete);
     if (result === "moved") {
+      if (transcript.scrollMotion) animation.move(transcript.scrollMotion, Date.now() - remote.started, nextFrame);
       remote = null;
       stoppedDirection = 0;
       needsDraw = true;
@@ -323,6 +354,7 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
       tick();
       scheduleFrame();
     } else if (result === "limit") {
+      animation.cancel();
       remote = null;
       captureStopped = true;
       stopTimer();
@@ -331,6 +363,7 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
     // Partial/unrelated repaints retain the last verified snapshot.
   };
   const parsed = term.onWriteParsed(() => {
+    animation.invalidate();
     const complete = completedRepaint;
     completedRepaint = false;
     if (!remote || !transcript || synchronizedRepaint) return;
@@ -362,8 +395,23 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
     return false;
   });
   const selection = term.onSelectionChange(notify);
+  const onNativeScroll = () => {
+    if (!nativeScrolling || term.buffer.active.type !== "normal") return;
+    const next = term.buffer.active.viewportY;
+    if (next !== nativeViewportY) {
+      const now = view.performance.now();
+      animation.move({ top: 0, bottom: term.rows, lines: next - nativeViewportY }, now - nativeScrollAt);
+      nativeViewportY = next;
+      nativeScrollAt = now;
+    }
+  };
+  // xterm suppresses its public onScroll event for viewport-originated scrolls.
+  // Listen after its DOM scroll handler, when viewportY has been updated.
+  viewport.addEventListener("scroll", onNativeScroll, { passive: true });
+  const scrolled = term.onScroll(onNativeScroll);
   const resized = term.onResize(() => {
     release();
+    animation.cancel();
     // Rows can reflow at a new width. Preserve captured text, stop alignment.
     remote = null;
     stopTimer();
@@ -374,7 +422,8 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
   host.addEventListener("keydown", onKey, true);
   doc.addEventListener("mousemove", onMove, true);
   doc.addEventListener("mouseup", onUp, true);
-  view.addEventListener("blur", release);
+  const onBlur = () => { release(); animation.cancel(); };
+  view.addEventListener("blur", onBlur);
 
   return {
     getText,
@@ -386,10 +435,13 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
       view.clearTimeout(parseTimer);
       view.clearTimeout(finishTimer);
       columnOverlay?.remove();
+      animation.dispose();
       parsed.dispose();
       syncStart.dispose();
       syncEnd.dispose();
       selection.dispose();
+      scrolled.dispose();
+      viewport.removeEventListener("scroll", onNativeScroll);
       resized.dispose();
       host.removeEventListener("mousedown", onDown, true);
       host.removeEventListener("wheel", onWheel, true);
@@ -397,7 +449,7 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
       host.removeEventListener("keydown", onKey, true);
       doc.removeEventListener("mousemove", onMove, true);
       doc.removeEventListener("mouseup", onUp, true);
-      view.removeEventListener("blur", release);
+      view.removeEventListener("blur", onBlur);
     },
   };
 }
