@@ -65,7 +65,7 @@ for (const renderer of ["canvas", "webgl"]) {
 
 for (const direction of ["up", "down"] as const) {
   test(`native shell ${direction} drag interpolates text, not only the scrollbar`, async ({ page }) => {
-    const box = await open(page, "&mode=shell&renderer=canvas&scrollLine=40");
+    const box = await open(page, "&mode=shell&renderer=canvas&scrollLine=2000&shellLines=5000");
     await page.mouse.move(box.x + 1, box.y + box.line * (direction === "up" ? 9.5 : 2.5));
     await page.mouse.down();
     await page.mouse.move(box.x + 50, direction === "up" ? box.y - 20 : box.y + box.height + 20, { steps: 4 });

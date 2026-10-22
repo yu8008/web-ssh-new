@@ -112,6 +112,7 @@ for (const direction of ["up", "down"]) {
     await page.mouse.down();
     await page.mouse.move(box.x + 20, direction === "up" ? box.y + 2 : box.y + box.height - 2, { steps: 5 });
     await expect.poll(async () => Number(await page.locator("#wheels").textContent())).toBeGreaterThanOrEqual(3);
+    await expect.poll(async () => Math.abs(Number(await page.locator("#terminal").getAttribute("data-offset")) - 20)).toBeGreaterThanOrEqual(6);
     await page.mouse.up();
     await page.waitForTimeout(600);
     const captured = (await page.locator("#selection").textContent())!;

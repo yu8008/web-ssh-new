@@ -20,6 +20,7 @@ const synchronized = parameters.has("synchronized") && parameters.get("synchroni
 let offset = Number(parameters.get("offset") || "20");
 let wheelCount = 0;
 let dropped = false;
+let lastAcceptedWheel = -Infinity;
 let responsePending = false;
 let responseOffset = offset;
 let holdResponses = parameters.has("holdAfter");
@@ -41,7 +42,8 @@ const inputs: string[] = [];
 const packets: string[] = [];
 const terminal = new Terminal({
   cols: Number(parameters.get("cols") || "64"), rows: Number(parameters.get("rows") || "12"),
-  fontSize: 16, scrollback: 500, theme: parameters.has("styled") ? darkTerminalTheme : { background: "#111827" },
+  ...(parameters.has("appFont") ? { fontSize: 15, lineHeight: 1.3, fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" } : { fontSize: 16 }),
+  scrollback: Number(parameters.get("shellLines") || "500"), theme: parameters.has("styled") ? darkTerminalTheme : { background: "#111827" },
 });
 terminal.open(element("terminal"));
 const rendering = parameters.get("renderer") !== "dom" ? configureTerminalRendering(terminal, {
@@ -121,6 +123,8 @@ const inputWriter = createTerminalInputWriter(window, (data) => {
     const wheel = /\x1b\[<(64|65);/.exec(data);
     if (!wheel) continue;
     element("wheels").textContent = String(++wheelCount);
+    if (performance.now() - lastAcceptedWheel < Number(parameters.get("coalesceWheelMs") ?? 0)) continue;
+    lastAcceptedWheel = performance.now();
     if (parameters.has("dropAt") && !dropped && offset === Number(parameters.get("dropAt"))) {
       dropped = true;
       continue;
@@ -169,18 +173,26 @@ window.releaseTerminalRepliesForTest = () => {
   holdResponses = false;
   heldReplies.splice(0).forEach((reply) => reply());
 };
+window.terminalStateForTest = () => ({
+  viewportY: terminal.buffer.active.viewportY,
+  mouse: terminal.modes.mouseTrackingMode,
+  buffer: terminal.buffer.active.type,
+  lines: Array.from({ length: terminal.rows }, (_, row) => terminal.buffer.active.getLine(terminal.buffer.active.viewportY + row)?.translateToString(true) ?? ""),
+});
 
 declare global {
   interface Window {
     resizeTerminalForTest(): void;
     selectTerminalForTest(first: number, last: number): void;
     releaseTerminalRepliesForTest(): void;
+    terminalStateForTest(): { viewportY: number; mouse: string; buffer: string; lines: string[] };
   }
 }
 
 const steadyOutput = parameters.has("steady") ? setInterval(() => writeOutput("\x1b[0m"), 8) : undefined;
 if (shell) {
-  terminal.write(Array.from({ length: 100 }, (_, index) => `Shell row ${String(index).padStart(3, "0")}`).join("\r\n"), () => {
+  const prefix = parameters.has("denseShell") ? "文字内容".repeat(Math.floor((terminal.cols - 20) / 8)) + " " : "";
+  terminal.write(Array.from({ length: Number(parameters.get("shellLines") || "100") }, (_, index) => `${prefix}Shell row ${String(index).padStart(3, "0")}`).join("\r\n"), () => {
     const duration = terminal.options.smoothScrollDuration;
     terminal.options.smoothScrollDuration = 0;
     terminal.scrollToLine(Number(parameters.get("scrollLine") || "30"));

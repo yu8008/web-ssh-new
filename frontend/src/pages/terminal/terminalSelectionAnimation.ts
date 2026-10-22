@@ -4,7 +4,7 @@ import { xtermPaletteColor } from "./terminalUtils";
 
 const ANSI_NAMES = ["black", "red", "green", "yellow", "blue", "magenta", "cyan", "white", "brightBlack", "brightRed", "brightGreen", "brightYellow", "brightBlue", "brightMagenta", "brightCyan", "brightWhite"] as const;
 const ANSI_DEFAULTS = ["#2e3436", "#cc0000", "#4e9a06", "#c4a000", "#3465a4", "#75507b", "#06989a", "#d3d7cf", "#555753", "#ef2929", "#8ae234", "#fce94f", "#729fcf", "#ad7fa8", "#34e2e2", "#eeeeec"];
-type ForegroundRun = { element: HTMLSpanElement; start: number; end: number; text: string; ascii: boolean; dim: boolean };
+type ForegroundRun = { element: HTMLSpanElement; start: number; end: number; text: string; columnsPerChar: number; dim: boolean };
 type PaintedRow = { element: HTMLDivElement; text: string; nodes: number; highlight: HTMLDivElement; selected: string; foreground: ForegroundRun[] };
 
 /** xterm paints text at integer rows even when its scrollbar moves in pixels.
@@ -19,6 +19,7 @@ export function createSelectionAnimation(term: Terminal, screen: HTMLElement, ge
   let waiting = false;
   let frame: number | undefined;
   let endTimer: number | undefined;
+  let cover: HTMLDivElement | null = null;
   let layer: HTMLDivElement | null = null;
   let content: HTMLDivElement | null = null;
   let region: SelectionScrollMotion | null = null;
@@ -38,6 +39,7 @@ export function createSelectionAnimation(term: Terminal, screen: HTMLElement, ge
   let selectionFill = "";
   let selectionOpacity = "";
   const rows = new Map<number, PaintedRow>();
+  const pinnedRows = new Map<number, PaintedRow>();
   const spacing = new Map<string, number>();
   let measure: CanvasRenderingContext2D | null = null;
 
@@ -46,10 +48,11 @@ export function createSelectionAnimation(term: Terminal, screen: HTMLElement, ge
     if (frame !== undefined) view.cancelAnimationFrame(frame);
     frame = undefined;
     view.clearTimeout(endTimer);
-    layer?.remove();
-    layer = content = null;
+    cover?.remove();
+    cover = layer = content = null;
     region = null;
     rows.clear();
+    pinnedRows.clear();
     spacing.clear();
     measure = null;
     nodeCount = 0;
@@ -75,7 +78,7 @@ export function createSelectionAnimation(term: Terminal, screen: HTMLElement, ge
     const line = term.buffer.active.getLine(term.buffer.active.viewportY + screenRow);
     const cell = term.buffer.active.getNullCell();
     const foreground: ForegroundRun[] = [];
-    let run: { element: HTMLSpanElement; textElement: HTMLSpanElement; text: string; start: number; end: number; key: string } | null = null;
+    let run: { element: HTMLSpanElement; textElement: HTMLSpanElement; text: string; start: number; end: number; key: string; columnsPerChar: number } | null = null;
     let background: { element: HTMLSpanElement; start: number; end: number; color: string } | null = null;
     const flushBackground = () => {
       if (background) background.element.style.width = `${(background.end - background.start) * cellWidth}px`;
@@ -85,7 +88,7 @@ export function createSelectionAnimation(term: Terminal, screen: HTMLElement, ge
       run.textElement.textContent = run.text;
       run.element.style.width = `${(run.end - run.start) * cellWidth}px`;
       if (run.textElement !== run.element || term.options.theme?.selectionForeground) {
-        foreground.push({ element: run.textElement, text: run.text, start: run.start, end: run.end, ascii: true, dim: run.textElement !== run.element });
+        foreground.push({ element: run.textElement, text: run.text, start: run.start, end: run.end, columnsPerChar: run.columnsPerChar, dim: run.textElement !== run.element });
       }
     };
     let nodes = 1;
@@ -112,11 +115,22 @@ export function createSelectionAnimation(term: Terminal, screen: HTMLElement, ge
       const weight = String(cell.isBold() ? term.options.fontWeightBold ?? "bold" : term.options.fontWeight ?? "normal");
       const italic = cell.isItalic() ? "italic" : "normal";
       const decoration = [cell.isUnderline() ? "underline" : "", cell.isStrikethrough() ? "line-through" : "", cell.isOverline() ? "overline" : ""].filter(Boolean).join(" ");
-      const key = `${fg}|${bg}|${weight}|${italic}|${cell.isDim()}|${decoration}`;
       const ascii = cell.getWidth() === 1 && /^[\x20-\x7e]$/.test(chars);
-      if (ascii && run && run.end === col && run.key === key) {
+      // Fixed-width BMP CJK glyphs can share a run too. One node per Chinese
+      // character exhausted the paint budget during an otherwise ordinary drag.
+      // Keep emoji/combined glyphs in individual cells and retain exact spacing.
+      const columnsPerChar = ascii ? 1 : cell.getWidth() === 2 && /^[\u2e80-\u9fff\uac00-\ud7a3\uf900-\ufaff\uff01-\uff60\uffe0-\uffe6]$/.test(chars) ? 2 : 0;
+      let letterSpacing = "";
+      if (columnsPerChar) {
+        const font = `${italic} ${weight} ${term.options.fontSize ?? 15}px ${term.options.fontFamily ?? "monospace"}`;
+        const key = ascii ? font : `${font}|${chars}`;
+        if (!spacing.has(key)) { measure!.font = font; spacing.set(key, columnsPerChar * cellWidth - measure!.measureText(ascii ? "M" : chars).width); }
+        letterSpacing = `${spacing.get(key)}px`;
+      }
+      const key = `${fg}|${bg}|${weight}|${italic}|${cell.isDim()}|${decoration}|${columnsPerChar}|${letterSpacing}`;
+      if (columnsPerChar && run && run.end === col && run.key === key) {
         run.text += chars;
-        run.end++;
+        run.end += columnsPerChar;
         continue;
       }
       flushRun();
@@ -127,26 +141,22 @@ export function createSelectionAnimation(term: Terminal, screen: HTMLElement, ge
         color: fg, zIndex: "1", fontWeight: weight, fontStyle: italic, textDecoration: decoration,
         whiteSpace: "pre", lineHeight: `${rowHeight}px`,
       });
-      if (ascii) {
-        const font = `${italic} ${weight} ${term.options.fontSize ?? 15}px ${term.options.fontFamily ?? "monospace"}`;
-        if (!spacing.has(font)) { measure!.font = font; spacing.set(font, cellWidth - measure!.measureText("M").width); }
-        span.style.letterSpacing = `${spacing.get(font)}px`;
-      }
+      if (columnsPerChar) span.style.letterSpacing = letterSpacing;
       if (cell.isDim()) {
         const glyph = doc.createElement("span");
         glyph.style.opacity = "0.5";
         glyph.textContent = chars;
         span.appendChild(glyph);
         nodes++;
-        run = ascii ? { element: span, textElement: glyph, text: chars, start: col, end: col + 1, key } : null;
-      } else if (ascii) {
-        run = { element: span, textElement: span, text: chars, start: col, end: col + 1, key };
+        run = columnsPerChar ? { element: span, textElement: glyph, text: chars, start: col, end: col + columnsPerChar, key, columnsPerChar } : null;
+      } else if (columnsPerChar) {
+        run = { element: span, textElement: span, text: chars, start: col, end: col + columnsPerChar, key, columnsPerChar };
       } else {
         span.textContent = chars;
         run = null;
       }
-      if (!ascii && (cell.isDim() || term.options.theme?.selectionForeground)) {
-        foreground.push({ element: cell.isDim() ? span.firstElementChild as HTMLSpanElement : span, text: chars, start: col, end: col + cell.getWidth(), ascii: false, dim: !!cell.isDim() });
+      if (!columnsPerChar && (cell.isDim() || term.options.theme?.selectionForeground)) {
+        foreground.push({ element: cell.isDim() ? span.firstElementChild as HTMLSpanElement : span, text: chars, start: col, end: col + cell.getWidth(), columnsPerChar: 0, dim: !!cell.isDim() });
       }
       element.appendChild(span);
       nodes++;
@@ -173,18 +183,20 @@ export function createSelectionAnimation(term: Terminal, screen: HTMLElement, ge
     const column = screen.querySelector<HTMLElement>(".wsg-column-selection");
     const columnRect = column?.getBoundingClientRect();
     const screenRect = columnRect ? screen.getBoundingClientRect() : null;
-    for (const [index, row] of rows) {
-      let first = index === start ? selected!.start.col : 0;
-      let last = index === end ? selected!.end.col : term.cols;
-      let visible = index >= start && index <= end;
+    const updateRow = (index: number, row: PaintedRow, pinned = false) => {
+      const firstRow = pinned ? native ? native.start.y - term.buffer.active.viewportY : Infinity : start;
+      const lastRow = pinned ? native ? native.end.y - term.buffer.active.viewportY : -Infinity : end;
+      let first = index === firstRow ? pinned ? native!.start.x : selected!.start.col : 0;
+      let last = index === lastRow ? pinned ? native!.end.x : selected!.end.col : term.cols;
+      let visible = index >= firstRow && index <= lastRow;
       if (columnRect && screenRect) {
-        const screenRow = index - target;
+        const screenRow = pinned ? index : index - target;
         visible = screenRow >= Math.round((columnRect.top - screenRect.top) / rowHeight) && screenRow < Math.round((columnRect.bottom - screenRect.top) / rowHeight);
         first = (columnRect.left - screenRect.left) / cellWidth;
         last = (columnRect.right - screenRect.left) / cellWidth;
       }
       const key = visible ? `${first}:${last}` : "";
-      if (key === row.selected) continue;
+      if (key === row.selected) return;
       row.selected = key;
       row.highlight.style.display = visible ? "block" : "none";
       row.highlight.style.left = `${first * cellWidth}px`;
@@ -193,13 +205,15 @@ export function createSelectionAnimation(term: Terminal, screen: HTMLElement, ge
         const left = visible ? Math.max(0, Math.min(run.end - run.start, first - run.start)) : 0;
         const right = visible ? Math.max(left, Math.min(run.end - run.start, last - run.start)) : 0;
         const selected = right > left;
-        // Native selected glyphs lose ANSI dim. Preserve partial ASCII runs,
+        // Native selected glyphs lose ANSI dim. Preserve partial text runs,
         // so selecting half a line doesn't brighten its unselected prefix.
         run.element.style.opacity = run.dim && !selected ? "0.5" : "1";
         run.element.style.color = selected ? term.options.theme?.selectionForeground ?? "" : "";
-        if (selected && run.ascii && (left > 0 || right < run.end - run.start)) {
+        if (selected && run.columnsPerChar && (left > 0 || right < run.end - run.start)) {
           run.element.style.color = "";
-          const parts = [run.text.slice(0, left), run.text.slice(left, right), run.text.slice(right)].map((text, index) => {
+          const first = Math.floor(left / run.columnsPerChar);
+          const last = Math.ceil(right / run.columnsPerChar);
+          const parts = [run.text.slice(0, first), run.text.slice(first, last), run.text.slice(last)].map((text, index) => {
             const part = doc.createElement("span");
             part.textContent = text;
             if (index !== 1 && run.dim) part.style.opacity = "0.5";
@@ -209,7 +223,9 @@ export function createSelectionAnimation(term: Terminal, screen: HTMLElement, ge
           run.element.replaceChildren(...parts);
         } else if (run.element.textContent !== run.text || run.element.childElementCount) run.element.textContent = run.text;
       }
-    }
+    };
+    rows.forEach((row, index) => updateRow(index, row));
+    pinnedRows.forEach((row, index) => updateRow(index, row, true));
   };
   const prune = () => {
     if (!region) return;
@@ -261,7 +277,7 @@ export function createSelectionAnimation(term: Terminal, screen: HTMLElement, ge
     layer.style.top = `${motion.top * rowHeight}px`;
     layer.style.height = `${(motion.bottom - motion.top) * rowHeight}px`;
     content.style.top = `${-motion.top * rowHeight}px`;
-    if (!layer.isConnected) screen.appendChild(layer);
+    if (!cover!.isConnected) screen.appendChild(cover!);
   };
   const rendered = term.onRender(() => {
     if (enabled && opaqueSelection !== (term.element?.dataset.terminalRenderer === "webgl")) cancel();
@@ -307,6 +323,18 @@ export function createSelectionAnimation(term: Terminal, screen: HTMLElement, ge
       content.className = "wsg-selection-content";
       Object.assign(content.style, { position: "absolute", left: "0", width: `${width}px`, height: `${bounds.height}px`, willChange: "transform", pointerEvents: "none", fontFamily: term.options.fontFamily ?? "monospace", fontSize: `${term.options.fontSize ?? 15}px`, fontKerning: "none", fontVariantLigatures: "none" });
       layer.appendChild(content);
+      // Own the complete frame during a drag. Exposing the native footer while
+      // the body is still interpolating shows two different moments at once.
+      cover = doc.createElement("div");
+      cover.className = "wsg-selection-frame";
+      cover.setAttribute("aria-hidden", "true");
+      Object.assign(cover.style, {
+        position: "absolute", inset: "0", overflow: "hidden", pointerEvents: "none", zIndex: "4",
+        background: term.options.theme?.background ?? "#000000",
+        fontFamily: term.options.fontFamily ?? "monospace", fontSize: `${term.options.fontSize ?? 15}px`,
+        fontKerning: "none", fontVariantLigatures: "none",
+      });
+      cover.appendChild(layer);
       try {
         for (let index = 0; index < term.rows; index++) {
           const text = term.buffer.active.getLine(term.buffer.active.viewportY + index)?.translateToString(true).trimEnd() ?? "";
@@ -317,7 +345,7 @@ export function createSelectionAnimation(term: Terminal, screen: HTMLElement, ge
         }
       } catch { cancel(); }
     },
-    prepare() { if (enabled) waiting = true; },
+    prepare(pending = true) { if (enabled) waiting = pending; },
     invalidate() { if (enabled && waiting && !region) show({ top: 0, bottom: term.rows, lines: 0 }); },
     move(motion: SelectionScrollMotion, elapsed: number, verifiedRows?: SelectionRow[]) {
       if (!enabled || !content) return;
@@ -327,19 +355,34 @@ export function createSelectionAnimation(term: Terminal, screen: HTMLElement, ge
         lastAdvance = now;
         const oldTarget = target;
         if (region?.top !== motion.top || region?.bottom !== motion.bottom) {
+          for (const [index, row] of pinnedRows) if (index >= motion.top && index < motion.bottom) {
+            pinnedRows.delete(index);
+            row.element.classList.remove("wsg-selection-pinned");
+            rows.set(oldTarget + index, row);
+            row.element.style.top = `${(oldTarget + index - base) * rowHeight}px`;
+            content.appendChild(row.element);
+          }
           for (const [index, row] of rows) if (index < oldTarget + motion.top || index >= oldTarget + motion.bottom) {
-            nodeCount -= row.nodes;
-            row.element.remove();
             rows.delete(index);
+            const screenRow = index - oldTarget;
+            if (screenRow >= 0 && screenRow < term.rows && !pinnedRows.has(screenRow)) {
+              pinnedRows.set(screenRow, row);
+              row.element.classList.add("wsg-selection-pinned");
+              row.element.style.top = `${screenRow * rowHeight}px`;
+              cover!.appendChild(row.element);
+            } else { nodeCount -= row.nodes; row.element.remove(); }
           }
         }
         target += motion.lines;
-        if (Math.abs(target - position) >= motion.bottom - motion.top) position = target;
+        if (Math.abs(target - position) >= 3 * (motion.bottom - motion.top)) position = target;
         show(motion);
         prune();
-        for (let screenRow = motion.top; screenRow < motion.bottom; screenRow++) {
+        const buffer = term.buffer.active;
+        const first = verifiedRows ? motion.top : Math.max(-buffer.viewportY, Math.floor(Math.min(position, target) - target) + motion.top);
+        const last = verifiedRows ? motion.bottom : Math.min(buffer.length - buffer.viewportY, Math.ceil(Math.max(position, target) - target) + motion.bottom);
+        for (let screenRow = first; screenRow < last; screenRow++) {
           const index = target + screenRow;
-          const text = verifiedRows?.[screenRow].text ?? term.buffer.active.getLine(term.buffer.active.viewportY + screenRow)?.translateToString(true).trimEnd() ?? "";
+          const text = verifiedRows?.[screenRow]?.text ?? buffer.getLine(buffer.viewportY + screenRow)?.translateToString(true).trimEnd() ?? "";
           const existing = rows.get(index);
           if (existing?.text === text) continue;
           if (existing) { nodeCount -= existing.nodes; existing.element.remove(); }

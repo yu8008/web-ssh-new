@@ -1,6 +1,7 @@
-import type { Terminal } from "xterm";
+import type { IMarker, Terminal } from "xterm";
 import { captureSelectionRows, SelectionTranscript, type SelectionPoint, type SelectionRow } from "./selectionTranscript";
 import { createSelectionAnimation } from "./terminalSelectionAnimation";
+import { terminalDragScroll } from "./terminalDragScroll";
 
 type SelectionOptions = {
   onChange: (hasSelection: boolean) => void;
@@ -20,6 +21,11 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
   let nativeScrolling = false;
   let nativeViewportY = term.buffer.active.viewportY;
   let nativeScrollAt = view.performance.now();
+  let nativeAnchor: { row: number; col: number; marker?: IMarker } | null = null;
+  let nativeColumn = false;
+  let nativeOriginY = 0;
+  let nativeRemainder = 0;
+  let nativeTickAt = 0;
   let transcript: SelectionTranscript | null = null;
   let pendingDown: MouseEvent | null = null;
   let pendingFrame: SelectionRow[] | null = null;
@@ -37,7 +43,8 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
   let notifiedSelection = false;
   let parseTimer: number | undefined;
   let finishTimer: number | undefined;
-  let remote: { direction: -1 | 1; started: number; retryAt: number; attempts: number; reports: number; expected: number; moved: number } | null = null;
+  let remote: { direction: -1 | 1; started: number; retryAt: number; attempts: number; reports: number; issued: number; expected: number; moved: number } | null = null;
+  const reportTimers = new Set<number>();
   let responseTime = 0;
   let scrollStep = 0;
   let scrollHeight = 0;
@@ -108,7 +115,23 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
     frameChanged = false;
     finishAfterDraw = false;
   };
+  const stopQueuedReports = () => {
+    reportTimers.forEach((timer) => view.clearTimeout(timer));
+    reportTimers.clear();
+    if (remote && remote.issued < remote.reports) {
+      remote.reports = remote.issued;
+      remote.expected = remote.issued * scrollStep;
+      if (remote.moved >= remote.expected) { remote = null; animation.prepare(false); }
+    }
+  };
+  const stopNative = () => {
+    nativeAnchor?.marker?.dispose();
+    nativeAnchor = null;
+    nativeRemainder = nativeTickAt = 0;
+  };
   const clear = () => {
+    stopQueuedReports();
+    stopNative();
     animation.cancel();
     nativeScrolling = false;
     active = false;
@@ -137,50 +160,103 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
     const now = Date.now();
     const attempts = retry && remote ? remote.attempts + 1 : 1;
     const rect = screen.getBoundingClientRect();
-    const outside = Math.max(rect.top - point.y, point.y - rect.bottom);
+    const motion = terminalDragScroll(point.y, rect.top, rect.bottom, term.rows, columnMode ? 12 : 48);
     // Learn the TUI's actual wheel distance before accelerating. Keep at least
-    // three overlapping rows, allow headroom for TUI wheel acceleration, and
-    // wait for the entire burst before sending more.
+    // overlapping rows and wait for the burst before sending more. Pacing
+    // reports prevents TUIs from folding an immediate burst into one wheel.
+    // Finish issuing before its first reply; fast links are quicker with one
+    // report per verified frame and cannot expose overlapping partial repaints.
+    const budget = Math.min(scrollHeight - 2, Math.floor(scrollHeight * 0.7));
     const reports = !retry && drag && scrollStep
-      ? Math.max(1, Math.min(outside > 2 * rect.height / term.rows ? 3 : 2, Math.floor((scrollHeight - 3) / (scrollStep * 1.5)))) : 1;
+      ? Math.max(1, Math.min(8, Math.floor(responseTime / 40), Math.ceil(motion.speed * responseTime / 1000 / scrollStep), Math.floor(budget / scrollStep))) : 1;
     remote = {
       direction, started: retry && remote ? remote.started : now, attempts,
       retryAt: now + Math.max(responseTime * 4, Math.min(10000, 2500 * 2 ** Math.min(attempts - 1, 2))),
       reports: retry && remote ? remote.reports : reports,
+      issued: retry && remote ? remote.issued : 0,
       expected: retry && remote ? remote.expected : scrollStep * reports,
       moved: retry && remote ? remote.moved : 0,
     };
     animation.prepare();
     // Use xterm's wheel encoder rather than hardcoding an escape sequence.
     // A line-mode delta emits one wheel report, with no held button/modifiers.
-    sendingWheel = true;
-    try {
-      for (let report = 0; report < reports; report++) screen.dispatchEvent(new WheelEvent("wheel", {
-        bubbles: true, cancelable: true, deltaMode: 1, deltaY: direction,
-        clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2,
-      }));
-    } finally {
-      sendingWheel = false;
+    const request = remote;
+    const sendReport = () => {
+      if (remote !== request) return;
+      if (!retry) request.issued++;
+      sendingWheel = true;
+      try {
+        screen.dispatchEvent(new WheelEvent("wheel", {
+          bubbles: true, cancelable: true, deltaMode: 1, deltaY: direction,
+          clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2,
+        }));
+      } finally { sendingWheel = false; }
+      options.flushInput?.();
+    };
+    sendReport();
+    for (let report = 1; report < reports; report++) {
+      const timer = view.setTimeout(() => { reportTimers.delete(timer); sendReport(); }, report * 40);
+      reportTimers.add(timer);
     }
-    // Normally this gesture has one outstanding burst. Waiting for the normal
-    // wheel-burst frame would add another display frame to every SSH round trip.
-    options.flushInput?.();
   };
   const tick = () => {
-    if (!active) return false;
+    if (!active || !transcript?.hasSelection()) return false;
     const rect = screen.getBoundingClientRect();
-    const direction = point.y <= rect.top + 12 ? -1 : point.y >= rect.bottom - 12 ? 1 : 0;
+    const direction = terminalDragScroll(point.y, rect.top, rect.bottom, term.rows, columnMode ? 12 : 48).direction;
     if (!direction) return false;
     // A TUI may ignore a wheel (or repaint without moving). Keep the verified
     // snapshot for late responses, but don't permanently latch the gesture.
     // Back off at boundaries and on slow links; never retry inside a split
     // synchronized repaint, where another wheel could skip uncaptured output.
     if (remote && Date.now() >= remote.retryAt && !synchronizedRepaint) {
-      if (direction === remote.direction) requestScroll(direction, true);
+      if (direction === remote.direction) requestScroll(direction as -1 | 1, true);
       else remote = null;
     }
-    requestScroll(direction);
+    requestScroll(direction as -1 | 1);
     return true;
+  };
+  const tickNative = () => {
+    if (!nativeDown || !nativeScrolling || nativeColumn || term.buffer.active.type !== "normal") return false;
+    const rect = screen.getBoundingClientRect();
+    const motion = terminalDragScroll(point.y, rect.top, rect.bottom, term.rows);
+    const now = view.performance.now();
+    const elapsed = nativeTickAt ? Math.min(64, now - nativeTickAt) : 0;
+    nativeTickAt = now;
+    if (!nativeAnchor && motion.direction && Math.abs(point.y - nativeOriginY) > 4) {
+      const selection = term.getSelectionPosition();
+      if (selection) {
+        const anchor = motion.direction > 0 ? selection.start : selection.end;
+        nativeAnchor = {
+          row: anchor.y, col: anchor.x,
+          marker: term.registerMarker(anchor.y - term.buffer.active.baseY - term.buffer.active.cursorY),
+        };
+      }
+    }
+    if (!nativeAnchor) { nativeTickAt = 0; return false; }
+    if (motion.direction) {
+      nativeRemainder += motion.direction * motion.speed * elapsed / 1000;
+      const lines = Math.trunc(nativeRemainder);
+      nativeRemainder -= lines;
+      if (lines) {
+        const duration = term.options.smoothScrollDuration;
+        term.options.smoothScrollDuration = 0;
+        try { term.scrollToLine(term.buffer.active.viewportY + lines); }
+        finally { term.options.smoothScrollDuration = duration; }
+      }
+    } else nativeRemainder = 0;
+    const end = coords(point.x, point.y);
+    end.row += term.buffer.active.viewportY;
+    if (motion.direction) end.col = motion.direction > 0 ? term.cols : 0;
+    const cell = term.buffer.active.getLine(end.row)?.getCell(end.col);
+    if (cell?.getWidth() === 0) end.col++;
+    const anchor = { row: nativeAnchor.marker?.isDisposed ? 0 : nativeAnchor.marker?.line ?? nativeAnchor.row, col: nativeAnchor.col };
+    const start = anchor.row < end.row || (anchor.row === end.row && anchor.col <= end.col) ? anchor : end;
+    const last = start === anchor ? end : anchor;
+    // Public select stops xterm's independent 50ms drag timer. This controller
+    // owns both scrolling and the endpoint from now until the release.
+    term.select(start.col, start.row, (last.row - start.row) * term.cols + last.col - start.col);
+    if (!motion.direction) nativeTickAt = 0;
+    return !!motion.direction;
   };
   const scheduleFrame = () => {
     if (frame !== undefined || disposed) return;
@@ -196,7 +272,11 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
         finishAfterDraw = false;
         if (hasSelection()) options.onFinish(point.x, point.y);
       }
-      if (nativeDown && nativeScrolling && !transcript) animation.updateSelection();
+      if (nativeDown && nativeScrolling && !transcript) {
+        const scrolling = tickNative();
+        animation.updateSelection();
+        if (scrolling) scheduleFrame();
+      }
       if (tick()) scheduleFrame();
     });
   };
@@ -222,6 +302,9 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
     }
     if (event.button !== 0) return;
     point = { x: event.clientX, y: event.clientY };
+    stopNative();
+    nativeColumn = event.altKey;
+    nativeOriginY = event.clientY;
     if (term.modes.mouseTrackingMode === "none" && !transcript) {
       nativeDown = true;
       nativeScrolling = true;
@@ -262,6 +345,7 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
     if (nativeDown && nativeScrolling && !transcript) {
       point = { x: event.clientX, y: event.clientY };
       scheduleFrame();
+      if (nativeAnchor) { event.preventDefault(); event.stopImmediatePropagation(); }
       return;
     }
     if (pendingDown) {
@@ -271,6 +355,8 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
     }
     if (!active || !transcript) return;
     point = { x: event.clientX, y: event.clientY };
+    const bounds = screen.getBoundingClientRect();
+    if (remote && terminalDragScroll(point.y, bounds.top, bounds.bottom, term.rows, columnMode ? 12 : 48).direction !== remote.direction) stopQueuedReports();
     needsDraw = true;
     scheduleFrame();
     // Selection gestures never become remote button/drag reports.
@@ -279,7 +365,9 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
   };
   const onUp = (event: MouseEvent) => {
     if (event.button !== 0) return;
+    point = { x: event.clientX, y: event.clientY };
     const finishing = nativeDown || active || pendingDown !== null;
+    if (nativeAnchor) { tickNative(); animation.updateSelection(); }
     nativeDown = false;
     if (!finishing) return;
     if (customGesture && !pendingDown) event.stopImmediatePropagation();
@@ -301,6 +389,8 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
     pendingDown = null;
     pendingFrame = null;
     active = false;
+    stopQueuedReports();
+    stopNative();
     stopTimer();
     point = { x: event.clientX, y: event.clientY };
     if (transcript) {
@@ -356,7 +446,7 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
       const motion = transcript.scrollMotion!;
       const lines = Math.abs(motion.lines);
       remote.moved += lines;
-      const completeBurst = remote.reports === 1 || remote.moved >= remote.expected;
+      const completeBurst = remote.issued === remote.reports && (remote.reports === 1 || remote.moved >= remote.expected);
       if (completeBurst && remote.attempts === 1) {
         responseTime = responseTime ? responseTime * 0.75 + elapsed * 0.25 : elapsed;
         scrollStep = Math.max(scrollStep, remote.moved / remote.reports);
@@ -364,7 +454,7 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
       scrollHeight = motion.bottom - motion.top;
       const interval = elapsed * Math.min(1, lines / Math.max(lines, remote.expected));
       animation.move(motion, remote.attempts === 1 ? interval : responseTime || 100, nextFrame);
-      if (completeBurst) remote = null;
+      if (completeBurst) { remote = null; stopQueuedReports(); }
       else animation.prepare();
       needsDraw = true;
       frameChanged = true;
@@ -414,7 +504,17 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
     }
     return false;
   });
-  const selection = term.onSelectionChange(notify);
+  // Several repaints can share one parsed SSH batch. Capture the preceding
+  // frame before a new home-and-redraw starts, rather than aligning its lower
+  // half with the next frame's upper half in onWriteParsed.
+  const repaintStart = term.parser.registerCsiHandler({ final: "H" }, (params) => {
+    if ((params[0] || 1) === 1 && (params[1] || 1) === 1 && remote && !synchronizedRepaint) {
+      view.clearTimeout(parseTimer);
+      captureRemote();
+    }
+    return false;
+  });
+  const selection = term.onSelectionChange(() => { animation.updateSelection(); notify(); });
   const onNativeScroll = () => {
     if (!nativeScrolling || term.buffer.active.type !== "normal") return;
     const next = term.buffer.active.viewportY;
@@ -459,6 +559,7 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
       parsed.dispose();
       syncStart.dispose();
       syncEnd.dispose();
+      repaintStart.dispose();
       selection.dispose();
       scrolled.dispose();
       viewport.removeEventListener("scroll", onNativeScroll);
