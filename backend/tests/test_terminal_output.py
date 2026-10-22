@@ -9,7 +9,7 @@ import pytest
 from app.services.terminal_output import TerminalOutput
 from app.services.types import SessionBuffer
 from app.api import sessions as sessions_api
-from fastapi import WebSocketDisconnect
+from fastapi import WebSocket, WebSocketDisconnect
 
 
 class Viewer:
@@ -232,8 +232,8 @@ def test_history_eviction_preserves_sequence_and_utf8_byte_budget() -> None:
     assert last.seq == buffer.sequence == 3
 
 
-@pytest.mark.parametrize("framed", [False, True])
-def test_terminal_endpoint_negotiates_output_and_keeps_user_input(monkeypatch, framed: bool) -> None:
+@pytest.mark.parametrize("framed", [False, True, "flow"])
+def test_terminal_endpoint_negotiates_output_and_keeps_user_input(monkeypatch, framed) -> None:
     async def scenario() -> None:
         output = TerminalOutput(SessionBuffer(), set())
         output.publish("prompt 中文")
@@ -248,7 +248,7 @@ def test_terminal_endpoint_negotiates_output_and_keeps_user_input(monkeypatch, f
         db = SimpleNamespace(execute=lambda _query: SimpleNamespace(scalar_one_or_none=lambda: record))
 
         class EndpointViewer(Viewer):
-            headers = {"sec-websocket-protocol": "webssh.output.v1" if framed else ""}
+            headers = {"sec-websocket-protocol": "webssh.output.v2, webssh.output.v1" if framed == "flow" else "webssh.output.v1" if framed else ""}
             query_params = {"lang": "en-US"}
             accepted = None
             reads = 0
@@ -268,13 +268,15 @@ def test_terminal_endpoint_negotiates_output_and_keeps_user_input(monkeypatch, f
         monkeypatch.setattr(sessions_api, "get_current_user_from_ws", lambda *_args: SimpleNamespace(id=1))
         viewer = EndpointViewer()
         await sessions_api.terminal_socket(viewer, "fixture", state, db)
-        assert viewer.accepted == ("webssh.output.v1" if framed else None)
+        assert viewer.accepted == ("webssh.output.v2" if framed == "flow" else "webssh.output.v1" if framed else None)
         assert inputs == ["user"]
         assert not output.subscriptions and not output.websockets
         if framed:
             frames = [json.loads(message) for message in viewer.messages]
             assert [frame["type"] for frame in frames if frame["type"] != "pong"] == ["replay_start", "output", "replay_end"]
             assert [frame for frame in frames if frame["type"] == "pong"] == [{"type": "pong", "ping_id": 7}]
+            if framed == "flow":
+                assert next(frame for frame in frames if frame["type"] == "output")["epoch"] == output.epoch
         else:
             assert viewer.messages == ["prompt 中文"]
     asyncio.run(scenario())
@@ -301,6 +303,116 @@ def test_latency_pongs_are_bounded_and_share_the_output_writer() -> None:
         assert viewer.max_sending == 1
 
     asyncio.run(scenario())
+
+
+def test_flow_control_bounds_unparsed_output_and_pongs_bypass_the_window() -> None:
+    async def scenario() -> None:
+        output = TerminalOutput(SessionBuffer(), set(), batch_chars=4, window_chars=4)
+        viewer = Viewer()
+        subscription = output.subscribe(viewer, framed=True)
+        subscription.enable_flow_control()
+        await until(lambda: subscription.replayed_at is not None)
+        for text in ["一二", "三四", "五六", "七八"]:
+            output.publish(text)
+        await until(lambda: subscription.inflight_chars == 4)
+        frames = [json.loads(message) for message in viewer.messages]
+        sent = [frame for frame in frames if frame["type"] == "output"]
+        assert "".join(frame["data"] for frame in sent) == "一二三四"
+        assert sent[-1]["epoch"] == output.epoch
+        subscription.pong(1, {"gateway_loop_lag_ms": 3})
+        await until(lambda: any('"type": "pong"' in message for message in viewer.messages))
+        pong = next(json.loads(message) for message in viewer.messages if '"type": "pong"' in message)
+        assert pong["gateway_inflight_chars"] == 4
+        assert pong["gateway_queued_chars"] == 4
+        assert pong["gateway_queue_ms"] >= 0
+        assert pong["gateway_loop_lag_ms"] == 3
+        subscription.acknowledge(999, output.epoch)
+        subscription.acknowledge(sent[-1]["seq"], "stale stream")
+        assert subscription.inflight_chars == 4
+        subscription.acknowledge(sent[-1]["seq"], output.epoch)
+        await until(lambda: not subscription.queue)
+        assert "".join(json.loads(message).get("data", "") for message in viewer.messages) == "一二三四五六七八"
+        subscription.acknowledge(subscription.last_sent_seq, output.epoch)
+        subscription.acknowledge(subscription.last_sent_seq, output.epoch)
+        assert subscription.inflight_chars == 0
+        await output.close()
+    asyncio.run(scenario())
+
+
+def test_flow_ack_from_a_replaced_stream_cannot_release_current_output() -> None:
+    async def scenario() -> None:
+        old = TerminalOutput(SessionBuffer(), set(), window_chars=4)
+        new = TerminalOutput(SessionBuffer(), set(), window_chars=4)
+        viewer = Viewer()
+        subscription = old.subscribe(viewer, framed=True)
+        subscription.enable_flow_control()
+        old.publish("old!")
+        await until(lambda: subscription.inflight_chars == 4)
+        new.publish("new!")
+        old.transfer_to(new)
+        await until(lambda: subscription.inflight_chars == 4)
+        subscription.acknowledge(1, old.epoch)
+        assert subscription.inflight_chars == 4
+        subscription.acknowledge(1, new.epoch)
+        await until(lambda: subscription.replayed_at is not None)
+        await old.close()
+        await new.close()
+        assert subscription.inflight_chars == 0
+    asyncio.run(scenario())
+
+
+def test_websocket_transport_replays_with_acknowledgements_while_input_remains_available(monkeypatch) -> None:
+    from threading import Timer
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    app = FastAPI()
+    inputs = []
+    expected = "".join(f"{index}:" + "中文😀" * 10922 for index in range(4))
+
+    @app.websocket("/terminal")
+    async def endpoint(websocket: WebSocket):
+        output = TerminalOutput(SessionBuffer(), set())
+        for index in range(4):
+            output.publish(f"{index}:" + "中文😀" * 10922)
+
+        async def send(data):
+            inputs.append(data)
+
+        session = SimpleNamespace(output=output, status="active", channel=object(), send=send)
+        state = SimpleNamespace(session_manager=SimpleNamespace(get_session=lambda _id: session))
+        record = SimpleNamespace(user_id=1, last_activity=None)
+        db = SimpleNamespace(execute=lambda _query: SimpleNamespace(scalar_one_or_none=lambda: record))
+        await sessions_api.terminal_socket(websocket, "transport", state, db)
+
+    monkeypatch.setattr(sessions_api, "get_current_user_from_ws", lambda *_args: SimpleNamespace(id=1))
+    with TestClient(app) as client, client.websocket_connect("/terminal", subprotocols=["webssh.output.v2", "webssh.output.v1"]) as socket:
+        deadline = Timer(5, socket.close)
+        deadline.start()
+        try:
+            assert socket.accepted_subprotocol == "webssh.output.v2"
+            assert socket.receive_json()["type"] == "replay_start"
+            first = socket.receive_json()
+            assert first["type"] == "output" and first["seq"] == 2
+            received = first["data"]
+            # The next history window cannot be sent until the browser parses
+            # this one, but the terminal receive loop must still accept input.
+            socket.send_json({"type": "input", "data": "key while history is paused"})
+            socket.send_json({"type": "ping", "ping_id": 8, "diagnostics": True})
+            pong = socket.receive_json()
+            assert pong["type"] == "pong" and pong["gateway_inflight_chars"] >= 60000
+            assert inputs == ["key while history is paused"]
+            socket.send_json({"type": "ack", "ack_seq": first["seq"], "epoch": first["epoch"]})
+            while True:
+                frame = socket.receive_json()
+                if frame["type"] == "replay_end":
+                    break
+                assert frame["type"] == "output"
+                received += frame["data"]
+                socket.send_json({"type": "ack", "ack_seq": frame["seq"], "epoch": frame["epoch"]})
+            assert received == expected
+        finally:
+            deadline.cancel()
 
 
 def test_terminal_input_does_not_wait_for_resize_and_latest_size_wins(monkeypatch) -> None:

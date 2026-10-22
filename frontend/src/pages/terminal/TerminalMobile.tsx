@@ -7,6 +7,8 @@ import { TerminalCopyPanel } from "./TerminalCopyPanel";
 import { createTerminalBufferSnapshot, type TerminalBufferSnapshot } from "./terminalUtils";
 import type { TerminalSessionState } from "./useTerminalSession";
 import { TerminalLoading } from "./TerminalLoading";
+import { TerminalComposer } from "./TerminalComposer";
+import { TerminalLatencyStatus } from "./TerminalLatencyStatus";
 
 const FileBrowser = React.lazy(() =>
   import("../../components/FileBrowser").then((module) => ({ default: module.FileBrowser }))
@@ -124,23 +126,7 @@ export function TerminalMobile({ state, onBack }: TerminalMobileProps) {
             {state.reconnectCountdown !== null ? state.t(`重连中 (${state.reconnectCountdown}s)`, `Reconnecting (${state.reconnectCountdown}s)`) : state.connectionLabel}
           </span>
           <span className={`${state.networkProfileTone}`}>{state.networkProfileLabel}</span>
-          {state.terminalLatencyMs !== null ? (
-            <span className={state.isDark ? "text-slate-500" : "text-slate-400"} title={state.t(
-              `终端长连接往返时间，包含浏览器和网关调度，不包含 SSH 和画面渲染；HTTP 健康检查：${state.browserLatencyMs ?? "—"}ms`,
-              `Terminal connection round trip, including browser/gateway scheduling, excluding SSH and rendering; HTTP health check: ${state.browserLatencyMs ?? "—"}ms`,
-            )}>
-              {state.t("终端", "Terminal")} {state.terminalLatencyMs}ms
-            </span>
-          ) : state.browserLatencyMs !== null ? (
-            <span className={state.isDark ? "text-slate-500" : "text-slate-400"} title={state.t("浏览器到网关的 HTTP 往返时间，包含请求处理耗时", "Browser-to-gateway HTTP round trip, including request processing")}>
-              {state.t("网页", "Web")} {state.browserLatencyMs}ms
-            </span>
-          ) : null}
-          {state.targetLatencyMs !== null ? (
-            <span className={state.isDark ? "text-slate-500" : "text-slate-400"} title={state.t("网关到 SSH 目标的命令往返时间，不包含浏览器网络和画面渲染", "Gateway-to-SSH command round trip, excluding browser network and rendering")}>
-              SSH {state.targetLatencyMs}ms
-            </span>
-          ) : null}
+          <TerminalLatencyStatus {...state} />
         </div>
         <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
           {actions.map((action) => (
@@ -242,6 +228,7 @@ export function TerminalMobile({ state, onBack }: TerminalMobileProps) {
               />
             ) : null}
           </div>
+          <TerminalComposer key={state.sessionId} connected={state.connectionState === "open"} t={state.t} onFill={state.fillTerminalDraft} />
         </div>
 
         <div className={`${activeTab === "files" ? "flex" : "hidden"} h-full flex-col`}>

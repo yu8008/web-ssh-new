@@ -4,6 +4,8 @@ import "xterm/css/xterm.css";
 import "../../src/index.css";
 import { useTerminalSocket } from "../../src/pages/terminal/useTerminalSocket";
 import { TerminalLoading } from "../../src/pages/terminal/TerminalLoading";
+import { TerminalComposer } from "../../src/pages/terminal/TerminalComposer";
+import { TerminalLatencyStatus } from "../../src/pages/terminal/TerminalLatencyStatus";
 
 const parameters = new URLSearchParams(location.search);
 localStorage.setItem("token", "fixture-token");
@@ -21,9 +23,9 @@ class FixtureSocket extends EventTarget {
   onclose: ((event: { code: number; wasClean: boolean }) => void) | null = null;
   onerror: (() => void) | null = null;
   inputs: string[] = [];
-  constructor(_url: string, protocol: string) {
+  constructor(_url: string, protocol: string | string[]) {
     super();
-    this.protocol = parameters.has("legacy") ? "" : protocol;
+    this.protocol = parameters.has("legacy") ? "" : parameters.has("v1") ? "webssh.output.v1" : Array.isArray(protocol) ? protocol[0] : protocol;
     sockets.push(this);
     queueMicrotask(() => { this.readyState = 1; this.onopen?.(); });
   }
@@ -32,7 +34,8 @@ class FixtureSocket extends EventTarget {
     const frame = JSON.parse(data);
     if (frame.type === "ping" && !parameters.has("noPong")) {
       setTimeout(() => {
-        if (this.readyState === 1) this.receive(JSON.stringify({ type: "pong", ping_id: frame.ping_id }));
+        if (this.readyState === 1) this.receive(JSON.stringify({ type: "pong", ping_id: frame.ping_id,
+          ...(parameters.has("diagnostics") ? { gateway_queue_ms: 6, gateway_loop_lag_ms: 3, gateway_queued_chars: 120, gateway_inflight_chars: 32 } : {}) }));
       }, Number(parameters.get("pingDelay") || "0"));
     }
   }
@@ -82,17 +85,21 @@ export function Harness() {
       dimensions: () => ({ rows: state.terminalInstance.current!.rows, cols: state.terminalInstance.current!.cols }),
       writes: () => parseWrites,
       pasteMode: () => state.terminalInstance.current!.modes.bracketedPasteMode,
+      diagnostics: () => state.terminalDiagnostics,
+      disconnect: (retryable = false) => sockets.at(-1)!.close(retryable ? 1012 : 1000),
     };
   }, [state]);
   return <>
     <div id="connection">{state.connectionState}</div>
     <div id="latency">{state.terminalLatencyMs ?? "unknown"}</div>
     <div id="painted">{String(state.hasRenderedOutput)}</div>
+    <TerminalLatencyStatus {...state} t={t} targetLatencyMs={24} browserLatencyMs={80} />
     <div id="notice">{notice}</div>
     <div style={{ position: "relative", height: "65vh", minHeight: 200, padding: 12 }}>
       <div ref={state.terminalRef} style={{ height: "100%", width: "100%" }} />
       <TerminalLoading state={{ ...state, t }} />
     </div>
+    <TerminalComposer connected={state.connectionState === "open"} t={t} onFill={state.fillTerminalDraft} />
     <button id="reconnect" onClick={state.handleReconnect}>Reconnect</button>
     <button id="copy" onClick={() => setCopied(state.getSelectionText())}>Copy</button>
     <pre id="copied">{copied}</pre>
@@ -104,10 +111,12 @@ declare global {
     pipeline: {
       frame(frame: string | object): void;
       screen(): string; top(): string | undefined; scroll(line: number): void;
-      select(): void; selectAll(): void; selected(): string; inputs(): Array<{ type: string; data?: string }>;
+      select(): void; selectAll(): void; selected(): string; inputs(): Array<{ type: string; data?: string; ack_seq?: number; epoch?: string }>;
       count(): number; history(): number | undefined; dimensions(): { rows: number; cols: number };
       writes(): number;
       pasteMode(): boolean;
+      diagnostics(): import("../../src/pages/terminal/terminalDiagnostics").TerminalDiagnostics | null;
+      disconnect(retryable?: boolean): void;
     };
   }
 }

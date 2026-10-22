@@ -141,3 +141,6 @@ class TerminalMessage(BaseModel):
     rows: Optional[int] = None
     cols: Optional[int] = None
     ping_id: Optional[int] = Field(default=None, ge=0, le=2147483647)
+    diagnostics: bool = False
+    ack_seq: Optional[int] = Field(default=None, ge=0, le=9007199254740991)
+    epoch: Optional[str] = Field(default=None, max_length=64)

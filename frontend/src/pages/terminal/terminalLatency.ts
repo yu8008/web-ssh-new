@@ -25,10 +25,11 @@ export function createTerminalLatencyProbe(
   probe();
   return {
     pong(pingId: number) {
-      if (disposed || pending?.id !== pingId) return;
+      if (disposed || pending?.id !== pingId) return null;
       const milliseconds = Math.round(view.performance.now() - pending.started);
       pending = undefined;
       onSample(view.document.visibilityState === "hidden" ? null : milliseconds);
+      return view.document.visibilityState === "hidden" ? null : milliseconds;
     },
     dispose() {
       disposed = true;

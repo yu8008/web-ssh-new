@@ -63,6 +63,19 @@ describe("terminal output scheduling", () => {
     writer.dispose();
   });
 
+  it("yields to a pending input even while output fits the normal time budget", () => {
+    vi.useFakeTimers();
+    const writes: string[] = [];
+    const writer = createTerminalOutput({ chunkSize: 2, inputPending: () => true, onOverflow: vi.fn(),
+      write(data, done) { writes.push(data); done(); } });
+    writer.enqueue("abcdef");
+    expect(writes).toEqual(["ab"]);
+    vi.runAllTimers();
+    expect(writes.join("")).toBe("abcdef");
+    expect(writer.diagnostics().queuedChars).toBe(0);
+    writer.dispose();
+  });
+
   it("replaces pending history only after the active parse completes", () => {
     vi.useFakeTimers();
     const events: string[] = [];
@@ -109,6 +122,8 @@ describe("terminal output scheduling", () => {
 
 it("validates framed output without confusing malformed data with control frames", () => {
   expect(decodeTerminalOutput('{"type":"pong","ping_id":7}')).toEqual({ type: "pong", ping_id: 7 });
+  expect(decodeTerminalOutput('{"type":"pong","ping_id":7,"gateway_queue_ms":5,"gateway_loop_lag_ms":-1,"gateway_queued_chars":null}'))
+    .toEqual({ type: "pong", ping_id: 7, gateway_queue_ms: 5 });
   expect(decodeTerminalOutput('{"type":"output","seq":1,"data":"中文"}')).toEqual({ type: "output", seq: 1, data: "中文" });
   for (const data of ["hello", "null", '{"type":"output","seq":-1,"data":"x"}', '{"type":"replay_end","seq":"1"}']) expect(decodeTerminalOutput(data)).toBeNull();
 });

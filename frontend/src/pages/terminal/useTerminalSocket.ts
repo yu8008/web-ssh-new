@@ -5,10 +5,11 @@ import { clearAuthStorage, getSession, getStoredToken, openTerminalSocket, uploa
 import { attachTerminalSelection } from "./terminalSelection";
 import { createTerminalInputWriter } from "./terminalInput";
 import { createTerminalLatencyProbe } from "./terminalLatency";
+import { createBrowserLagMonitor, type TerminalDiagnostics } from "./terminalDiagnostics";
 import { configureTerminalRendering } from "./terminalRendering";
 import { disposeTerminal } from "./terminalLifecycle";
 import { attachTerminalWheel } from "./terminalWheel";
-import { createTerminalOutput, decodeTerminalOutput, TERMINAL_OUTPUT_PROTOCOL } from "./terminalOutput";
+import { createTerminalOutput, decodeTerminalOutput, isTerminalOutputProtocol } from "./terminalOutput";
 import { attachTerminalViewport } from "./terminalViewport";
 import { attachTerminalShortcuts } from "./terminalShortcuts";
 import { attachTerminalPaste } from "./terminalPaste";
@@ -57,7 +58,10 @@ export function useTerminalSocket({
   const outputRef = React.useRef<ReturnType<typeof createTerminalOutput> | null>(null);
   const viewportRef = React.useRef<ReturnType<typeof attachTerminalViewport> | null>(null);
   const latencyProbeRef = React.useRef<ReturnType<typeof createTerminalLatencyProbe> | null>(null);
+  const browserLagRef = React.useRef<ReturnType<typeof createBrowserLagMonitor> | null>(null);
+  const pasteControllerRef = React.useRef<ReturnType<typeof attachTerminalPaste> | null>(null);
   const [terminalLatencyMs, setTerminalLatencyMs] = React.useState<number | null>(null);
+  const [terminalDiagnostics, setTerminalDiagnostics] = React.useState<TerminalDiagnostics | null>(null);
   const replayingRef = React.useRef(false);
   const remotePaintRef = React.useRef(false);
   const paintedRef = React.useRef(false);
@@ -200,6 +204,7 @@ export function useTerminalSocket({
       latencyProbeRef.current?.dispose();
       latencyProbeRef.current = null;
       setTerminalLatencyMs(null);
+      setTerminalDiagnostics(null);
       let latencyProbe: ReturnType<typeof createTerminalLatencyProbe> | undefined;
       const stopLatencyProbe = () => {
         latencyProbe?.dispose();
@@ -207,6 +212,21 @@ export function useTerminalSocket({
       };
       let sanitizePendingSuffix = "";
       let lastQueuedSeq = 0;
+      let pendingAck: { seq: number; epoch: string } | null = null;
+      let ackScheduled = false;
+      const acknowledge = (seq: number, epoch: string) => {
+        if (socketRef.current !== socket) return;
+        pendingAck = { seq, epoch };
+        if (ackScheduled) return;
+        ackScheduled = true;
+        queueMicrotask(() => {
+          ackScheduled = false;
+          if (pendingAck && socketRef.current === socket && socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ type: "ack", ack_seq: pendingAck.seq, epoch: pendingAck.epoch }));
+          }
+          pendingAck = null;
+        });
+      };
       const resetReplay = () => {
         sanitizePendingSuffix = "";
         lastQueuedSeq = 0;
@@ -225,9 +245,20 @@ export function useTerminalSocket({
           return;
         }
         let data = String(event.data ?? "");
-        if (socket.protocol === TERMINAL_OUTPUT_PROTOCOL) {
+        let parsedAck: (() => void) | undefined;
+        if (isTerminalOutputProtocol(socket.protocol)) {
           const frame = decodeTerminalOutput(data);
-          if (frame?.type === "pong") { latencyProbe?.pong(frame.ping_id); return; }
+          if (frame?.type === "pong") {
+            const roundTripMs = latencyProbe?.pong(frame.ping_id);
+            if (roundTripMs !== null && roundTripMs !== undefined) {
+              const output = outputWriter.diagnostics();
+              setTerminalDiagnostics({ roundTripMs, gatewayQueueMs: frame.gateway_queue_ms, gatewayLagMs: frame.gateway_loop_lag_ms,
+                gatewayQueuedChars: frame.gateway_queued_chars, gatewayInflightChars: frame.gateway_inflight_chars,
+                browserLagMs: browserLagRef.current?.maximumMs() ?? 0, renderWaitMs: browserLagRef.current?.renderWaitMs(), outputWaitMs: Math.round(output.waitMs),
+                outputParseMs: Math.round(output.parseMs), outputQueuedChars: output.queuedChars });
+            }
+            return;
+          }
           if (frame?.type === "replay_start") { resetReplay(); return; }
           if (frame?.type === "replay_end") {
             outputWriter.enqueue("", () => { replayingRef.current = false; });
@@ -237,6 +268,7 @@ export function useTerminalSocket({
             if (frame.seq <= lastQueuedSeq) return;
             lastQueuedSeq = frame.seq;
             data = frame.data;
+            if (frame.epoch) { const epoch = frame.epoch; parsedAck = () => acknowledge(frame.seq, epoch); }
           }
         }
         const sanitized = sanitizeTerminalOutputChunk(
@@ -247,7 +279,7 @@ export function useTerminalSocket({
         sanitizePendingSuffix = sanitized.pendingSuffix;
         const output = sanitized.output;
 
-        outputWriter.enqueue(output, () => { remotePaintRef.current = true; });
+        outputWriter.enqueue(output, () => { remotePaintRef.current = true; parsedAck?.(); });
 
         // 检测目录变化：解析提示符中的路径
         const text = output.replace(/\x1b\[[0-9;]*m/g, "");
@@ -262,17 +294,21 @@ export function useTerminalSocket({
           return;
         }
         reconnectAttemptRef.current = 0;
-        if (socket.protocol !== TERMINAL_OUTPUT_PROTOCOL) {
+        if (!isTerminalOutputProtocol(socket.protocol)) {
           replayingRef.current = false;
           if (isReconnect) resetReplay();
           replayingRef.current = false;
         }
         clearNetworkHint();
-        if (socket.protocol === TERMINAL_OUTPUT_PROTOCOL) {
+        if (isTerminalOutputProtocol(socket.protocol)) {
+          socket.send(JSON.stringify({ type: "flow_control" }));
           latencyProbe = createTerminalLatencyProbe(window,
-            (pingId) => socket.send(JSON.stringify({ type: "ping", ping_id: pingId })),
+            (pingId) => socket.send(JSON.stringify({ type: "ping", ping_id: pingId, diagnostics: true })),
             (milliseconds) => {
-              if (socketRef.current === socket) setTerminalLatencyMs(milliseconds);
+              if (socketRef.current === socket) {
+                setTerminalLatencyMs(milliseconds);
+                if (milliseconds === null) setTerminalDiagnostics(null);
+              }
             });
           latencyProbeRef.current = latencyProbe;
         }
@@ -286,7 +322,10 @@ export function useTerminalSocket({
           }, delay);
         });
         setConnectionState("open");
-        term.focus();
+        const focused = term.element?.ownerDocument.activeElement;
+        const editingOutside = focused instanceof HTMLElement && !term.element?.contains(focused)
+          && (focused.matches("input, textarea") || focused.isContentEditable || focused.closest('[role="dialog"]'));
+        if (!editingOutside) term.focus();
         if (isReconnect) {
           push(t("重新连接成功", "Reconnected successfully"));
         }
@@ -299,6 +338,7 @@ export function useTerminalSocket({
         }
         setConnectionState("closed");
         setTerminalLatencyMs(null);
+        setTerminalDiagnostics(null);
         reportNetworkHint("poor", 15000);
       };
 
@@ -309,6 +349,7 @@ export function useTerminalSocket({
         }
         setConnectionState("closed");
         setTerminalLatencyMs(null);
+        setTerminalDiagnostics(null);
         if (!event.wasClean) {
           reportNetworkHint("poor", 25000);
         }
@@ -475,6 +516,7 @@ export function useTerminalSocket({
     let rendered: { dispose(): void } | null = null;
     let rendering: ReturnType<typeof configureTerminalRendering> | null = null;
     let pasteController: ReturnType<typeof attachTerminalPaste> | null = null;
+    let resizeObserver: ResizeObserver | null = null;
 
     // 会话切换时清空上一个会话遗留的选区状态。
     setHasSelection(false);
@@ -516,11 +558,13 @@ export function useTerminalSocket({
 
       viewport = attachTerminalViewport(term, terminalContainer);
       viewportRef.current = viewport;
+      browserLagRef.current = createBrowserLagMonitor(window);
       const activeTerm = term;
       outputWriter = createTerminalOutput({
         write: (data, onParsed) => activeTerm.write(data, onParsed),
         beforeWrite: viewport.capture,
-        afterWrite: viewport.restore,
+        afterWrite: (snapshot) => { viewport?.restore(snapshot); browserLagRef.current?.parsed(); },
+        inputPending: () => (navigator as Navigator & { scheduling?: { isInputPending(): boolean } }).scheduling?.isInputPending() ?? false,
         onOverflow: () => {
           // Reconnect through a fresh bounded replay instead of dropping ANSI.
           socketRef.current?.close(4001, "Terminal output queue full");
@@ -528,6 +572,7 @@ export function useTerminalSocket({
       });
       outputRef.current = outputWriter;
       rendered = term.onRender(({ start, end }) => {
+        browserLagRef.current?.rendered();
         if (!remotePaintRef.current || paintedRef.current) return;
         const buffer = activeTerm.buffer.active;
         for (let row = start; row <= end; row++) {
@@ -585,10 +630,13 @@ export function useTerminalSocket({
             ? t("终端连接已变化，请重新粘贴", "Terminal connection changed; paste again")
             : error.message === "Clipboard image exceeds 20 MiB"
             ? t("剪贴板图片不能超过 20 MiB", "Clipboard image exceeds 20 MiB")
+            : error.message === "Multiline draft requires bracketed paste"
+            ? t("当前程序未启用安全多行粘贴，请使用单行输入，或先进入 Codex 等支持多行粘贴的程序", "This program has not enabled bracketed paste. Use a single line or open a program such as Codex that supports multiline paste.")
             : error.message;
           push(t("粘贴失败：", "Paste failed: ") + message);
         },
       });
+      pasteControllerRef.current = pasteController;
 
       attachTerminalShortcuts(term, getSelectionText, (text) => copyRequestRef.current?.(text));
 
@@ -601,6 +649,10 @@ export function useTerminalSocket({
       };
 
       window.addEventListener("resize", handleResize);
+      resizeObserver = new ResizeObserver(() => {
+        if (!disposed) handleResize?.();
+      });
+      resizeObserver.observe(terminalContainer);
       connectSocketRef.current(term);
     };
 
@@ -614,6 +666,10 @@ export function useTerminalSocket({
       }
       selectionController?.dispose();
       pasteController?.dispose();
+      if (pasteControllerRef.current === pasteController) pasteControllerRef.current = null;
+      resizeObserver?.disconnect();
+      browserLagRef.current?.dispose();
+      browserLagRef.current = null;
       inputWriter?.dispose();
       outputWriter?.dispose();
       viewport?.dispose();
@@ -631,12 +687,26 @@ export function useTerminalSocket({
     };
   }, [sessionId, clearReconnectTimer, enhancedSessionRef, getSelectionText]);
 
+  const fillTerminalDraft = React.useCallback(async (text: string, images: File[] = []) => {
+      const controller = pasteControllerRef.current;
+      if (!controller || socketRef.current?.readyState !== WebSocket.OPEN) {
+        const { t, push } = pasteFeedbackRef.current;
+        push(t("终端未连接，草稿已保留", "Terminal is not connected. Your draft is preserved."));
+        return false;
+      }
+      const applied = await controller.pasteDraft(text, images);
+      if (applied) terminalInstance.current?.focus();
+      return applied;
+    }, []);
+
   return {
     terminalRef,
     terminalInstance,
     fitAddon,
     connectionState,
     terminalLatencyMs,
+    terminalDiagnostics,
+    fillTerminalDraft,
     hasRenderedOutput,
     reconnectCountdown,
     autoReconnect,

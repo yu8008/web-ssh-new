@@ -99,6 +99,7 @@ def create_app() -> FastAPI:
     app = FastAPI(title="WebSSH Gateway", version="0.1.0")
     app.dependency_overrides[get_state] = lambda: app_state
     clipboard_cleanup_task: asyncio.Task | None = None
+    latency_monitor_task: asyncio.Task | None = None
 
     @app.exception_handler(HTTPException)
     async def _localized_http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
@@ -112,15 +113,20 @@ def create_app() -> FastAPI:
 
     @app.on_event("startup")
     async def _start_retry_worker() -> None:
-        nonlocal clipboard_cleanup_task
+        nonlocal clipboard_cleanup_task, latency_monitor_task
         if app_state.start_enhanced_retry_worker:
             app_state.start_enhanced_retry_worker()
         if app_state.start_session_sync_worker:
             app_state.start_session_sync_worker()
         clipboard_cleanup_task = asyncio.create_task(run_clipboard_cleanup_worker(app_state))
+        latency_monitor_task = asyncio.create_task(app_state.event_loop_lag.run())
 
     @app.on_event("shutdown")
     async def _stop_clipboard_cleanup() -> None:
+        if latency_monitor_task:
+            latency_monitor_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await latency_monitor_task
         if clipboard_cleanup_task:
             clipboard_cleanup_task.cancel()
             with suppress(asyncio.CancelledError):

@@ -38,7 +38,7 @@ from app.services.ssh_errors import SSH_CONNECTION_EXCEPTIONS, ssh_error_detail
 from app.services.ssh_manager import ManagedSession, SessionManager
 from app.services.system_settings import load_runtime_system_settings, resolve_retry_delay_seconds
 from app.services.types import PtyInfo
-from app.services.terminal_output import OUTPUT_PROTOCOL
+from app.services.terminal_output import OUTPUT_PROTOCOL, FLOW_PROTOCOL
 from app.services.terminal_resize import TerminalResizeQueue
 
 logger = get_logger(__name__)
@@ -684,9 +684,10 @@ async def terminal_socket(
     state: AppState = Depends(get_state),
     db=Depends(get_db),
 ) -> None:
-    protocols = websocket.headers.get("sec-websocket-protocol", "").split(",")
-    framed = OUTPUT_PROTOCOL in (protocol.strip() for protocol in protocols)
-    await websocket.accept(subprotocol=OUTPUT_PROTOCOL if framed else None)
+    protocols = {protocol.strip() for protocol in websocket.headers.get("sec-websocket-protocol", "").split(",")}
+    protocol = FLOW_PROTOCOL if FLOW_PROTOCOL in protocols else OUTPUT_PROTOCOL if OUTPUT_PROTOCOL in protocols else None
+    framed = protocol is not None
+    await websocket.accept(subprotocol=protocol)
     language = resolve_websocket_language(websocket)
     try:
         user = get_current_user_from_ws(websocket, state, db)
@@ -712,6 +713,8 @@ async def terminal_socket(
 
         bound_session = session
         subscription = session.output.subscribe(websocket, framed=framed)
+        if protocol == FLOW_PROTOCOL:
+            subscription.enable_flow_control()
 
         async def apply_resize(rows: int, cols: int) -> None:
             current = session_manager.get_session(session_id)
@@ -742,7 +745,17 @@ async def terminal_socket(
                 message = await websocket.receive_text()
                 payload = TerminalMessage.model_validate_json(message)
                 if payload.type == "ping" and payload.ping_id is not None:
-                    subscription.pong(payload.ping_id)
+                    details = None
+                    if payload.diagnostics:
+                        monitor = getattr(state, "event_loop_lag", None)
+                        details = {"gateway_loop_lag_ms": monitor.maximum_ms() if monitor else None}
+                    subscription.pong(payload.ping_id, details)
+                    continue
+                if payload.type == "flow_control":
+                    subscription.enable_flow_control()
+                    continue
+                if payload.type == "ack" and payload.ack_seq is not None:
+                    subscription.acknowledge(payload.ack_seq, payload.epoch)
                     continue
                 active_session = session_manager.get_session(session_id)
                 if not active_session or active_session.status != "active" or not active_session.channel:

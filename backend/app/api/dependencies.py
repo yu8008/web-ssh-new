@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable, Generator
 
 from fastapi import Depends, Header, HTTPException, WebSocket, status
@@ -12,6 +12,7 @@ from app.models.user import User
 from app.services.auth import AuthService
 from app.services.session_updates import SessionBroadcaster
 from app.services.ssh_manager import SessionManager
+from app.services.event_loop_lag import EventLoopLag
 
 
 @dataclass(frozen=True)
@@ -23,6 +24,7 @@ class AppState:
     session_broadcaster: "SessionBroadcaster"
     start_enhanced_retry_worker: Callable[[], None] | None = None
     start_session_sync_worker: Callable[[], None] | None = None
+    event_loop_lag: EventLoopLag = field(default_factory=EventLoopLag)
 
 
 def get_state() -> AppState:

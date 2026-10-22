@@ -6,6 +6,8 @@ import { getServerClock, type ServerClock } from "../../lib/api";
 import type { FileInfo } from "../../lib/api";
 import type { TerminalSessionState } from "./useTerminalSession";
 import { TerminalLoading } from "./TerminalLoading";
+import { TerminalComposer } from "./TerminalComposer";
+import { TerminalLatencyStatus } from "./TerminalLatencyStatus";
 
 function cx(...values: Array<string | false | null | undefined>): string {
   return values.filter(Boolean).join(" ");
@@ -207,23 +209,7 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
           <span className="font-mono">{state.sessionInfo ? new Date(state.sessionInfo.started_at).toLocaleString() : ""}</span>
           <span aria-hidden="true">·</span>
           <span>{state.networkProfileLabel}</span>
-          {state.terminalLatencyMs !== null ? (
-            <span className="font-mono" title={state.t(
-              `终端长连接往返时间，包含浏览器和网关调度，不包含 SSH 和画面渲染；HTTP 健康检查：${state.browserLatencyMs ?? "—"}ms`,
-              `Terminal connection round trip, including browser/gateway scheduling, excluding SSH and rendering; HTTP health check: ${state.browserLatencyMs ?? "—"}ms`,
-            )}>
-              {state.t("终端", "Terminal")} {state.terminalLatencyMs}ms
-            </span>
-          ) : state.browserLatencyMs !== null ? (
-            <span className="font-mono" title={state.t("浏览器到网关的 HTTP 往返时间，包含请求处理耗时", "Browser-to-gateway HTTP round trip, including request processing")}>
-              {state.t("网页", "Web")} {state.browserLatencyMs}ms
-            </span>
-          ) : null}
-          {state.targetLatencyMs !== null ? (
-            <span className="font-mono" title={state.t("网关到 SSH 目标的命令往返时间，不包含浏览器网络和画面渲染", "Gateway-to-SSH command round trip, excluding browser network and rendering")}>
-              SSH {state.targetLatencyMs}ms
-            </span>
-          ) : null}
+          <TerminalLatencyStatus {...state} />
         </div>
         <div className="ml-auto flex items-center gap-1">
           {state.targetLatencyMs !== null ? (
@@ -370,6 +356,7 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
               </div>
             ) : null}
           </div>
+          <TerminalComposer key={state.sessionId} connected={state.connectionState === "open"} t={state.t} onFill={state.fillTerminalDraft} />
         </div>
         <div
           onMouseDown={handleMouseDown}
