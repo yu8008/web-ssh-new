@@ -154,13 +154,14 @@ const inputWriter = createTerminalInputWriter(window, (data) => {
   }
 });
 terminal.onData(inputWriter.write);
-attachTerminalShortcuts(terminal, selection.getText, (text) => { element("copied").textContent = text; });
+const shortcuts = attachTerminalShortcuts(terminal, selection.getText, (text) => { element("copied").textContent = text; });
 const wheelController = attachTerminalWheel(terminal, element("terminal"), () => parameters.has("enhanced"), inputWriter.write);
 element("copy").addEventListener("click", () => { element("copied").textContent = selection.getText(); });
 element("repaint").addEventListener("click", () => render(true));
 element("dispose").addEventListener("click", () => {
   clearInterval(steadyOutput);
   selection.dispose();
+  shortcuts.dispose();
   inputWriter.dispose();
   wheelController.dispose();
   output.dispose();

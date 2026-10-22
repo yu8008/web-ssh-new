@@ -68,6 +68,10 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 390, height: 844 
           await expect(page.locator(".xterm")).toHaveCount(0);
           await expect.poll(() => terminalSockets.size).toBe(0);
           await expect(page.locator("html")).toHaveAttribute("data-navigation-test", "same-document");
+          // Terminal-only shortcuts must be released on the workbench.
+          expect(await page.evaluate(() => document.body.dispatchEvent(new KeyboardEvent("keydown", {
+            key: "F2", code: "F2", keyCode: 113, bubbles: true, cancelable: true,
+          })))).toBe(true);
           expect(errors).toEqual([]);
         }
       });

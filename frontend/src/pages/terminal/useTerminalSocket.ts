@@ -516,6 +516,7 @@ export function useTerminalSocket({
     let rendered: { dispose(): void } | null = null;
     let rendering: ReturnType<typeof configureTerminalRendering> | null = null;
     let pasteController: ReturnType<typeof attachTerminalPaste> | null = null;
+    let shortcuts: ReturnType<typeof attachTerminalShortcuts> | null = null;
     let resizeObserver: ResizeObserver | null = null;
 
     // 会话切换时清空上一个会话遗留的选区状态。
@@ -638,7 +639,7 @@ export function useTerminalSocket({
       });
       pasteControllerRef.current = pasteController;
 
-      attachTerminalShortcuts(term, getSelectionText, (text) => copyRequestRef.current?.(text));
+      shortcuts = attachTerminalShortcuts(term, getSelectionText, (text) => copyRequestRef.current?.(text));
 
       wheelController = attachTerminalWheel(term, terminalContainer, () => enhancedSessionRef.current, inputWriter.write);
       handleResize = () => {
@@ -661,6 +662,7 @@ export function useTerminalSocket({
     return () => {
       disposed = true;
       wheelController?.dispose();
+      shortcuts?.dispose();
       if (handleResize) {
         window.removeEventListener("resize", handleResize);
       }
