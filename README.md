@@ -8,20 +8,26 @@ WebSSH Gateway 是一个面向运维、开发和 AI CLI 工作流的浏览器 SS
 
 本仓库重点优化终端历史滚动、大范围拖选、深浅色即时切换，以及 CLI 本轮结束和等待用户操作时的声音提醒。同一会话的近期输出和通知记录可以在其他设备上查看。
 
+界面采用统一的控制室视觉：暖黑／纸白主题、信号橙强调色、原创透视轨道图形，以及本地字体。登录、会话工作空间、终端、文件、监控、设置和日志使用同一套设计令牌与 Lucide 图标；移动端提供连接列表、会话搜索及适配触控的操作。展示动效尊重系统的“减少动态效果”设置。
+
 [快速开始](#快速开始) · [CLI 任务提醒](#cli-任务提醒) · [架构说明](./docs/ARCHITECTURE.md) · [部署指南](./docs/DEPLOYMENT.md)
 
 ## 项目预览
 
-![WebSSH Gateway 项目总览](./docs/images/preview-overview.png)
-![WebSSH Gateway 终端与文件管理](./docs/images/preview-terminal.png)
+以下为当前界面截图，使用演示数据。
+
+![WebSSH Gateway 登录](./docs/images/gateway-login.png)
+
+![WebSSH Gateway 项目总览](./docs/images/gateway-workspace.png)
+![WebSSH Gateway 终端与文件管理](./docs/images/gateway-terminal.png)
 
 ## 移动端适配
 
 移动端提供专门的触摸友好布局与交互，支持在手机浏览器中完成终端操作、文件管理与系统监控。
 
-<img src="./docs/images/mobile-overview.jpg" alt="移动端概览" width="320" style="max-width: 100%;" />
-<img src="./docs/images/mobile-terminal.jpg" alt="移动端终端" width="320" style="max-width: 100%;" />
-<img src="./docs/images/mobile-fileManagement.jpg" alt="移动端文件管理" width="320" style="max-width: 100%;" />
+<img src="./docs/images/gateway-mobile-workspace.png" alt="移动端概览" width="320" style="max-width: 100%;" />
+<img src="./docs/images/gateway-mobile-terminal.png" alt="移动端终端" width="320" style="max-width: 100%;" />
+<img src="./docs/images/gateway-mobile-files.png" alt="移动端文件管理" width="320" style="max-width: 100%;" />
 <img src="./docs/images/mobile-systemStatus.jpg" alt="移动端系统状态" width="320" style="max-width: 100%;" />
 
 ## 核心特性

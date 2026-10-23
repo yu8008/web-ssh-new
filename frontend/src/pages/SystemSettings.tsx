@@ -1,4 +1,5 @@
 import React from "react";
+import { PageFrame } from "../components/PageFrame";
 import { Button } from "../components/Button";
 import { Card } from "../components/Card";
 import { Input } from "../components/Input";
@@ -36,8 +37,6 @@ function buildRetryScheduleValues(attemptCount: number, scheduleSeconds: number[
 export function SystemSettingsPage() {
   const {
     isDark,
-    toggleTheme,
-    toggleLanguage,
     language,
     systemSettings,
     systemSettingsLoading,
@@ -146,48 +145,21 @@ export function SystemSettingsPage() {
 
   const retryAttemptCount = Number(form.enhancedRetryMaxAttempts);
   const canRenderRetrySchedule = Number.isInteger(retryAttemptCount) && retryAttemptCount >= 1;
-  const sectionClassName = isDark ? "border-slate-700 bg-slate-950/40" : "border-slate-200 bg-slate-50";
-  const hintClassName = isDark ? "text-slate-400" : "text-slate-500";
-  const subtleClassName = isDark ? "text-slate-500" : "text-slate-500";
+  const sectionClassName = isDark ? "border-line bg-canvas/40" : "border-line bg-elevated";
+  const hintClassName = isDark ? "text-muted" : "text-muted";
+  const subtleClassName = isDark ? "text-muted" : "text-muted";
 
   return (
-    <div className={`min-h-screen px-4 py-6 transition-colors duration-300 ${isDark ? "bg-slate-950 text-slate-100 dark-scrollbar" : "bg-gray-100 text-slate-900 light-scrollbar"}`}>
-      <div className="mx-auto max-w-4xl space-y-6">
-        <div className={`flex flex-wrap items-start justify-between gap-3 pb-4 ${isDark ? "border-b border-slate-800" : "border-b border-slate-200"}`}>
-          <div>
-            <h1 className="text-2xl font-semibold">{t("系统设置", "System Settings")}</h1>
-            <p className={`mt-1 text-sm ${isDark ? "text-slate-400" : "text-slate-500"}`}>
-              {t("管理会话行为、终端显示和粘贴图片缓存，保存后应用。", "Manage session behavior, terminal display, and pasted image caching, then save to apply.")}
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="ghost" lightMode={!isDark} onClick={toggleLanguage}>
-              {language === "en-US" ? "中文" : "EN"}
-            </Button>
-            <Button variant="ghost" lightMode={!isDark} onClick={toggleTheme}>
-              {isDark ? t("浅色", "Light") : t("深色", "Dark")}
-            </Button>
-            <Button
-              variant="secondary"
-              lightMode={!isDark}
-              onClick={() => {
-                window.location.href = "/sessions";
-              }}
-            >
-              {t("返回会话管理", "Back to Sessions")}
-            </Button>
-          </div>
-        </div>
-
+    <PageFrame title={t("系统设置", "System settings")} description={t("让每一个细节，都按你的方式运行。", "Make every detail work your way.")} index="03">
         <Card
           title={t("全局运行设置", "Global Runtime Settings")}
           description={t("这里只包含当前已支持页面化管理且可即时生效的系统级参数。", "This page only includes system-wide settings that are currently supported for immediate runtime updates.")}
-          className={!isDark ? "bg-white border-slate-200 shadow-sm" : ""}
-          titleClassName={!isDark ? "text-slate-900" : ""}
-          descClassName={!isDark ? "text-slate-500" : ""}
+          className={!isDark ? "bg-surface border-line shadow-sm" : ""}
+          titleClassName={!isDark ? "text-ink" : ""}
+          descClassName={!isDark ? "text-muted" : ""}
         >
           {systemSettingsLoading && !systemSettings ? (
-            <div className={`text-sm ${isDark ? "text-slate-400" : "text-slate-500"}`}>{t("加载系统设置中...", "Loading system settings...")}</div>
+            <div className={`text-sm ${isDark ? "text-muted" : "text-muted"}`}>{t("加载系统设置中...", "Loading system settings...")}</div>
           ) : (
             <form className="space-y-5" onSubmit={handleSave}>
               <div className={`rounded-xl border p-4 ${sectionClassName}`}>
@@ -241,7 +213,7 @@ export function SystemSettingsPage() {
                       type="checkbox"
                       checked={form.showSessionStatusSummary}
                       onChange={(event) => setForm((prev) => ({ ...prev, showSessionStatusSummary: event.target.checked }))}
-                      className="mt-1 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                      className="mt-1 h-4 w-4 rounded border-line-strong text-brand focus:ring-brand"
                     />
                     <span className="space-y-1">
                       <span className="block text-sm font-medium">{t("是否开启会话管理页面系统状态展示", "Enable system status display on session management")}</span>
@@ -260,7 +232,7 @@ export function SystemSettingsPage() {
                       value={form.sessionStatusRefreshIntervalSeconds}
                       onChange={(event) => setForm((prev) => ({ ...prev, sessionStatusRefreshIntervalSeconds: event.target.value }))}
                       disabled={!form.showSessionStatusSummary}
-                      className={`mt-2 ${!isDark ? "border-slate-300 bg-white text-slate-900 placeholder:text-slate-400" : ""} ${!form.showSessionStatusSummary ? "opacity-60" : ""}`}
+                      className={`mt-2 ${!isDark ? "border-line-strong bg-surface text-ink placeholder:text-muted" : ""} ${!form.showSessionStatusSummary ? "opacity-60" : ""}`}
                     />
                     <p className={`mt-2 text-xs ${hintClassName}`}>
                       {t("仅在开启展示时生效，默认每 3 秒更新一次。", "Only applies when display is enabled. Default refresh is every 3 seconds.")}
@@ -286,7 +258,7 @@ export function SystemSettingsPage() {
                       max={20}
                       value={form.enhancedRetryMaxAttempts}
                       onChange={(event) => handleRetryAttemptsChange(event.target.value)}
-                      className={!isDark ? "border-slate-300 bg-white text-slate-900 placeholder:text-slate-400" : ""}
+                      className={!isDark ? "border-line-strong bg-surface text-ink placeholder:text-muted" : ""}
                     />
                     <p className={`text-xs ${subtleClassName}`}>
                       {t("修改次数后，下方会自动同步对应数量的间隔输入项。", "Changing the attempt count automatically syncs the delay inputs below.")}
@@ -306,7 +278,7 @@ export function SystemSettingsPage() {
                             max={3600}
                             value={value}
                             onChange={(event) => handleRetryScheduleChange(index, event.target.value)}
-                            className={`mt-2 ${!isDark ? "border-slate-300 bg-white text-slate-900 placeholder:text-slate-400" : ""}`}
+                            className={`mt-2 ${!isDark ? "border-line-strong bg-surface text-ink placeholder:text-muted" : ""}`}
                           />
                         </div>
                       ))}
@@ -325,7 +297,7 @@ export function SystemSettingsPage() {
                     type="checkbox"
                     checked={form.defaultEnableEnhancedSession}
                     onChange={(event) => setForm((prev) => ({ ...prev, defaultEnableEnhancedSession: event.target.checked }))}
-                    className="mt-1 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                    className="mt-1 h-4 w-4 rounded border-line-strong text-brand focus:ring-brand"
                   />
                   <span className="space-y-1">
                     <span className="block text-sm font-medium">{t("系统支持时默认开启增强持久化连接", "Enable enhanced persistence by default when supported")}</span>
@@ -358,7 +330,6 @@ export function SystemSettingsPage() {
         <section id="clipboard-image-cache" className="scroll-mt-6">
           <ClipboardImageCache />
         </section>
-      </div>
-    </div>
+    </PageFrame>
   );
 }

@@ -16,8 +16,8 @@ function getSessionStatusClassName(status: string, isDark: boolean) {
 
   if (status === "disconnected") {
     return isDark
-      ? "border-slate-600 bg-slate-800/80 text-slate-300"
-      : "border-slate-200 bg-slate-100 text-slate-600";
+      ? "border-line-strong bg-elevated/80 text-ink-soft"
+      : "border-line bg-elevated text-ink-soft";
   }
 
   return isDark

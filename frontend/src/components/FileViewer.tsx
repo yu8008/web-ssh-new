@@ -109,7 +109,7 @@ function highlightLine(line: string, language: string): React.ReactNode {
     }
     const text = match[0];
     const className = match[1]
-      ? "text-slate-500 italic"
+      ? "text-muted italic"
       : match[2]
         ? "text-emerald-300"
         : match[3]
@@ -296,8 +296,8 @@ export function FileViewer({ sessionId, path, isDark, onClose }: FileViewerProps
   const secondaryButton = cx(
     "inline-flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-xs",
     isDark
-      ? "border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
-      : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+      ? "border-line bg-surface text-ink hover:bg-elevated"
+      : "border-line-strong bg-surface text-ink-soft hover:bg-elevated"
   );
 
   return (
@@ -315,11 +315,11 @@ export function FileViewer({ sessionId, path, isDark, onClose }: FileViewerProps
       <div
         className={cx(
           "flex h-full max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-xl border shadow-2xl",
-          isDark ? "border-slate-700 bg-slate-950 text-slate-100" : "border-slate-200 bg-white text-slate-900"
+          isDark ? "border-line bg-canvas text-ink" : "border-line bg-surface text-ink"
         )}
       >
-        <div className={cx("flex items-start gap-3 border-b px-4 py-3", isDark ? "border-slate-800" : "border-slate-200")}>
-          <div className={cx("mt-0.5 rounded-md p-1.5", isDark ? "bg-slate-800 text-indigo-300" : "bg-slate-100 text-indigo-600")}>
+        <div className={cx("flex items-start gap-3 border-b px-4 py-3", isDark ? "border-line" : "border-line")}>
+          <div className={cx("mt-0.5 rounded-md p-1.5", isDark ? "bg-elevated text-brand" : "bg-elevated text-brand")}>
             <HeaderIcon className="h-4 w-4" aria-hidden="true" />
           </div>
           <div className="min-w-0 flex-1">
@@ -336,7 +336,7 @@ export function FileViewer({ sessionId, path, isDark, onClose }: FileViewerProps
                 </span>
               ) : null}
             </div>
-            <div className="mt-0.5 truncate font-mono text-[11px] text-slate-500" title={meta}>
+            <div className="mt-0.5 truncate font-mono text-[11px] text-muted" title={meta}>
               {meta}
             </div>
           </div>
@@ -352,7 +352,7 @@ export function FileViewer({ sessionId, path, isDark, onClose }: FileViewerProps
                 type="button"
                 onClick={() => void handleSave()}
                 disabled={saving}
-                className="inline-flex h-8 items-center gap-1.5 rounded-md bg-indigo-500 px-2.5 text-xs font-medium text-white hover:bg-indigo-400 disabled:opacity-60"
+                className="inline-flex h-8 items-center gap-1.5 rounded-md bg-brand px-2.5 text-xs font-medium text-white hover:bg-brand disabled:opacity-60"
               >
                 <Save className="h-3.5 w-3.5" aria-hidden="true" />
                 {t("保存", "Save")}
@@ -368,8 +368,8 @@ export function FileViewer({ sessionId, path, isDark, onClose }: FileViewerProps
               className={cx(
                 "inline-flex h-8 w-8 items-center justify-center rounded-md border",
                 isDark
-                  ? "border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800"
-                  : "border-slate-300 bg-white text-slate-600 hover:bg-slate-100"
+                  ? "border-line bg-surface text-ink-soft hover:bg-elevated"
+                  : "border-line-strong bg-surface text-ink-soft hover:bg-elevated"
               )}
               aria-label={t("关闭", "Close")}
               title={t("关闭 (Esc)", "Close (Esc)")}
@@ -379,9 +379,9 @@ export function FileViewer({ sessionId, path, isDark, onClose }: FileViewerProps
           </div>
         </div>
 
-        <div className={cx("relative min-h-0 flex-1", isDark ? "bg-slate-950" : "bg-slate-50")}>
+        <div className={cx("relative min-h-0 flex-1", isDark ? "bg-canvas" : "bg-elevated")}>
           {loading ? (
-            <div className="flex h-full items-center justify-center gap-2 text-sm text-slate-400">
+            <div className="flex h-full items-center justify-center gap-2 text-sm text-muted">
               <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
               {t("加载中...", "Loading...")}
             </div>
@@ -391,7 +391,7 @@ export function FileViewer({ sessionId, path, isDark, onClose }: FileViewerProps
               <button
                 type="button"
                 onClick={() => void load(false)}
-                className="rounded-md bg-indigo-500 px-3 py-1.5 text-xs text-white hover:bg-indigo-400"
+                className="rounded-md bg-brand px-3 py-1.5 text-xs text-white hover:bg-brand"
               >
                 {t("重试", "Retry")}
               </button>
@@ -404,8 +404,8 @@ export function FileViewer({ sessionId, path, isDark, onClose }: FileViewerProps
             <iframe src={mediaUrl} title={fileName} className="h-full w-full" />
           ) : tooLarge ? (
             <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-              <FileText className="h-8 w-8 text-slate-500" aria-hidden="true" />
-              <p className={cx("text-sm", isDark ? "text-slate-300" : "text-slate-600")}>
+              <FileText className="h-8 w-8 text-muted" aria-hidden="true" />
+              <p className={cx("text-sm", isDark ? "text-ink-soft" : "text-ink-soft")}>
                 {t(
                   "文件较大 (" + formatBytes(size) + ")，超过 1 MB 的默认限制",
                   "File is large (" + formatBytes(size) + "), above the 1 MB default limit"
@@ -415,7 +415,7 @@ export function FileViewer({ sessionId, path, isDark, onClose }: FileViewerProps
                 <button
                   type="button"
                   onClick={() => void load(true)}
-                  className="rounded-md bg-indigo-500 px-3 py-1.5 text-xs text-white hover:bg-indigo-400"
+                  className="rounded-md bg-brand px-3 py-1.5 text-xs text-white hover:bg-brand"
                 >
                   {t("仍然加载", "Load anyway")}
                 </button>
@@ -426,14 +426,14 @@ export function FileViewer({ sessionId, path, isDark, onClose }: FileViewerProps
             </div>
           ) : binary ? (
             <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-              <FileText className="h-8 w-8 text-slate-500" aria-hidden="true" />
-              <p className={cx("text-sm", isDark ? "text-slate-300" : "text-slate-600")}>
+              <FileText className="h-8 w-8 text-muted" aria-hidden="true" />
+              <p className={cx("text-sm", isDark ? "text-ink-soft" : "text-ink-soft")}>
                 {t("该文件是二进制内容，无法以文本预览", "This file looks binary and cannot be previewed as text")}
               </p>
               <button
                 type="button"
                 onClick={() => void handleDownload()}
-                className="rounded-md bg-indigo-500 px-3 py-1.5 text-xs text-white hover:bg-indigo-400"
+                className="rounded-md bg-brand px-3 py-1.5 text-xs text-white hover:bg-brand"
               >
                 {t("下载", "Download")}
               </button>
@@ -445,7 +445,7 @@ export function FileViewer({ sessionId, path, isDark, onClose }: FileViewerProps
               spellCheck={false}
               className={cx(
                 "h-full w-full resize-none bg-transparent p-4 font-mono text-[13px] leading-[1.55] outline-none",
-                isDark ? "text-slate-200" : "text-slate-800"
+                isDark ? "text-ink" : "text-ink"
               )}
             />
           ) : (
@@ -457,13 +457,13 @@ export function FileViewer({ sessionId, path, isDark, onClose }: FileViewerProps
                       className={cx(
                         "sticky left-0 w-12 shrink-0 select-none border-r px-2 text-right text-[11px]",
                         isDark
-                          ? "border-slate-800 bg-slate-950 text-slate-600"
-                          : "border-slate-200 bg-slate-50 text-slate-400"
+                          ? "border-line bg-canvas text-ink-soft"
+                          : "border-line bg-elevated text-muted"
                       )}
                     >
                       {index + 1}
                     </span>
-                    <span className={cx("whitespace-pre px-3", isDark ? "text-slate-200" : "text-slate-800")}>
+                    <span className={cx("whitespace-pre px-3", isDark ? "text-ink" : "text-ink")}>
                       {highlightable && line ? highlightLine(line, fileLanguage) : line || " "}
                     </span>
                   </div>
@@ -476,7 +476,7 @@ export function FileViewer({ sessionId, path, isDark, onClose }: FileViewerProps
         <div
           className={cx(
             "flex flex-wrap items-center justify-between gap-2 border-t px-4 py-2 text-[11px]",
-            isDark ? "border-slate-800 text-slate-500" : "border-slate-200 text-slate-500"
+            isDark ? "border-line text-muted" : "border-line text-muted"
           )}
         >
           <div className="flex flex-wrap items-center gap-3">

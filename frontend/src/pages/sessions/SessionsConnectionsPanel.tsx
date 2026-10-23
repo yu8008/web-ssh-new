@@ -30,7 +30,7 @@ function getProbeStatusClass(state: SessionsState, status?: string) {
   if (status === "verifying") {
     return state.isDark ? "border-sky-400/40 bg-sky-500/10 text-sky-200" : "border-sky-200 bg-sky-50 text-sky-700";
   }
-  return state.isDark ? "border-slate-600 bg-slate-800 text-slate-300" : "border-slate-200 bg-slate-100 text-slate-600";
+  return state.isDark ? "border-line-strong bg-elevated text-ink-soft" : "border-line bg-elevated text-ink-soft";
 }
 
 export function SessionsConnectionsPanel({ state }: SessionsConnectionsPanelProps) {
@@ -48,15 +48,15 @@ export function SessionsConnectionsPanel({ state }: SessionsConnectionsPanelProp
   const editPasswordId = React.useId();
   const editPrivateKeyId = React.useId();
   const editKeyPassphraseId = React.useId();
-  const fieldLabelClassName = `mb-1 block text-xs font-medium ${state.isDark ? "text-slate-300" : "text-slate-700"}`;
+  const fieldLabelClassName = `mb-1 block text-xs font-medium ${state.isDark ? "text-ink-soft" : "text-ink-soft"}`;
 
   return (
     <Card
       title={state.t("新增 SSH 连接", "New SSH Connection")}
       description={state.t("保存连接信息并发起会话", "Save connection details and start sessions")}
-      className={!state.isDark ? "bg-white border-slate-200 shadow-sm" : ""}
-      titleClassName={!state.isDark ? "text-slate-900" : ""}
-      descClassName={!state.isDark ? "text-slate-500" : ""}
+      className={!state.isDark ? "bg-surface border-line shadow-sm" : ""}
+      titleClassName={!state.isDark ? "text-ink" : ""}
+      descClassName={!state.isDark ? "text-muted" : ""}
     >
       <div className="space-y-4">
         <Button
@@ -90,7 +90,7 @@ export function SessionsConnectionsPanel({ state }: SessionsConnectionsPanelProp
                 placeholder={state.t("例如：生产服务器", "Example: production server")}
                 value={state.form.name}
                 onChange={(event) => state.setForm({ ...state.form, name: event.target.value })}
-                className={!state.isDark ? "border-slate-300 bg-white text-slate-900 placeholder:text-slate-400" : ""}
+                className={!state.isDark ? "border-line-strong bg-surface text-ink placeholder:text-muted" : ""}
               />
             </div>
             <div>
@@ -102,7 +102,7 @@ export function SessionsConnectionsPanel({ state }: SessionsConnectionsPanelProp
                 placeholder={state.t("主机 IP 或域名", "Host IP or domain")}
                 value={state.form.host}
                 onChange={(event) => state.setForm({ ...state.form, host: event.target.value })}
-                className={!state.isDark ? "border-slate-300 bg-white text-slate-900 placeholder:text-slate-400" : ""}
+                className={!state.isDark ? "border-line-strong bg-surface text-ink placeholder:text-muted" : ""}
               />
             </div>
             <div>
@@ -115,7 +115,7 @@ export function SessionsConnectionsPanel({ state }: SessionsConnectionsPanelProp
                 type="number"
                 value={state.form.port}
                 onChange={(event) => state.setForm({ ...state.form, port: Number(event.target.value) })}
-                className={!state.isDark ? "border-slate-300 bg-white text-slate-900 placeholder:text-slate-400" : ""}
+                className={!state.isDark ? "border-line-strong bg-surface text-ink placeholder:text-muted" : ""}
               />
             </div>
             <div>
@@ -127,7 +127,7 @@ export function SessionsConnectionsPanel({ state }: SessionsConnectionsPanelProp
                 placeholder={state.t("登录用户名", "Login username")}
                 value={state.form.username}
                 onChange={(event) => state.setForm({ ...state.form, username: event.target.value })}
-                className={!state.isDark ? "border-slate-300 bg-white text-slate-900 placeholder:text-slate-400" : ""}
+                className={!state.isDark ? "border-line-strong bg-surface text-ink placeholder:text-muted" : ""}
               />
             </div>
             <div className="flex gap-2">
@@ -161,7 +161,7 @@ export function SessionsConnectionsPanel({ state }: SessionsConnectionsPanelProp
                   type="password"
                   value={state.form.password}
                   onChange={(event) => state.setForm({ ...state.form, password: event.target.value })}
-                  className={!state.isDark ? "border-slate-300 bg-white text-slate-900 placeholder:text-slate-400" : ""}
+                  className={!state.isDark ? "border-line-strong bg-surface text-ink placeholder:text-muted" : ""}
                 />
               </div>
             ) : (
@@ -172,7 +172,7 @@ export function SessionsConnectionsPanel({ state }: SessionsConnectionsPanelProp
                   </label>
                   <textarea
                     id={createPrivateKeyId}
-                    className={`min-h-[120px] w-full rounded-md border px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-400 ${state.isDark ? "border-slate-700 bg-slate-900 text-slate-100 placeholder:text-slate-500" : "border-slate-300 bg-white text-slate-900 placeholder:text-slate-400"}`}
+                    className={`min-h-[120px] w-full rounded-md border px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand ${state.isDark ? "border-line bg-surface text-ink placeholder:text-muted" : "border-line-strong bg-surface text-ink placeholder:text-muted"}`}
                     placeholder={state.t("粘贴私钥内容", "Paste private key content")}
                     value={state.form.private_key}
                     onChange={(event) => state.setForm({ ...state.form, private_key: event.target.value })}
@@ -188,7 +188,7 @@ export function SessionsConnectionsPanel({ state }: SessionsConnectionsPanelProp
                     type="password"
                     value={state.form.key_passphrase}
                     onChange={(event) => state.setForm({ ...state.form, key_passphrase: event.target.value })}
-                    className={!state.isDark ? "border-slate-300 bg-white text-slate-900 placeholder:text-slate-400" : ""}
+                    className={!state.isDark ? "border-line-strong bg-surface text-ink placeholder:text-muted" : ""}
                   />
                 </div>
               </>
@@ -199,10 +199,10 @@ export function SessionsConnectionsPanel({ state }: SessionsConnectionsPanelProp
           </form>
         ) : null}
       </div>
-      <div className={`mt-6 pt-6 space-y-3 ${state.isDark ? "border-t border-slate-700" : "border-t border-slate-200"}`}>
-        <p className={`text-sm font-semibold ${state.isDark ? "text-slate-200" : "text-slate-700"}`}>{state.t("已保存连接", "Saved connections")}</p>
+      <div className={`mt-6 pt-6 space-y-3 ${state.isDark ? "border-t border-line" : "border-t border-line"}`}>
+        <p className={`text-sm font-semibold ${state.isDark ? "text-ink" : "text-ink-soft"}`}>{state.t("已保存连接", "Saved connections")}</p>
         {state.connections.map((conn) => (
-          <div key={conn.id} className={`rounded-md border p-3 text-sm ${state.isDark ? "border-slate-700 bg-slate-900/60 text-slate-300" : "border-slate-200 bg-slate-50 text-slate-600"}`}>
+          <div key={conn.id} className={`rounded-md border p-3 text-sm ${state.isDark ? "border-line bg-surface/60 text-ink-soft" : "border-line bg-elevated text-ink-soft"}`}>
             {state.editingConnection?.id === conn.id ? (
               <form className="space-y-3" onSubmit={state.handleUpdateConnection}>
                 <div>
@@ -214,7 +214,7 @@ export function SessionsConnectionsPanel({ state }: SessionsConnectionsPanelProp
                     placeholder={state.t("例如：生产服务器", "Example: production server")}
                     value={state.editForm.name}
                     onChange={(event) => state.setEditForm({ ...state.editForm, name: event.target.value })}
-                    className={!state.isDark ? "border-slate-300 bg-white text-slate-900 placeholder:text-slate-400" : ""}
+                    className={!state.isDark ? "border-line-strong bg-surface text-ink placeholder:text-muted" : ""}
                   />
                 </div>
                 <div>
@@ -226,7 +226,7 @@ export function SessionsConnectionsPanel({ state }: SessionsConnectionsPanelProp
                     placeholder={state.t("主机 IP 或域名", "Host IP or domain")}
                     value={state.editForm.host}
                     onChange={(event) => state.setEditForm({ ...state.editForm, host: event.target.value })}
-                    className={!state.isDark ? "border-slate-300 bg-white text-slate-900 placeholder:text-slate-400" : ""}
+                    className={!state.isDark ? "border-line-strong bg-surface text-ink placeholder:text-muted" : ""}
                   />
                 </div>
                 <div>
@@ -239,7 +239,7 @@ export function SessionsConnectionsPanel({ state }: SessionsConnectionsPanelProp
                     type="number"
                     value={state.editForm.port}
                     onChange={(event) => state.setEditForm({ ...state.editForm, port: Number(event.target.value) })}
-                    className={!state.isDark ? "border-slate-300 bg-white text-slate-900 placeholder:text-slate-400" : ""}
+                    className={!state.isDark ? "border-line-strong bg-surface text-ink placeholder:text-muted" : ""}
                   />
                 </div>
                 <div>
@@ -251,7 +251,7 @@ export function SessionsConnectionsPanel({ state }: SessionsConnectionsPanelProp
                     placeholder={state.t("登录用户名", "Login username")}
                     value={state.editForm.username}
                     onChange={(event) => state.setEditForm({ ...state.editForm, username: event.target.value })}
-                    className={!state.isDark ? "border-slate-300 bg-white text-slate-900 placeholder:text-slate-400" : ""}
+                    className={!state.isDark ? "border-line-strong bg-surface text-ink placeholder:text-muted" : ""}
                   />
                 </div>
                 <div className="flex gap-2">
@@ -274,7 +274,7 @@ export function SessionsConnectionsPanel({ state }: SessionsConnectionsPanelProp
                     {state.t("私钥", "Private key")}
                   </Button>
                 </div>
-                <p className={`text-xs ${state.isDark ? "text-slate-500" : "text-slate-400"}`}>{state.t("留空则保持原凭据不变", "Leave empty to keep original credentials")}</p>
+                <p className={`text-xs ${state.isDark ? "text-muted" : "text-muted"}`}>{state.t("留空则保持原凭据不变", "Leave empty to keep original credentials")}</p>
                 {state.editForm.auth_type === "password" ? (
                   <div>
                     <label htmlFor={editPasswordId} className={fieldLabelClassName}>
@@ -286,7 +286,7 @@ export function SessionsConnectionsPanel({ state }: SessionsConnectionsPanelProp
                       type="password"
                       value={state.editForm.password}
                       onChange={(event) => state.setEditForm({ ...state.editForm, password: event.target.value })}
-                      className={!state.isDark ? "border-slate-300 bg-white text-slate-900 placeholder:text-slate-400" : ""}
+                      className={!state.isDark ? "border-line-strong bg-surface text-ink placeholder:text-muted" : ""}
                     />
                   </div>
                 ) : (
@@ -297,7 +297,7 @@ export function SessionsConnectionsPanel({ state }: SessionsConnectionsPanelProp
                       </label>
                       <textarea
                         id={editPrivateKeyId}
-                        className={`min-h-[80px] w-full rounded-md border px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-400 ${state.isDark ? "border-slate-700 bg-slate-900 text-slate-100 placeholder:text-slate-500" : "border-slate-300 bg-white text-slate-900 placeholder:text-slate-400"}`}
+                        className={`min-h-[80px] w-full rounded-md border px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand ${state.isDark ? "border-line bg-surface text-ink placeholder:text-muted" : "border-line-strong bg-surface text-ink placeholder:text-muted"}`}
                         placeholder={state.t("留空则保持原私钥", "Leave empty to keep current private key")}
                         value={state.editForm.private_key}
                         onChange={(event) => state.setEditForm({ ...state.editForm, private_key: event.target.value })}
@@ -313,7 +313,7 @@ export function SessionsConnectionsPanel({ state }: SessionsConnectionsPanelProp
                         type="password"
                         value={state.editForm.key_passphrase}
                         onChange={(event) => state.setEditForm({ ...state.editForm, key_passphrase: event.target.value })}
-                        className={!state.isDark ? "border-slate-300 bg-white text-slate-900 placeholder:text-slate-400" : ""}
+                        className={!state.isDark ? "border-line-strong bg-surface text-ink placeholder:text-muted" : ""}
                       />
                     </div>
                   </>
@@ -330,11 +330,11 @@ export function SessionsConnectionsPanel({ state }: SessionsConnectionsPanelProp
             ) : (
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="space-y-1">
-                  <p className={`text-base font-semibold ${state.isDark ? "text-slate-100" : "text-slate-800"}`}>{conn.name}</p>
-                  <p className={`text-xs ${state.isDark ? "text-slate-400" : "text-slate-500"}`}>
+                  <p className={`text-base font-semibold ${state.isDark ? "text-ink" : "text-ink"}`}>{conn.name}</p>
+                  <p className={`text-xs ${state.isDark ? "text-muted" : "text-muted"}`}>
                     {conn.username}@{conn.host}:{conn.port}
                   </p>
-                  <p className={`text-xs ${state.isDark ? "text-slate-500" : "text-slate-400"}`}>
+                  <p className={`text-xs ${state.isDark ? "text-muted" : "text-muted"}`}>
                     {state.t("创建", "Created")}: {new Date(conn.created_at).toLocaleString()} | {state.t("更新", "Updated")}: {new Date(conn.updated_at).toLocaleString()}
                   </p>
                   <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -342,7 +342,7 @@ export function SessionsConnectionsPanel({ state }: SessionsConnectionsPanelProp
                       {getProbeStatusLabel(state, conn.remote_probe_status)}
                     </span>
                     {conn.remote_probe_status === "verified" && conn.remote_arch && conn.remote_os ? (
-                      <span className={`text-xs ${state.isDark ? "text-slate-400" : "text-slate-500"}`}>
+                      <span className={`text-xs ${state.isDark ? "text-muted" : "text-muted"}`}>
                         {conn.remote_os} {conn.remote_arch}
                         {conn.enhanced_supported ? ` · ${state.t("支持增强", "Enhanced supported")}` : ""}
                       </span>
@@ -350,7 +350,7 @@ export function SessionsConnectionsPanel({ state }: SessionsConnectionsPanelProp
                     {conn.remote_probe_status === "failed" && conn.remote_probe_error ? (
                       <button
                         type="button"
-                        className={`inline-flex h-11 w-11 items-center justify-center rounded-full border transition focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${state.isDark ? "border-rose-400/50 text-rose-200 hover:bg-rose-500/10" : "border-rose-300 text-rose-700 hover:bg-rose-50"}`}
+                        className={`inline-flex h-11 w-11 items-center justify-center rounded-full border transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand ${state.isDark ? "border-rose-400/50 text-rose-200 hover:bg-rose-500/10" : "border-rose-300 text-rose-700 hover:bg-rose-50"}`}
                         title={conn.remote_probe_error}
                         aria-label={state.t("查看验证失败原因", "View verification failure reason")}
                         onClick={() => state.push(conn.remote_probe_error || state.t("验证失败", "Verification failed"))}
@@ -365,7 +365,7 @@ export function SessionsConnectionsPanel({ state }: SessionsConnectionsPanelProp
                     </p>
                   ) : null}
                   {conn.remote_probe_checked_at ? (
-                    <p className={`text-xs ${state.isDark ? "text-slate-500" : "text-slate-400"}`}>
+                    <p className={`text-xs ${state.isDark ? "text-muted" : "text-muted"}`}>
                       {state.t("最近验证", "Last verified")}: {new Date(conn.remote_probe_checked_at).toLocaleString()}
                     </p>
                   ) : null}

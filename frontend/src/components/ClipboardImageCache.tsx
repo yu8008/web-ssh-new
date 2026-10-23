@@ -115,9 +115,9 @@ export function ClipboardImageCache() {
     <Card
       title={t("临时图片缓存", "Temporary Image Cache")}
       description={t("管理通过 WebSSH Gateway 粘贴的图片。图片保存在所选 SSH 服务器，同一远程账号的连接共享缓存，包含旧版上传的临时图片。", "Manage images pasted through WebSSH Gateway, including older uploads. Images live on the selected SSH server; connections to the same remote account share this cache.")}
-      className={!isDark ? "bg-white border-slate-200 shadow-sm" : ""}
-      titleClassName={!isDark ? "text-slate-900" : ""}
-      descClassName={!isDark ? "text-slate-500" : ""}
+      className={!isDark ? "bg-surface border-line shadow-sm" : ""}
+      titleClassName={!isDark ? "text-ink" : ""}
+      descClassName={!isDark ? "text-muted" : ""}
     >
       <div className="space-y-4">
         <div className="flex flex-wrap items-end gap-3">

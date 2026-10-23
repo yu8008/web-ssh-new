@@ -87,7 +87,7 @@ function useServerClock(sessionId?: string) {
 
 function TerminalPanelFallback({ isDark }: { isDark: boolean }) {
   return (
-    <div className={`flex h-full min-h-[120px] items-center justify-center rounded-lg border text-sm ${isDark ? "border-slate-800 bg-slate-900/40 text-slate-400" : "border-slate-200 bg-white text-slate-500"}`}>
+    <div className={`flex h-full min-h-[120px] items-center justify-center rounded-lg border text-sm ${isDark ? "border-line bg-surface/40 text-muted" : "border-line bg-surface text-muted"}`}>
       加载中... / Loading...
     </div>
   );
@@ -177,8 +177,8 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
   }, [sidebarWidth, syncTerminalSize, terminalInstance]);
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-canvas text-ink transition-colors duration-300 supports-[height:100dvh]:h-dvh">
-      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line bg-chrome px-3 sm:px-4">
+    <div className="terminal-shell flex h-screen flex-col overflow-hidden bg-canvas text-ink transition-colors duration-300 supports-[height:100dvh]:h-dvh">
+      <header className="terminal-toolbar flex h-14 shrink-0 items-center gap-3 border-b border-line bg-chrome px-3 sm:px-4">
         <Button variant="ghost" size="icon" onClick={onBack} aria-label={state.t("返回会话管理", "Back")} title={state.t("返回会话管理", "Back")}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
@@ -261,7 +261,7 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
         <div className="flex-1 flex flex-col min-w-0">
           <div className="relative min-h-0 flex-1 p-3 sm:p-4">
             <div
-              className="h-full w-full overflow-hidden rounded-lg border border-line"
+              className="terminal-frame h-full w-full overflow-hidden rounded-lg border border-line"
               style={{ backgroundColor: state.isDark ? "#020617" : "#ffffff" }}
             >
               <div className={cx("h-full w-full p-3", !state.isDark && "xterm-light", !state.isDark && "xterm-light", state.sessionInfo?.enhanced_enabled && "xterm-tmux-enhanced")}>
@@ -346,7 +346,7 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
                   className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium shadow-lg transition ${
                     copyFlash
                       ? "border-emerald-400 bg-emerald-500 text-white"
-                      : "border-indigo-400/60 bg-indigo-500 text-white hover:bg-indigo-400"
+                      : "border-brand/60 bg-brand text-white hover:bg-brand"
                   }`}
                   aria-label={state.t("复制选中内容", "Copy selected text")}
                   title={state.t("复制选中内容", "Copy selected text")}
@@ -406,7 +406,7 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-canvas">
           <div className="text-center">
             <div className="text-2xl mb-4 text-rose-400">{state.t("会话已断开", "Session disconnected")}</div>
-            <div className="text-sm text-slate-400">{state.t("断开时间", "Disconnected at")}: {state.sessionDisconnected.time}</div>
+            <div className="text-sm text-muted">{state.t("断开时间", "Disconnected at")}: {state.sessionDisconnected.time}</div>
           </div>
         </div>
       )}

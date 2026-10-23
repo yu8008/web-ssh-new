@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React from "react";
 import { Button } from "./Button";
 import { useApp } from "../context/AppContextCore";
 
@@ -165,20 +165,20 @@ export function ConfirmDialog({
         tabIndex={-1}
         onKeyDown={handleDialogKeyDown}
         className={`relative z-10 w-full max-w-md rounded-lg p-6 shadow-xl ${
-          isDark ? "bg-slate-800" : "bg-white"
+          isDark ? "bg-elevated" : "bg-surface"
         }`}
       >
         <h3
           id={titleId}
           className={`text-lg font-semibold mb-2 ${
-            isDark ? "text-slate-100" : "text-slate-900"
+            isDark ? "text-ink" : "text-ink"
           }`}
         >
           {title}
         </h3>
         <p
           id={descriptionId}
-          className={`mb-6 ${isDark ? "text-slate-300" : "text-slate-600"}`}
+          className={`mb-6 ${isDark ? "text-ink-soft" : "text-ink-soft"}`}
         >
           {message}
         </p>

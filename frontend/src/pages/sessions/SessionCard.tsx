@@ -30,14 +30,14 @@ export function SessionCard({ state, session, layout, orderingScopeSessions, sho
   const rootClassName = cn(
     "relative rounded-lg border p-4 transition-transform duration-200 ease-out will-change-transform",
     isMobile ? "pl-12" : "pl-14",
-    state.ordering.draggingSessionId === session.id ? "ring-2 ring-indigo-400/60" : "",
-    state.isDark ? "border-slate-700 bg-slate-900/60" : "border-slate-200 bg-white shadow-sm"
+    state.ordering.draggingSessionId === session.id ? "ring-2 ring-brand/60" : "",
+    state.isDark ? "border-line bg-surface/60" : "border-line bg-surface shadow-sm"
   );
 
   const sessionMeta = (
     <div className={isMobile ? "space-y-1" : "min-w-0 space-y-1"}>
       <p className={cn("break-words font-semibold", isMobile ? "text-base" : "text-lg")}>{session.name}</p>
-      <p className={`break-all text-sm ${state.isDark ? "text-slate-400" : "text-slate-500"}`}>
+      <p className={`break-all text-sm ${state.isDark ? "text-muted" : "text-muted"}`}>
         {session.username}@{session.host}
       </p>
       <div className="flex flex-wrap items-center gap-2">
@@ -49,23 +49,23 @@ export function SessionCard({ state, session, layout, orderingScopeSessions, sho
         <NotificationSessionBadge sessionId={session.id} />
       </div>
       {session.enhanced_enabled ? (
-        <p className={`text-xs font-medium ${state.isDark ? "text-indigo-300" : "text-indigo-600"}`}>
+        <p className={`text-xs font-medium ${state.isDark ? "text-brand" : "text-brand"}`}>
           {state.t("增强持久化连接", "Enhanced persistent connection")}
         </p>
       ) : null}
-      <p className={`text-xs ${state.isDark ? "text-slate-500" : "text-slate-400"}`}>
+      <p className={`text-xs ${state.isDark ? "text-muted" : "text-muted"}`}>
         {state.t("创建时间", "Created at")}: {new Date(session.started_at).toLocaleString()}
       </p>
-      <p className={`text-xs ${state.isDark ? "text-slate-500" : "text-slate-400"}`}>
+      <p className={`text-xs ${state.isDark ? "text-muted" : "text-muted"}`}>
         {state.t("最近活动", "Last activity")}: {new Date(session.last_activity).toLocaleString()}
       </p>
       {session.disconnected_at ? (
-        <p className={`text-xs ${state.isDark ? "text-slate-500" : "text-slate-400"}`}>
+        <p className={`text-xs ${state.isDark ? "text-muted" : "text-muted"}`}>
           {state.t("断开时间", "Disconnected at")}: {new Date(session.disconnected_at).toLocaleString()}
         </p>
       ) : null}
       {session.enhanced_enabled && session.status !== "active" && session.allow_auto_retry !== false ? (
-        <p className={`text-xs ${state.isDark ? "text-slate-500" : "text-slate-400"}`}>
+        <p className={`text-xs ${state.isDark ? "text-muted" : "text-muted"}`}>
           {state.t("本轮重试", "Retry cycle")}: {session.retry_cycle_count ?? 0}/{state.enhancedRetryMaxAttempts}
         </p>
       ) : null}
@@ -125,14 +125,14 @@ export function SessionCard({ state, session, layout, orderingScopeSessions, sho
     >
       {isMobile ? (
         <div className="absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2">
-          <div className={`flex flex-col items-center gap-1 rounded-full border p-1 ${state.isDark ? "border-slate-700 bg-slate-900 text-slate-400" : "border-slate-200 bg-white text-slate-500"}`}>
+          <div className={`flex flex-col items-center gap-1 rounded-full border p-1 ${state.isDark ? "border-line bg-surface text-muted" : "border-line bg-surface text-muted"}`}>
             <button
               type="button"
               onClick={() => state.ordering.handleMoveSession(session.id, "up", orderingScopeSessions)}
               disabled={!canMoveUp}
-              className={`flex h-11 w-11 items-center justify-center rounded-full transition focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
+              className={`flex h-11 w-11 items-center justify-center rounded-full transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
                 canMoveUp
-                  ? (state.isDark ? "text-slate-200 hover:bg-slate-800" : "text-slate-700 hover:bg-slate-100")
+                  ? (state.isDark ? "text-ink hover:bg-elevated" : "text-ink-soft hover:bg-elevated")
                   : "cursor-not-allowed opacity-40"
               }`}
               aria-label={state.t("上移会话", "Move session up")}
@@ -143,9 +143,9 @@ export function SessionCard({ state, session, layout, orderingScopeSessions, sho
               type="button"
               onClick={() => state.ordering.handleMoveSession(session.id, "down", orderingScopeSessions)}
               disabled={!canMoveDown}
-              className={`flex h-11 w-11 items-center justify-center rounded-full transition focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
+              className={`flex h-11 w-11 items-center justify-center rounded-full transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
                 canMoveDown
-                  ? (state.isDark ? "text-slate-200 hover:bg-slate-800" : "text-slate-700 hover:bg-slate-100")
+                  ? (state.isDark ? "text-ink hover:bg-elevated" : "text-ink-soft hover:bg-elevated")
                   : "cursor-not-allowed opacity-40"
               }`}
               aria-label={state.t("下移会话", "Move session down")}
@@ -163,10 +163,10 @@ export function SessionCard({ state, session, layout, orderingScopeSessions, sho
           disabled={state.ordering.savingOrder}
           aria-label={state.t("拖动调整排序", "Drag to reorder")}
           title={state.t("拖动调整排序", "Drag to reorder")}
-          className={`absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border p-2 shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
+          className={`absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border p-2 shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
             state.isDark
-              ? "border-slate-700 bg-slate-900 text-slate-400 hover:text-slate-200"
-              : "border-slate-200 bg-white text-slate-500 hover:text-slate-700"
+              ? "border-line bg-surface text-muted hover:text-ink"
+              : "border-line bg-surface text-muted hover:text-ink-soft"
           } ${state.ordering.savingOrder ? "cursor-not-allowed opacity-50" : "cursor-grab active:cursor-grabbing"}`}
         >
           <span className="flex flex-col items-center leading-none">
@@ -211,9 +211,9 @@ export function SessionCard({ state, session, layout, orderingScopeSessions, sho
           value={noteValue}
           maxLength={1000}
           onChange={(event) => state.handleNoteChange(session.id, event.target.value)}
-          className={!state.isDark ? "border-slate-300 bg-white text-slate-900 placeholder:text-slate-400" : ""}
+          className={!state.isDark ? "border-line-strong bg-surface text-ink placeholder:text-muted" : ""}
         />
-        <div className={`flex flex-wrap items-center justify-between gap-2 text-xs ${state.isDark ? "text-slate-500" : "text-slate-400"}`}>
+        <div className={`flex flex-wrap items-center justify-between gap-2 text-xs ${state.isDark ? "text-muted" : "text-muted"}`}>
           <span>{state.t("最多 1000 字", "Up to 1000 characters")}</span>
           {noteValue.trim() !== (session.note ?? "") ? (
             <Button

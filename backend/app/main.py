@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 import asyncio
+import mimetypes
 from contextlib import suppress
 from pathlib import Path
 
@@ -161,6 +162,8 @@ def create_app() -> FastAPI:
 
     static_dir = Path(__file__).resolve().parent.parent / "frontend" / "dist"
     if static_dir.exists():
+        # Minimal container images may lack the system MIME entry for WOFF2.
+        mimetypes.add_type("font/woff2", ".woff2")
         app.mount("/", StaticFiles(directory=static_dir, html=True), name="frontend")
 
         index_path = static_dir / "index.html"

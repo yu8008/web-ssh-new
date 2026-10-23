@@ -1,5 +1,5 @@
 import React from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, ChevronRight } from "lucide-react";
 import type { Connection, Session } from "../../lib/api";
 import { cn } from "../../lib/utils";
 import type { SessionGroup } from "./sessionsUtils";
@@ -34,7 +34,7 @@ function getProbeStatusClassName(state: SessionsState, status?: string | null) {
   if (status === "verifying") {
     return state.isDark ? "border-sky-400/40 bg-sky-500/10 text-sky-200" : "border-sky-200 bg-sky-50 text-sky-700";
   }
-  return state.isDark ? "border-slate-600 bg-slate-800 text-slate-300" : "border-slate-200 bg-slate-100 text-slate-600";
+  return state.isDark ? "border-line-strong bg-elevated text-ink-soft" : "border-line bg-elevated text-ink-soft";
 }
 
 function formatConnectionEndpoint(group: SessionGroup<Session, Connection>) {
@@ -56,7 +56,7 @@ function SessionGroupSystemPreview({
 }) {
   const activeSession = group.representativeActiveSession;
   const mutedClassName = cn(
-    state.isDark ? "text-slate-400" : "text-slate-500",
+    state.isDark ? "text-muted" : "text-muted",
     compact ? "min-w-0 break-words text-xs" : ""
   );
 
@@ -79,7 +79,7 @@ function SessionGroupSystemPreview({
 
   const { stats, network } = entry.summary;
   const metricClassName = cn(
-    state.isDark ? "text-slate-200" : "text-slate-700",
+    state.isDark ? "text-ink" : "text-ink-soft",
     compact ? "whitespace-nowrap" : ""
   );
   const hint = entry.error
@@ -93,12 +93,12 @@ function SessionGroupSystemPreview({
       <span className={metricClassName}>CPU {stats.cpu.percent.toFixed(1)}%</span>
       <span className={metricClassName}>{state.t("内存", "Memory")} {stats.memory.percent.toFixed(1)}%</span>
       <span className={cn("whitespace-nowrap", state.isDark ? "text-emerald-300" : "text-emerald-600")}>
-        ↑ {formatBytesPerSecond(network.upload_speed)}
+        <ArrowUp size={11} className="mr-1 inline-block" aria-hidden="true" />{formatBytesPerSecond(network.upload_speed)}
       </span>
       <span className={cn("whitespace-nowrap", state.isDark ? "text-sky-300" : "text-sky-600")}>
-        ↓ {formatBytesPerSecond(network.download_speed)}
+        <ArrowDown size={11} className="mr-1 inline-block" aria-hidden="true" />{formatBytesPerSecond(network.download_speed)}
       </span>
-      {hint ? <span className={`whitespace-nowrap text-[11px] ${state.isDark ? "text-slate-500" : "text-slate-400"}`}>{hint}</span> : null}
+      {hint ? <span className={`whitespace-nowrap text-[11px] ${state.isDark ? "text-muted" : "text-muted"}`}>{hint}</span> : null}
     </div>
   );
 }
@@ -111,8 +111,8 @@ export function SessionGroupHeader({ state, group, expanded, onToggle }: Session
     <button
       type="button"
       className={cn(
-        "w-full px-3 py-3 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 sm:px-4 sm:py-4",
-        state.isDark ? "hover:bg-slate-900/80" : "hover:bg-slate-50"
+        "w-full px-3 py-3 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand sm:px-4 sm:py-4",
+        state.isDark ? "hover:bg-surface/80" : "hover:bg-elevated"
       )}
       aria-expanded={expanded}
       onClick={onToggle}
@@ -122,7 +122,7 @@ export function SessionGroupHeader({ state, group, expanded, onToggle }: Session
           <span
             className={cn(
               "mt-0.5 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md border",
-              state.isDark ? "border-slate-700 bg-slate-950 text-slate-300" : "border-slate-200 bg-white text-slate-600"
+              state.isDark ? "border-line bg-canvas text-ink-soft" : "border-line bg-surface text-ink-soft"
             )}
             aria-hidden="true"
           >
@@ -130,23 +130,23 @@ export function SessionGroupHeader({ state, group, expanded, onToggle }: Session
           </span>
           <div className="min-w-0 flex-1 space-y-1.5">
             <div className="flex flex-wrap items-center gap-2">
-              <p className={`min-w-0 max-w-full break-words text-base font-semibold ${state.isDark ? "text-slate-100" : "text-slate-900"}`}>
+              <p className={`min-w-0 max-w-full break-words text-base font-semibold ${state.isDark ? "text-ink" : "text-ink"}`}>
                 {connectionName}
               </p>
               <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold ${getProbeStatusClassName(state, group.connection?.remote_probe_status)}`}>
                 {getProbeStatusLabel(state, group.connection?.remote_probe_status)}
               </span>
             </div>
-            <p className={`break-all text-sm ${state.isDark ? "text-slate-400" : "text-slate-500"}`}>
+            <p className={`break-all text-sm ${state.isDark ? "text-muted" : "text-muted"}`}>
               {formatConnectionEndpoint(group)}
             </p>
-            <div className={`flex flex-wrap gap-x-3 gap-y-1 text-xs ${state.isDark ? "text-slate-500" : "text-slate-400"}`}>
+            <div className={`flex flex-wrap gap-x-3 gap-y-1 text-xs ${state.isDark ? "text-muted" : "text-muted"}`}>
               <span>{state.t("在线", "Active")} {group.activeCount}</span>
               <span>{state.t("离线", "Offline")} {group.offlineCount}</span>
               <span>{state.t("最近活动", "Last activity")}: {lastActivity}</span>
             </div>
             <div className="mt-2 flex min-w-0 flex-wrap items-start gap-x-2 gap-y-1 lg:hidden">
-              <span className={`shrink-0 text-xs font-medium ${state.isDark ? "text-slate-400" : "text-slate-500"}`}>
+              <span className={`shrink-0 text-xs font-medium ${state.isDark ? "text-muted" : "text-muted"}`}>
                 {state.t("系统状态", "System status")}
               </span>
               <div className="min-w-0 flex-1">
@@ -155,8 +155,8 @@ export function SessionGroupHeader({ state, group, expanded, onToggle }: Session
             </div>
           </div>
         </div>
-        <div className={`hidden rounded-md border px-3 py-2 text-xs lg:block lg:w-80 lg:shrink-0 ${state.isDark ? "border-slate-700 bg-slate-950/50" : "border-slate-200 bg-white"}`}>
-          <div className={`mb-1 font-medium ${state.isDark ? "text-slate-400" : "text-slate-500"}`}>
+        <div className={`hidden rounded-md border px-3 py-2 text-xs lg:block lg:w-80 lg:shrink-0 ${state.isDark ? "border-line bg-canvas/50" : "border-line bg-surface"}`}>
+          <div className={`mb-1 font-medium ${state.isDark ? "text-muted" : "text-muted"}`}>
             {state.t("系统状态", "System status")}
           </div>
           <SessionGroupSystemPreview state={state} group={group} />

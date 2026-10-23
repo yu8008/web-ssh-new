@@ -23,7 +23,7 @@ export function SessionViewModeToggle({ value, onChange, isDark, t, className, f
       className={cn(
         "inline-flex rounded-md border p-1",
         fullWidth ? "w-full" : "",
-        isDark ? "border-slate-700 bg-slate-900/70" : "border-slate-200 bg-white shadow-sm",
+        isDark ? "border-line bg-surface/70" : "border-line bg-surface shadow-sm",
         className
       )}
       role="group"
@@ -37,13 +37,13 @@ export function SessionViewModeToggle({ value, onChange, isDark, t, className, f
             key={item.value}
             type="button"
             className={cn(
-              "inline-flex min-h-11 items-center justify-center gap-2 rounded px-3 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400",
+              "inline-flex min-h-11 items-center justify-center gap-2 rounded px-3 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand",
               fullWidth ? "flex-1" : "",
               selected
-                ? "bg-indigo-500 text-white shadow-sm"
+                ? "bg-brand text-white shadow-sm"
                 : isDark
-                  ? "text-slate-300 hover:bg-slate-800 hover:text-slate-100"
-                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                  ? "text-ink-soft hover:bg-elevated hover:text-ink"
+                  : "text-ink-soft hover:bg-elevated hover:text-ink"
             )}
             aria-pressed={selected}
             onClick={() => onChange(item.value)}

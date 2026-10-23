@@ -47,11 +47,11 @@ export function SessionGroupedList({ state, layout }: SessionGroupedListProps) {
               "overflow-hidden rounded-lg border",
               layout === "mobile"
                 ? state.isDark
-                  ? "border-slate-800 bg-slate-900/35"
-                  : "border-slate-200 bg-white"
+                  ? "border-line bg-surface/35"
+                  : "border-line bg-surface"
                 : state.isDark
-                  ? "border-slate-700 bg-slate-900/45"
-                  : "border-slate-200 bg-white"
+                  ? "border-line bg-surface/45"
+                  : "border-line bg-surface"
             )}
           >
             <SessionGroupHeader
@@ -72,11 +72,11 @@ export function SessionGroupedList({ state, layout }: SessionGroupedListProps) {
                   layout === "mobile" ? "px-2 pb-2 pt-2" : "p-3 sm:p-4",
                   layout === "mobile"
                     ? state.isDark
-                      ? "border-slate-800 bg-transparent"
-                      : "border-slate-200 bg-transparent"
+                      ? "border-line bg-transparent"
+                      : "border-line bg-transparent"
                     : state.isDark
-                      ? "border-slate-700 bg-slate-950/15"
-                      : "border-slate-200 bg-slate-50/50"
+                      ? "border-line bg-canvas/15"
+                      : "border-line bg-elevated/50"
                 )}
               >
                 <div className={layout === "mobile" ? "grid gap-2.5" : "grid gap-4"}>

@@ -37,6 +37,12 @@ flowchart LR
 - `src/lib/api.ts`
 - `src/context/AppContext.tsx`
 
+### 3.1 Interface System
+
+`src/design.css` defines the control-room presentation layer: warm dark/paper light themes, signal orange, typography, navigation, and responsive layouts. `index.css` retains base and accessibility styles. Legacy neutral/accent utilities use semantic tokens; file selections use translucent accent backgrounds to preserve text contrast. `Brand`, `PageFrame`, and `WorkspaceIntro` provide shared identity, settings/log layouts, and real session counts. Interface operation icons come from Lucide, including files and loading indicators.
+
+The perspective orbit illustration is original vector artwork. Space Grotesk and IBM Plex Mono are self-hosted with their licenses. Login pointer parallax uses one animation frame per pointer update, cancels on exit/unmount, and has no continuous rendering loop. Reduced motion disables presentation effects. Terminal chrome shares the visual system while ANSI colors, scrolling, selection, output acknowledgements, and synchronization retain their independent implementations. Mobile workspace search expands on demand. Browser regressions cover navigation, forms, files, notifications, and both themes.
+
 ## 4. Critical Flows
 
 - Auth flow: `/auth/login` -> JWT -> protected APIs

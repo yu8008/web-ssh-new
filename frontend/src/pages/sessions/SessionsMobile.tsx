@@ -18,13 +18,13 @@ type SessionsMobileProps = {
 
 export function SessionsMobile({ state }: SessionsMobileProps) {
   if (state.loading) {
-    return <div className={`p-6 ${state.isDark ? "text-slate-200" : "text-slate-700"}`}>{state.t("加载中...", "Loading...")}</div>;
+    return <div className={`p-6 ${state.isDark ? "text-ink" : "text-ink-soft"}`}>{state.t("加载中...", "Loading...")}</div>;
   }
 
   return (
-    <div className={`min-h-screen px-4 py-6 transition-colors duration-300 ${state.isDark ? "bg-slate-950 text-slate-100 dark-scrollbar" : "bg-gray-100 text-slate-900 light-scrollbar"}`}>
+    <div className={`min-h-screen px-4 py-6 transition-colors duration-300 ${state.isDark ? "bg-canvas text-ink dark-scrollbar" : "bg-canvas text-ink light-scrollbar"}`}>
       <div className="space-y-6">
-        <div className={`space-y-3 pb-4 ${state.isDark ? "border-b border-slate-800" : "border-b border-slate-200"}`}>
+        <div className={`space-y-3 pb-4 ${state.isDark ? "border-b border-line" : "border-b border-line"}`}>
           <div className="flex items-center justify-between gap-3">
             <div>
               <h1 className="text-xl font-semibold">{state.t("会话管理", "Session Management")}</h1>
@@ -76,9 +76,9 @@ export function SessionsMobile({ state }: SessionsMobileProps) {
             placeholder={state.t("搜索会话名称", "Search session name")}
             value={state.search}
             onChange={(event) => state.setSearch(event.target.value)}
-            className={`min-h-11 ${state.isDark ? "" : "border-slate-300 bg-white text-slate-900 placeholder:text-slate-400"}`}
+            className={`min-h-11 ${state.isDark ? "" : "border-line-strong bg-surface text-ink placeholder:text-muted"}`}
           />
-          <div className={`space-y-3 rounded-lg border p-3 ${state.isDark ? "border-slate-800 bg-slate-900/40" : "border-slate-200 bg-white"}`}>
+          <div className={`space-y-3 rounded-lg border p-3 ${state.isDark ? "border-line bg-surface/40" : "border-line bg-surface"}`}>
             <SessionViewModeToggle
               value={state.viewMode}
               onChange={state.setViewMode}
@@ -103,7 +103,7 @@ export function SessionsMobile({ state }: SessionsMobileProps) {
                 </Button>
               ))}
             </div>
-            <div className={`grid grid-cols-2 gap-2 border-t pt-3 ${state.isDark ? "border-slate-800" : "border-slate-200"}`} role="group" aria-label={state.t("系统入口", "System entry points")}>
+            <div className={`grid grid-cols-2 gap-2 border-t pt-3 ${state.isDark ? "border-line" : "border-line"}`} role="group" aria-label={state.t("系统入口", "System entry points")}>
               <Button
                 variant="secondary"
                 lightMode={!state.isDark}

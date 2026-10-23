@@ -1,4 +1,5 @@
 import React from "react";
+import { PageFrame } from "../components/PageFrame";
 import { RefreshCcw } from "lucide-react";
 import { Button } from "../components/Button";
 import { Card } from "../components/Card";
@@ -21,13 +22,13 @@ function getLevelClassName(level: string, isDark: boolean): string {
     return isDark ? "bg-amber-500/15 text-amber-300 border-amber-500/30" : "bg-amber-50 text-amber-700 border-amber-200";
   }
   if (level === "DEBUG") {
-    return isDark ? "bg-slate-700 text-slate-300 border-slate-600" : "bg-slate-100 text-slate-600 border-slate-200";
+    return isDark ? "bg-elevated text-ink-soft border-line-strong" : "bg-elevated text-ink-soft border-line";
   }
   return isDark ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30" : "bg-emerald-50 text-emerald-700 border-emerald-200";
 }
 
 export function SystemLogsPage() {
-  const { isDark, toggleTheme, toggleLanguage, language } = useApp();
+  const { isDark, language } = useApp();
   const { push } = useToast();
   const t = React.useCallback((zh: string, en: string) => localizeText(language, zh, en), [language]);
   const [entries, setEntries] = React.useState<SystemLogEntry[]>([]);
@@ -54,47 +55,20 @@ export function SystemLogsPage() {
     void loadLogs();
   }, [loadLogs]);
 
-  const panelClassName = isDark ? "border-slate-700 bg-slate-950/40" : "border-slate-200 bg-white";
-  const subtleClassName = isDark ? "text-slate-400" : "text-slate-500";
+  const panelClassName = isDark ? "border-line bg-canvas/40" : "border-line bg-surface";
+  const subtleClassName = isDark ? "text-muted" : "text-muted";
   const inputClassName = isDark
-    ? "border-slate-700 bg-slate-900 text-slate-100"
-    : "border-slate-300 bg-white text-slate-900";
+    ? "border-line bg-surface text-ink"
+    : "border-line-strong bg-surface text-ink";
 
   return (
-    <div className={`min-h-screen px-4 py-6 transition-colors duration-300 ${isDark ? "bg-slate-950 text-slate-100 dark-scrollbar" : "bg-gray-100 text-slate-900 light-scrollbar"}`}>
-      <div className="mx-auto max-w-6xl space-y-6">
-        <div className={`flex flex-wrap items-start justify-between gap-3 pb-4 ${isDark ? "border-b border-slate-800" : "border-b border-slate-200"}`}>
-          <div>
-            <h1 className="text-2xl font-semibold">{t("系统日志", "System Logs")}</h1>
-            <p className={`mt-1 text-sm ${subtleClassName}`}>
-              {t("查看后端最近运行日志，用于定位登录、会话和系统接口问题。", "Inspect recent backend runtime logs for login, session, and system API diagnostics.")}
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="ghost" lightMode={!isDark} onClick={toggleLanguage}>
-              {language === "en-US" ? "中文" : "EN"}
-            </Button>
-            <Button variant="ghost" lightMode={!isDark} onClick={toggleTheme}>
-              {isDark ? t("浅色", "Light") : t("深色", "Dark")}
-            </Button>
-            <Button
-              variant="secondary"
-              lightMode={!isDark}
-              onClick={() => {
-                window.location.href = "/sessions";
-              }}
-            >
-              {t("返回会话管理", "Back to Sessions")}
-            </Button>
-          </div>
-        </div>
-
+    <PageFrame title={t("系统日志", "System logs")} description={t("追踪每一次运行，看清每一个细节。", "A clear view of everything behind the scenes.")} index="04">
         <Card
           title={t("最近日志", "Recent Logs")}
           description={t("日志保存在当前进程内存中，服务重启后会重新开始记录。", "Logs are kept in current process memory and reset after service restart.")}
-          className={!isDark ? "bg-white border-slate-200 shadow-sm" : ""}
-          titleClassName={!isDark ? "text-slate-900" : ""}
-          descClassName={!isDark ? "text-slate-500" : ""}
+          className={!isDark ? "bg-surface border-line shadow-sm" : ""}
+          titleClassName={!isDark ? "text-ink" : ""}
+          descClassName={!isDark ? "text-muted" : ""}
         >
           <div className="flex flex-wrap items-end gap-3">
             <label className="space-y-1">
@@ -138,9 +112,9 @@ export function SystemLogsPage() {
                   {loading ? t("加载日志中...", "Loading logs...") : t("暂无日志", "No logs")}
                 </div>
               ) : (
-                <div className="divide-y divide-slate-700/40">
+                <div className="divide-y divide-line/40">
                   {entries.map((entry) => (
-                    <div key={entry.sequence} className={`grid gap-2 p-3 text-xs md:grid-cols-[170px,92px,1fr] ${isDark ? "hover:bg-slate-900/70" : "hover:bg-slate-50"}`}>
+                    <div key={entry.sequence} className={`grid gap-2 p-3 text-xs md:grid-cols-[170px,92px,1fr] ${isDark ? "hover:bg-surface/70" : "hover:bg-elevated"}`}>
                       <div className={subtleClassName}>{entry.timestamp}</div>
                       <div>
                         <span className={`inline-flex rounded border px-2 py-0.5 font-mono text-[11px] ${getLevelClassName(entry.level, isDark)}`}>
@@ -161,7 +135,6 @@ export function SystemLogsPage() {
             </div>
           </div>
         </Card>
-      </div>
-    </div>
+    </PageFrame>
   );
 }
