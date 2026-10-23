@@ -148,8 +148,23 @@ export class SelectionTranscript {
   move(point: SelectionPoint, frame: readonly SelectionRow[] = this.frame): boolean {
     // A resize can release the pointer after terminal dimensions have changed,
     // while the displayed snapshot still has its previous number of rows.
-    const row = frame[Math.max(0, Math.min(frame.length - 1, point.row))];
-    const col = Math.max(0, Math.min(row.offsets.length - 1, point.col));
+    let index = Math.max(0, Math.min(frame.length - 1, point.row));
+    let column = point.col;
+    if (this.scrollRegion) {
+      const { top, bottom } = this.scrollRegion;
+      // After reversing, fixed chrome can be separated from the visible body
+      // by captured rows that are now offscreen. An edge endpoint belongs to
+      // the visible body boundary, not that chrome's original document index.
+      if (top > 0 && index < top && this.positions.get(frame[top])! - this.positions.get(frame[top - 1])! > 1) {
+        index = top;
+        column = 0;
+      } else if (bottom < frame.length && index >= bottom && this.positions.get(frame[bottom])! - this.positions.get(frame[bottom - 1])! > 1) {
+        index = bottom - 1;
+        column = frame[index].offsets.length - 1;
+      }
+    }
+    const row = frame[index];
+    const col = Math.max(0, Math.min(row.offsets.length - 1, column));
     if (this.end.row === row && this.end.col === col) return false;
     this.end = { row, col };
     this.cachedText = undefined;

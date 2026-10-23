@@ -51,7 +51,7 @@ for (const renderer of ["dom", "webgl"]) {
   }
 }
 
-test("edge selection paces a bounded burst after learning the scroll distance", async ({ page }) => {
+test("a short viewport bounds outstanding drag movement after learning the scroll distance", async ({ page }) => {
   await page.goto("/tests/browser/terminal-selection.html?renderer=dom&delay=500&chunkDelay=0&synchronized=1&maxOffset=10000&holdAfter=1");
   await expect(page.locator("#terminal")).toHaveAttribute("data-ready", "true");
   const box = (await page.locator(".xterm-screen").boundingBox())!;
@@ -59,15 +59,15 @@ test("edge selection paces a bounded burst after learning the scroll distance", 
   await page.mouse.down();
   await page.mouse.move(box.x + 40, box.y + box.height - 2, { steps: 4 });
   await expect(page.locator("#wheels")).toHaveText("1");
-  await expect(page.locator("#wheels")).toHaveText("3");
+  await expect(page.locator("#wheels")).toHaveText("2");
   await page.waitForTimeout(180);
-  expect(await page.locator("#wheels").textContent()).toBe("3");
+  expect(await page.locator("#wheels").textContent()).toBe("2");
   await page.mouse.up();
   await page.evaluate(() => window.releaseTerminalRepliesForTest());
-  await expect(page.locator("#selection")).toContainText("Output 035");
+  await expect(page.locator("#selection")).toContainText("Output 033");
 });
 
-test("a burst waits for both separately rendered wheel replies and copies every line", async ({ page }) => {
+test("the window refills after separately rendered wheel replies and copies every line", async ({ page }) => {
   await page.goto("/tests/browser/terminal-selection.html?renderer=dom&delay=400&chunkDelay=0&synchronized=1&separateReports=1&reportGap=250&maxOffset=10000&holdAfter=2");
   await expect(page.locator("#terminal")).toHaveAttribute("data-ready", "true");
   const box = (await page.locator(".xterm-screen").boundingBox())!;
@@ -85,7 +85,7 @@ test("a burst waits for both separately rendered wheel replies and copies every 
   expect(numbers).toEqual(Array.from({ length: 15 }, (_, index) => index + 21));
 });
 
-test("a tall viewport keeps each paced burst small while preserving overlap", async ({ page }) => {
+test("a tall viewport permits a larger bounded window while preserving overlap", async ({ page }) => {
   await page.goto("/tests/browser/terminal-selection.html?renderer=dom&rows=30&delay=500&chunkDelay=0&synchronized=1&maxOffset=10000&holdAfter=1");
   await expect(page.locator("#terminal")).toHaveAttribute("data-ready", "true");
   const box = (await page.locator(".xterm-screen").boundingBox())!;
@@ -93,12 +93,15 @@ test("a tall viewport keeps each paced burst small while preserving overlap", as
   await page.mouse.move(box.x + 1, box.y + box.height / 30 * 2.5);
   await page.mouse.down();
   await page.mouse.move(box.x + 40, box.y + box.height + 45, { steps: 4 });
-  await expect(page.locator("#wheels")).toHaveText("3");
+  // One calibrated probe and three two-line reports use six of 28 body rows.
+  await expect(page.locator("#wheels")).toHaveText("4");
   await page.waitForTimeout(100);
-  expect(await page.locator("#wheels").textContent()).toBe("3");
+  expect(await page.locator("#wheels").textContent()).toBe("4");
   await page.mouse.up();
   await page.evaluate(() => window.releaseTerminalRepliesForTest());
-  await expect(page.locator("#selection")).toContainText("Output 053");
+  await expect(page.locator("#selection")).toContainText("Output 055");
+  const rows = [...(await page.locator("#selection").textContent())!.matchAll(/Output (\d+)/g)].map(match => Number(match[1]));
+  expect(rows).toEqual(Array.from({ length: 35 }, (_, i) => i + 21));
 });
 
 test("a large wheel step stays within the viewport's safe overlap", async ({ page }) => {

@@ -17,7 +17,7 @@ for (const { extra, dense } of [{ extra: -2 }, { extra: 2 }, { extra: 20 }, { ex
     await page.evaluate(async () => { for (let frame = 0; frame < 45; frame++) await new Promise(requestAnimationFrame); });
     const end = await page.evaluate(() => window.terminalStateForTest().viewportY);
     expect(end - start).toBeGreaterThan(80);
-    expect(end - start).toBeLessThanOrEqual(184);
+    expect(end - start).toBeLessThanOrEqual(276);
     await expect(page.locator(".wsg-selection-frame")).toHaveCount(0);
     if (dense) await page.locator(".xterm-screen").screenshot({ path: testInfo.outputPath("dense-chinese-drag.png") });
     await page.mouse.up();

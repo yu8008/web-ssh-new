@@ -42,16 +42,19 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
   let notifiedSelection = false;
   let parseTimer: number | undefined;
   let finishTimer: number | undefined;
-  let remote: { direction: -1 | 1; started: number; retryAt: number; attempts: number; reports: number; issued: number; expected: number; moved: number } | null = null;
-  const reportTimers = new Set<number>();
+  let remote: { direction: -1 | 1; started: number; retryAt: number; attempts: number; issued: number; moved: number } | null = null;
+  let reportTimer: number | undefined;
   let responseTime = 0;
   let scrollStep = 0;
   let scrollHeight = 0;
   let sendingWheel = false;
   let lastRequestAt = -Infinity;
+  let reportInterval = 8;
   let dragCredit = 0;
   let dragTickAt = 0;
   let dragDirection = 0;
+  let fastSince = 0;
+  let fastDirection = 0;
   let pendingFocus = false;
   let contextCopy = false;
   let completedRepaint = false;
@@ -61,6 +64,23 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
   let renderedFrame: SelectionRow[] = [];
   const captureFrame = () => (capturedFrame = captureSelectionRows(term, capturedFrame));
   const selectionFrame = () => renderedFrame.length === term.rows ? renderedFrame : captureFrame();
+
+  const dragMotion = (now = view.performance.now()) => {
+    const rect = screen.getBoundingClientRect();
+    const args = [point.y, rect.top, rect.bottom, term.rows, columnMode ? 12 : 48] as const;
+    const motion = terminalDragScroll(...args);
+    if (!motion.fast || motion.direction !== fastDirection) fastSince = now;
+    fastDirection = motion.fast ? motion.direction : 0;
+    return terminalDragScroll(...args, motion.fast ? now - fastSince : 0);
+  };
+  const scrollWindow = (speed: number) => {
+    const step = scrollStep || 2;
+    // Keep roughly three quarters of the scrolling body available to align
+    // successive frames. Until the first response, send only one probe.
+    if (!scrollStep) return step;
+    const overlapLimit = Math.min(12, Math.ceil(scrollHeight / 4));
+    return Math.max(step, Math.min(overlapLimit, speed >= 180 ? 12 : 4));
+  };
 
   const getText = () => transcript?.getText() ?? term.getSelection();
   const hasSelection = () => transcript?.hasSelection() ?? term.hasSelection();
@@ -104,18 +124,14 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
     finishAfterDraw = false;
   };
   const stopQueuedReports = () => {
-    reportTimers.forEach((timer) => view.clearTimeout(timer));
-    reportTimers.clear();
-    if (remote && remote.issued < remote.reports) {
-      remote.reports = remote.issued;
-      remote.expected = remote.issued * scrollStep;
-      if (remote.moved >= remote.expected) remote = null;
-    }
+    view.clearTimeout(reportTimer);
+    reportTimer = undefined;
   };
   const stopNative = () => {
     nativeAnchor?.marker?.dispose();
     nativeAnchor = null;
     nativeRemainder = nativeTickAt = 0;
+    fastSince = fastDirection = 0;
   };
   const clear = () => {
     stopQueuedReports();
@@ -130,6 +146,7 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
     displayedFrame = undefined;
     remote = null;
     scrollStep = scrollHeight = 0;
+    reportInterval = 8;
     dragCredit = dragTickAt = dragDirection = 0;
     frameChanged = false;
     pendingFocus = false;
@@ -144,72 +161,72 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
     notify();
   };
 
+  const scheduleReport = (milliseconds: number) => {
+    if (reportTimer !== undefined) return;
+    reportTimer = view.setTimeout(() => {
+      reportTimer = undefined;
+      if (tick()) scheduleFrame();
+    }, Math.max(8, milliseconds));
+  };
   const requestScroll = (direction: -1 | 1, retry = false, drag = true) => {
-    if (!active || disposed || captureStopped || !transcript || (remote && !retry)) return;
-    if (frameChanged && !retry) return;
+    if (!active || disposed || captureStopped || !transcript) return;
+    if (remote && (remote.direction !== direction || (!scrollStep && !retry))) return;
+    // Parsed movement does not free window space until its text and highlight
+    // have reached the renderer together.
+    if (frameChanged) return;
     if (term.modes.synchronizedOutputMode) return;
-    if (view.performance.now() - lastRequestAt < 16) return;
     if (term.modes.mouseTrackingMode === "none" || term.modes.mouseTrackingMode === "x10") return;
+    const clock = view.performance.now();
+    const motion = dragMotion(clock);
+    const step = scrollStep || 2;
+    const interval = Math.max(reportInterval, Math.min(64, 1000 * step / Math.max(1, motion.speed)));
+    const wait = interval - (clock - lastRequestAt);
+    if (wait > 0) { if (drag) scheduleReport(wait); return; }
+    if (!retry) {
+      if (drag && dragCredit < step) {
+        scheduleReport(1000 * (step - dragCredit) / Math.max(1, motion.speed));
+        return;
+      }
+      const outstanding = remote ? remote.issued * step - remote.moved : 0;
+      if (outstanding + step > scrollWindow(motion.speed)) return;
+    }
     const now = Date.now();
     const attempts = retry && remote ? remote.attempts + 1 : 1;
     const rect = screen.getBoundingClientRect();
-    const motion = terminalDragScroll(point.y, rect.top, rect.bottom, term.rows, columnMode ? 12 : 48);
-    // Time supplies a small amount of credit; response latency never increases
-    // a burst. Discard excess credit instead of catching up after a pause.
-    const step = scrollStep || 2;
-    if (drag && !retry && dragCredit < step) return;
-    lastRequestAt = view.performance.now();
-    const budget = Math.min(scrollHeight - 2, Math.floor(scrollHeight * 0.7));
-    const reports = !retry && drag && scrollStep
-      ? Math.max(1, Math.min(2, Math.floor(dragCredit / step), Math.floor(4 / step), Math.floor(budget / step))) : 1;
-    if (drag && !retry) dragCredit = Math.max(0, dragCredit - reports * step);
-    const interval = Math.max(16, Math.min(64, 1000 * step / Math.max(1, motion.speed)));
-    remote = {
-      direction, started: retry && remote ? remote.started : now, attempts,
-      retryAt: now + Math.min(2000, (responseTime ? Math.max(150, responseTime * 2.5) : 2000) * 2 ** Math.min(attempts - 1, 2)),
-      reports: retry && remote ? remote.reports : reports,
-      issued: retry && remote ? remote.issued : 0,
-      expected: retry && remote ? remote.expected : scrollStep * reports,
-      moved: retry && remote ? remote.moved : 0,
-    };
+    lastRequestAt = clock;
+    // Some TUIs fold closely spaced wheel reports into one action. If a full
+    // window stops progressing, recover with a slower cadence for this gesture.
+    if (retry) reportInterval = Math.min(64, Math.max(16, reportInterval * 2));
+    if (drag && !retry) dragCredit = Math.max(0, dragCredit - step);
+    if (!remote) remote = { direction, started: now, attempts: 1, retryAt: 0, issued: 0, moved: 0 };
+    if (!retry) remote.issued++;
+    remote.attempts = attempts;
+    // A full window with no progress backs off instead of accumulating input.
+    if (remote.issued === 1 || retry) remote.retryAt = now + Math.min(2000,
+      (responseTime ? Math.max(150, responseTime * 2.5) : 2000) * 2 ** Math.min(attempts - 1, 2));
     // Use xterm's wheel encoder rather than hardcoding an escape sequence.
     // A line-mode delta emits one wheel report, with no held button/modifiers.
-    const request = remote;
-    const sendReport = () => {
-      if (remote !== request || !active || disposed) return;
-      if (term.modes.synchronizedOutputMode) {
-        const timer = view.setTimeout(() => { reportTimers.delete(timer); sendReport(); }, 16);
-        reportTimers.add(timer);
-        return;
-      }
-      if (!retry) request.issued++;
-      sendingWheel = true;
-      try {
-        dispatchTerminalWheel(term, screen, {
-          deltaY: direction,
-          clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2,
-        });
-      } finally { sendingWheel = false; }
-      options.flushInput?.();
-    };
-    sendReport();
-    for (let report = 1; report < reports; report++) {
-      const timer = view.setTimeout(() => { reportTimers.delete(timer); sendReport(); }, report * interval);
-      reportTimers.add(timer);
-    }
+    sendingWheel = true;
+    try {
+      dispatchTerminalWheel(term, screen, {
+        deltaY: direction,
+        clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2,
+      });
+    } finally { sendingWheel = false; }
+    options.flushInput?.();
+    if (drag) scheduleReport(interval);
   };
   const tick = () => {
-    if (!active || !transcript?.hasSelection()) return false;
-    const rect = screen.getBoundingClientRect();
-    const motion = terminalDragScroll(point.y, rect.top, rect.bottom, term.rows, columnMode ? 12 : 48);
-    const { direction } = motion;
+    if (!active || captureStopped || !transcript?.hasSelection()) return false;
     const now = view.performance.now();
+    const motion = dragMotion(now);
+    const { direction } = motion;
     const elapsed = dragTickAt && direction === dragDirection ? Math.min(32, now - dragTickAt) : 0;
     if (direction !== dragDirection) dragCredit = 0;
     dragDirection = direction;
     dragTickAt = direction ? now : 0;
-    if (!direction) { dragCredit = 0; return false; }
-    dragCredit = Math.min(Math.max(4, scrollStep), dragCredit + motion.speed * elapsed / 1000);
+    if (!direction) { dragCredit = 0; stopQueuedReports(); return false; }
+    dragCredit = Math.min(scrollWindow(motion.speed), dragCredit + motion.speed * elapsed / 1000);
     // A TUI may ignore a wheel (or repaint without moving). Keep the verified
     // snapshot for late responses, but don't permanently latch the gesture.
     // Back off at boundaries and on slow links; never retry inside a split
@@ -223,9 +240,8 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
   };
   const tickNative = () => {
     if (!nativeDown || !nativeScrolling || nativeColumn || term.buffer.active.type !== "normal") return false;
-    const rect = screen.getBoundingClientRect();
-    const motion = terminalDragScroll(point.y, rect.top, rect.bottom, term.rows);
     const now = view.performance.now();
+    const motion = dragMotion(now);
     const elapsed = nativeTickAt ? Math.min(32, now - nativeTickAt) : 0;
     nativeTickAt = now;
     if (!nativeAnchor && motion.direction && Math.abs(point.y - nativeOriginY) > 4) {
@@ -240,7 +256,9 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
     }
     if (!nativeAnchor) { nativeTickAt = 0; return false; }
     if (motion.direction) {
-      nativeRemainder = Math.max(-4.999, Math.min(4.999, nativeRemainder + motion.direction * motion.speed * elapsed / 1000));
+      if (Math.sign(nativeRemainder) !== motion.direction) nativeRemainder = 0;
+      const limit = Math.min(6, Math.max(1, Math.floor(term.rows / 4))) + 0.999;
+      nativeRemainder = Math.max(-limit, Math.min(limit, nativeRemainder + motion.direction * motion.speed * elapsed / 1000));
       const lines = Math.trunc(nativeRemainder);
       nativeRemainder -= lines;
       if (lines) {
@@ -371,6 +389,7 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
     }
     if (nativeDown && nativeScrolling && !transcript) {
       point = { x: event.clientX, y: event.clientY };
+      dragMotion();
       scheduleFrame();
       if (term.modes.mouseTrackingMode !== "none") {
         // SelectionService listens on the document. Deliver its local move
@@ -396,8 +415,11 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
     }
     if (!active || !transcript) return;
     point = { x: event.clientX, y: event.clientY };
-    const bounds = screen.getBoundingClientRect();
-    if (remote && terminalDragScroll(point.y, bounds.top, bounds.bottom, term.rows, columnMode ? 12 : 48).direction !== remote.direction) stopQueuedReports();
+    const motion = dragMotion();
+    if (motion.direction !== dragDirection) {
+      dragCredit = dragTickAt = 0;
+      stopQueuedReports();
+    }
     needsDraw = true;
     scheduleFrame();
     // Selection gestures never become remote button/drag reports.
@@ -502,23 +524,28 @@ export function attachTerminalSelection(term: Terminal, host: HTMLElement, optio
       const motion = transcript.scrollMotion!;
       const lines = Math.abs(motion.lines);
       remote.moved += lines;
-      const completeBurst = remote.issued === remote.reports && (remote.reports === 1 || remote.moved >= remote.expected);
-      if (completeBurst && remote.attempts === 1) {
-        responseTime = responseTime ? responseTime * 0.75 + elapsed * 0.25 : elapsed;
-        scrollStep = Math.max(scrollStep, remote.moved / remote.reports);
+      responseTime = responseTime ? responseTime * 0.75 + elapsed * 0.25 : elapsed;
+      const completeWindow = !scrollStep || remote.moved >= remote.issued * scrollStep;
+      if (completeWindow && remote.attempts === 1) {
+        scrollStep = Math.max(scrollStep, remote.moved / remote.issued);
       }
       scrollHeight = motion.bottom - motion.top;
-      if (completeBurst) { remote = null; stopQueuedReports(); }
+      if (completeWindow) remote = null;
+      else {
+        remote.started = Date.now();
+        remote.retryAt = remote.started + Math.min(2000, Math.max(150, responseTime * 2.5));
+      }
       needsDraw = true;
       frameChanged = true;
       finishAfterDraw = !active;
-      // Keep time accounting current, but start the next burst only after
-      // this verified frame has actually reached the renderer.
+      // Keep time accounting current. Window space is reused only after this
+      // verified frame has actually reached the renderer.
       tick();
       scheduleFrame();
     } else if (result === "limit") {
       remote = null;
       captureStopped = true;
+      stopQueuedReports();
       stopTimer();
       options.onLimit();
     }

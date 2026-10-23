@@ -142,6 +142,25 @@ describe("TUI selection transcript", () => {
     expect(selection.getText()).toBe("line 2\nline 3\nline 4\nline 5");
   });
 
+  it("maps fixed chrome to the visible body boundary after reversing", () => {
+    const down = new SelectionTranscript(frame("Header", "A", "B", "C", "D", "Footer"), { row: 1, col: 0 });
+    down.scroll(frame("Header", "B", "C", "D", "E", "Footer"), 1);
+    down.scroll(frame("Header", "C", "D", "E", "F", "Footer"), 1);
+    down.scroll(frame("Header", "D", "E", "F", "G", "Footer"), 1);
+    down.scroll(frame("Header", "C", "D", "E", "F", "Footer"), -1);
+    down.move({ row: 0, col: 0 });
+    expect(down.getText()).toBe("A\nB\n");
+
+    const up = new SelectionTranscript(frame("Header", "E", "F", "G", "H", "Footer"), { row: 4, col: 1 });
+    up.scroll(frame("Header", "D", "E", "F", "G", "Footer"), -1);
+    up.scroll(frame("Header", "C", "D", "E", "F", "Footer"), -1);
+    up.scroll(frame("Header", "B", "C", "D", "E", "Footer"), -1);
+    up.scroll(frame("Header", "C", "D", "E", "F", "Footer"), 1);
+    up.move({ row: 5, col: 80 });
+    // The bottom boundary is after the visible F row, before offscreen G/H.
+    expect(up.getText()).toBe("\nG\nH");
+  });
+
   it("does not replace verified text with an unrelated or partial repaint", () => {
     const selection = new SelectionTranscript(frame("header", "original 1", "original 2", "original 3"), { row: 1, col: 0 });
     selection.move({ row: 3, col: 80 });

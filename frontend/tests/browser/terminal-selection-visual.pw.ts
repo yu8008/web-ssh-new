@@ -112,7 +112,8 @@ test("DOM cross-screen selection displays only complete frames and bounded steps
   for (const [index, frame] of frames.entries()) {
     expect(frame.highlight).toBe(true);
     expect(frame.numbers).toEqual(Array.from({ length: 33 }, (_, row) => frame.numbers[0] + row));
-    if (index) expect(frame.numbers[0] - frames[index - 1].numbers[0]).toBeLessThanOrEqual(4);
+    // The fast window occupies at most one quarter of the 33-row body.
+    if (index) expect(frame.numbers[0] - frames[index - 1].numbers[0]).toBeLessThanOrEqual(8);
   }
   await page.locator(".xterm-screen").screenshot({ path: testInfo.outputPath("complete-drag-frame.png") });
   await page.mouse.up();
@@ -137,7 +138,7 @@ test("native history drag discards catch-up after a busy frame", async ({ page }
     return positions;
   });
   expect(positions.at(-1)! - positions[0]).toBeGreaterThan(30);
-  for (let i = 1; i < positions.length; i++) expect(positions[i] - positions[i - 1]).toBeLessThanOrEqual(4);
+  for (let i = 1; i < positions.length; i++) expect(positions[i] - positions[i - 1]).toBeLessThanOrEqual(6);
   await page.mouse.up();
   const stopped = await page.evaluate(() => window.terminalStateForTest().viewportY);
   await page.waitForTimeout(150);
