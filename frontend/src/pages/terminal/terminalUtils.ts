@@ -83,8 +83,8 @@ export function buildExtendedAnsiPalette(overrides: Record<number, string> = {})
 
 export const darkTerminalTheme = {
   background: "#171717",
-  foreground: "#ececec",
-  cursor: "#ececec",
+  foreground: "#ffffff",
+  cursor: "#ffffff",
   cursorAccent: "#171717",
   selectionBackground: "#454b55",
   black: "#303030",
@@ -112,8 +112,8 @@ export const darkTerminalTheme = {
 
 export const lightTerminalTheme = {
   background: "#ffffff",
-  foreground: "#1f1f1f",
-  cursor: "#1f1f1f",
+  foreground: "#000000",
+  cursor: "#000000",
   cursorAccent: "#ffffff",
   selectionBackground: "#dce7f7",
   black: "#1f1f1f",

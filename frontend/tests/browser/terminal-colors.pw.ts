@@ -124,7 +124,7 @@ for (const renderer of ["dom", "webgl"]) {
     expect((await page.evaluate(() => window.terminalStateForTest())).lines).toEqual(before.lines);
   });
 
-  test(`${renderer}: light text stays readable on both panels and while selected, preserving ANSI attributes`, async ({ page }, testInfo) => {
+  test(`${renderer}: body text switches between pure white and black while accents and selection stay readable`, async ({ page }, testInfo) => {
     await open(page, renderer, true);
     const lines = ["", "48;5;235;", "48;5;236;"].flatMap(surface => [
       `\x1b[0;${surface}39mNormal body 中文 MMMM\x1b[K`,
@@ -147,6 +147,8 @@ for (const renderer of ["dom", "webgl"]) {
     for (const dark of [true, false, true, false]) {
       await page.evaluate(dark => window.themeTerminalForTest(dark), dark);
       expect((await page.evaluate(() => window.terminalStateForTest())).rowStyles).toEqual(before.rowStyles);
+      const body = await painted(page, [0, 4, 8]);
+      for (const foreground of body.foregrounds) expect(foreground).toEqual(dark ? [255, 255, 255] : [0, 0, 0]);
       if (!dark) await check();
     }
     const box = (await page.locator(".xterm-screen").boundingBox())!;
@@ -354,7 +356,10 @@ for (const mobile of [false, true]) {
       await expect(page.locator(".terminal-frame")).toHaveCSS("background-color", background);
       await expect(page.locator(".xterm-scrollable-element")).toHaveCSS("background-color", background);
       await expect(page.locator(".terminal-shell")).toHaveCSS("background-color", background);
-      if (!mobile) await expect(page.locator(".terminal-inspector")).toHaveCSS("background-color", light ? "rgb(249, 249, 249)" : "rgb(33, 33, 33)");
+      const chrome = light ? "rgb(249, 249, 249)" : "rgb(33, 33, 33)";
+      await expect(page.locator(".terminal-toolbar")).toHaveCSS("background-color", chrome);
+      if (!mobile) await expect(page.locator(".terminal-inspector")).toHaveCSS("background-color", chrome);
+      await expect(page.locator(".xterm-rows span").filter({ hasText: "Normal text and readable links" }).first()).toHaveCSS("color", light ? "rgb(0, 0, 0)" : "rgb(255, 255, 255)");
       await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute("content", light ? "#ffffff" : "#212121");
       await expect.poll(() => page.locator(".xterm-rows > div").first().locator("span").first().evaluate(el => getComputedStyle(el).backgroundColor))
         .toBe(light ? "rgb(237, 237, 237)" : "rgb(48, 48, 48)");
@@ -362,7 +367,7 @@ for (const mobile of [false, true]) {
       await expect(page.getByText(/需要重启程序/)).toHaveCount(0);
       await expect(page.locator(".xterm")).toHaveAttribute("data-identity", "original");
       if (light) {
-        await expect(page.locator(".xterm-rows span").filter({ hasText: "Worked for 35s" }).first()).toHaveCSS("color", "rgb(76, 76, 76)");
+        await expect(page.locator(".xterm-rows span").filter({ hasText: "Worked for 35s" }).first()).toHaveCSS("color", "rgb(51, 51, 51)");
         await page.screenshot({ path: testInfo.outputPath("live-light-theme.png") });
       }
     }

@@ -176,9 +176,10 @@ select:focus-visible, textarea:focus-visible { outline: 2px solid rgb(var(--bran
 .workspace-empty > p:nth-child(2) { font-size: 20px; font-weight: 500; letter-spacing: -.04em; }
 .workspace-footer { font-family: var(--font-detail); font-size: 9px; height: 43px; background: rgb(var(--canvas)); }
 
-/* Dark terminal and inspector exchange their neutral surface depths. */
+/* Keep the terminal deeper than the shared toolbar and inspector surfaces. */
 [data-theme="dark"] .terminal-shell { background-color: #171717; }
-[data-theme="dark"] .terminal-inspector { background-color: #212121; }
+.terminal-toolbar, .terminal-inspector { background-color: rgb(var(--chrome)); }
+[data-theme="dark"] .terminal-toolbar, [data-theme="dark"] .terminal-inspector { background-color: #212121; }
 .terminal-toolbar { box-shadow: 0 1px 0 rgb(var(--ink) / .02); }
 .terminal-shell .terminal-frame { border-radius: 13px; box-shadow: 0 4px 25px rgb(0 0 0 / .025); }
 .terminal-shell .ui-button { border-radius: 8px; }

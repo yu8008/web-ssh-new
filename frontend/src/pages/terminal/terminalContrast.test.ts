@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { lightTerminalTheme } from "./terminalUtils";
 import { readableLightForeground, readableTerminalForeground, usesLightTextPolicy, usesTerminalTextPolicy } from "./terminalContrast";
 
 const rgba = (red: number, green: number, blue: number) => ((red << 24) | (green << 16) | (blue << 8) | 255) >>> 0;
@@ -12,10 +13,10 @@ function contrast(a: number, b: number) {
 
 describe("light terminal glyph contrast", () => {
   it("preserves readable body text and gives default dim text a darker secondary color", () => {
-    const body = rgba(31, 31, 31);
+    const body = (parseInt(lightTerminalTheme.foreground.slice(1), 16) * 256 + 255) >>> 0;
     expect(readableLightForeground(0xffffffff, body, false).rgba).toBe(body);
     const secondary = readableLightForeground(0xffffffff, body, true);
-    expect(secondary.css).toBe("#4c4c4c");
+    expect(secondary.css).toBe("#333333");
     expect(contrast(0xffffffff, secondary.rgba)).toBeGreaterThanOrEqual(4.5);
     expect(contrast(0xffffffff, secondary.rgba)).toBeLessThan(contrast(0xffffffff, body));
   });
