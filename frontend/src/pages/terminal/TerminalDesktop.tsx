@@ -1,5 +1,5 @@
 import React from "react";
-import { ArrowLeft, Copy, Folder, Moon, RefreshCw, Sun, X } from "lucide-react";
+import { Activity, ArrowLeft, Copy, Folder, Moon, RefreshCw, Sun, X } from "lucide-react";
 import { Button } from "../../components/Button";
 import { FileViewer } from "../../components/FileViewer";
 import { getServerClock, type ServerClock } from "../../lib/api";
@@ -8,6 +8,7 @@ import type { TerminalSessionState } from "./useTerminalSession";
 import { TerminalLoading } from "./TerminalLoading";
 import { TerminalLatencyStatus } from "./TerminalLatencyStatus";
 import { NotificationButton } from "../../notifications/NotificationProvider";
+import { darkTerminalTheme, lightTerminalTheme } from "./terminalUtils";
 
 function cx(...values: Array<string | false | null | undefined>): string {
   return values.filter(Boolean).join(" ");
@@ -87,7 +88,7 @@ function useServerClock(sessionId?: string) {
 
 function TerminalPanelFallback({ isDark }: { isDark: boolean }) {
   return (
-    <div className={`flex h-full min-h-[120px] items-center justify-center rounded-lg border text-sm ${isDark ? "border-slate-800 bg-slate-900/40 text-slate-400" : "border-slate-200 bg-white text-slate-500"}`}>
+    <div className={`flex h-full min-h-[120px] items-center justify-center rounded-lg border text-sm ${isDark ? "border-line bg-surface/40 text-muted" : "border-line bg-surface text-muted"}`}>
       加载中... / Loading...
     </div>
   );
@@ -177,8 +178,8 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
   }, [sidebarWidth, syncTerminalSize, terminalInstance]);
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-canvas text-ink transition-colors duration-300 supports-[height:100dvh]:h-dvh">
-      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line bg-chrome px-3 sm:px-4">
+    <div className="terminal-shell flex h-screen flex-col overflow-hidden bg-canvas text-ink transition-colors duration-300 supports-[height:100dvh]:h-dvh">
+      <header className="terminal-toolbar flex h-14 shrink-0 items-center gap-3 border-b border-line bg-chrome px-3 sm:px-4">
         <Button variant="ghost" size="icon" onClick={onBack} aria-label={state.t("返回会话管理", "Back")} title={state.t("返回会话管理", "Back")}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
@@ -261,10 +262,10 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
         <div className="flex-1 flex flex-col min-w-0">
           <div className="relative min-h-0 flex-1 p-3 sm:p-4">
             <div
-              className="h-full w-full overflow-hidden rounded-lg border border-line"
-              style={{ backgroundColor: state.isDark ? "#020617" : "#ffffff" }}
+              className="terminal-frame h-full w-full overflow-hidden rounded-lg border border-line"
+              style={{ backgroundColor: (state.isDark ? darkTerminalTheme : lightTerminalTheme).background }}
             >
-              <div className={cx("h-full w-full p-3", !state.isDark && "xterm-light", !state.isDark && "xterm-light", state.sessionInfo?.enhanced_enabled && "xterm-tmux-enhanced")}>
+              <div className={cx("h-full w-full p-3", !state.isDark && "xterm-light", state.sessionInfo?.enhanced_enabled && "xterm-tmux-enhanced")}>
                 <div
                   ref={state.terminalRef}
                   className="h-full w-full"
@@ -346,7 +347,7 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
                   className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium shadow-lg transition ${
                     copyFlash
                       ? "border-emerald-400 bg-emerald-500 text-white"
-                      : "border-indigo-400/60 bg-indigo-500 text-white hover:bg-indigo-400"
+                      : "border-brand/60 bg-brand text-white hover:bg-brand"
                   }`}
                   aria-label={state.t("复制选中内容", "Copy selected text")}
                   title={state.t("复制选中内容", "Copy selected text")}
@@ -367,8 +368,9 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
         />
         <div
           style={{ width: sidebarWidth }}
-          className="hidden min-h-0 flex-shrink-0 flex-col overflow-hidden border-l border-line bg-chrome p-3 md:flex"
+          className="terminal-inspector hidden min-h-0 flex-shrink-0 flex-col overflow-hidden border-l border-line bg-chrome p-3 md:flex"
         >
+          <div className="inspector-heading"><Activity size={14} strokeWidth={1.4} />{state.t("资源监测", "INSPECTOR")}<span>SERVER / LIVE</span></div>
           <div className="mb-2 flex shrink-0 items-center justify-between gap-2 rounded-lg border border-line bg-surface px-3 py-2">
             <span className="text-2xs font-medium text-muted">{state.t("服务器时间", "Server time")}</span>
             <span className="flex items-baseline gap-1.5 font-mono text-xs tabular-nums text-ink">
@@ -406,7 +408,7 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-canvas">
           <div className="text-center">
             <div className="text-2xl mb-4 text-rose-400">{state.t("会话已断开", "Session disconnected")}</div>
-            <div className="text-sm text-slate-400">{state.t("断开时间", "Disconnected at")}: {state.sessionDisconnected.time}</div>
+            <div className="text-sm text-muted">{state.t("断开时间", "Disconnected at")}: {state.sessionDisconnected.time}</div>
           </div>
         </div>
       )}

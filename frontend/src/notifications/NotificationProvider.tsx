@@ -1,6 +1,6 @@
 import React from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Bell, Volume2, VolumeX, X } from "lucide-react";
+import { Bell, Circle, Volume2, VolumeX, X } from "lucide-react";
 import { AppContext, useApp } from "../context/AppContextCore";
 import { Button } from "../components/Button";
 import { configureCliNotifications, openNotificationSocket, readTerminalNotification } from "../lib/api";
@@ -221,7 +221,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           <p className="text-xs text-ink-soft">{t("网页保持打开时接收提醒；浏览器休眠、设备锁屏或网页关闭后不保证即时播放。旧通知和重连回放不会补响。", "Keep the page open for alerts. Sleeping browsers, locked devices and closed pages may not play sounds promptly. Old notifications and reconnect history stay silent.")}</p>
           <div className="border-t border-line pt-3"><h3 className="mb-2 text-sm font-medium">{t("最近提醒", "Recent notifications")} ({events.filter(event => !event.read_at).length} {t("未读", "unread")})</h3>
             {!events.length && <p className="text-sm text-ink-soft">{t("暂无提醒", "No notifications yet")}</p>}
-            <div className="space-y-1">{events.slice(0, 50).map(event => <button key={event.id} type="button" onClick={() => visit(event)} className="block w-full rounded p-2 text-left text-sm hover:bg-elevated"><span className="block truncate">{!event.read_at && "● "}{event.session_name} · {event.app}</span><span className="text-ink-soft">{label(event)} · {new Date(event.created_at).toLocaleTimeString()}</span></button>)}</div>
+            <div className="space-y-1">{events.slice(0, 50).map(event => <button key={event.id} type="button" onClick={() => visit(event)} className="block w-full rounded p-2 text-left text-sm hover:bg-elevated"><span className="block truncate">{!event.read_at && <Circle size={6} fill="currentColor" className="mr-2 inline-block text-brand" aria-label={t("未读", "Unread")} />}{event.session_name} · {event.app}</span><span className="text-ink-soft">{label(event)} · {new Date(event.created_at).toLocaleTimeString()}</span></button>)}</div>
           </div>
         </div>
       </div>

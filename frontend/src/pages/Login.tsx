@@ -1,6 +1,8 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Moon, Sun, Terminal } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Fingerprint, Layers, LockKeyhole, Moon, Network, Sun } from "lucide-react";
+import { Brand } from "../components/Brand";
+import { SignalArtwork } from "../components/SignalArtwork";
 import { Button } from "../components/Button";
 import { Input } from "../components/Input";
 import { useToast } from "../components/ToastContext";
@@ -9,22 +11,22 @@ import { login, storeAuthData } from "../lib/api";
 import { parseJwt } from "../lib/auth";
 
 const copy = {
-  title: { zh: "登录工作台", en: "Sign in" },
-  subtitle: { zh: "用管理员账号进入 WebSSH 工作台", en: "Use your admin account to open the workbench" },
+  title: { zh: "进入工作空间", en: "Welcome back" },
+  subtitle: { zh: "一个入口，连接你的服务器与工作现场。", en: "Your servers. Your sessions. Your space." },
   username: { zh: "用户名", en: "Username" },
   password: { zh: "密码", en: "Password" },
   remember: { zh: "记住我", en: "Keep me signed in" },
   submit: { zh: "登录", en: "Sign in" },
   submitting: { zh: "正在登录…", en: "Signing in…" },
   forgot: { zh: "忘记密码？", en: "Forgot password?" },
-  hint: { zh: "首次部署：初始密码来自 .env 的 INITIAL_ADMIN_PASSWORD。", en: "First run: the initial password comes from INITIAL_ADMIN_PASSWORD." },
+  hint: { zh: "仅限已授权的工作空间成员访问", en: "For authorized workspace members" },
   headline: { zh: "服务器，就在这个标签页里。", en: "Your servers, in one tab." },
   lead: {
     zh: "保存连接、启动持久会话、翻看文件，不用再在多个终端窗口之间切换。",
     en: "Save connections, keep sessions alive and move files without switching terminal windows.",
   },
   features: [
-    { zh: "断网或关掉浏览器，会话仍在后台运行", en: "Sessions keep running after you close the browser" },
+    { zh: "增强持久会话，让工作持续在线", en: "Persistent sessions keep your work moving" },
     { zh: "连接、会话、文件与监控在同一个工作台", en: "Connections, sessions, files and metrics in one place" },
     { zh: "凭据加密存储，权限按账号隔离", en: "Credentials encrypted at rest, scoped per account" },
   ],
@@ -102,129 +104,55 @@ export function Login() {
   const isDisabled = !username || !password || loading;
 
   return (
-    <div className="flex min-h-screen bg-canvas text-ink">
-      <aside className="relative hidden w-[46%] max-w-[620px] flex-col justify-between overflow-hidden border-r border-line bg-surface px-10 py-10 lg:flex">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_80%_at_10%_0%,rgb(var(--brand)/0.14),transparent_55%)]" />
-        <div className="relative flex items-center gap-2">
-          <span className="grid h-9 w-9 place-items-center rounded-lg bg-brand/12 text-brand ring-1 ring-inset ring-brand/25">
-            <Terminal className="h-4 w-4" />
-          </span>
-          <span className="text-sm font-semibold tracking-tight">WebSSH</span>
-          <span className="rounded border border-line px-1.5 py-0.5 text-[10px] font-medium text-muted">Gateway</span>
+    <div className="auth-layout">
+      <header className="auth-header">
+        <Brand />
+        <span className="auth-header-caption">REMOTE SYSTEMS. HUMAN CONTROL.</span>
+        <div className="auth-controls">
+          <Button variant="ghost" size="sm" onClick={toggleLanguage} aria-label={zh ? "Switch to English" : "切换到中文"}>{zh ? "EN" : "中"}</Button>
+          <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label={zh ? "切换主题" : "Toggle theme"}>{isDark ? <Sun size={17} /> : <Moon size={17} />}</Button>
         </div>
-
-        <div className="relative max-w-md">
-          <h1 className="text-2xl font-semibold leading-tight tracking-tight">{tr("headline")}</h1>
-          <p className="mt-3 text-sm leading-relaxed text-ink-soft">{tr("lead")}</p>
-          <ul className="mt-8 space-y-3">
-            {copy.features.map((feature) => (
-              <li key={feature.zh} className="flex items-start gap-2.5 text-xs text-muted">
-                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-brand/70" />
-                {zh ? feature.zh : feature.en}
-              </li>
-            ))}
-          </ul>
+      </header>
+      <div className="auth-stage">
+      <aside className="auth-story">
+        <span className="auth-wordmark" aria-hidden="true">GATEWAY</span>
+        <SignalArtwork className="auth-art" interactive />
+        <div className="auth-copy">
+          <p className="eyebrow"><span className="eyebrow-rule" /> {zh ? "距离，重新定义。" : "DISTANCE, REDEFINED."}</p>
+          <h1>{zh ? <>远端，<br /><span>触手可及。</span></> : <>Remote.<br /><span>Within reach.</span></>}</h1>
+          <span className="auth-direction" aria-hidden="true"><ArrowDownRight strokeWidth={1} /></span>
+          <p>{tr("lead")}</p>
         </div>
-
-        <div className="relative rounded-lg border border-line bg-canvas/80 p-4 font-mono text-xs backdrop-blur">
-          <div className="flex items-center gap-1.5 text-muted">
-            <span className="h-2 w-2 rounded-full bg-ok/80" />
-            <span className="h-2 w-2 rounded-full bg-warn/70" />
-            <span className="h-2 w-2 rounded-full bg-line-strong" />
-            <span className="ml-2 text-[10px] uppercase tracking-wide">session</span>
-          </div>
-          <div className="mt-3 space-y-1.5">
-            <div className="text-ink-soft">
-              <span className="text-brand">$</span> ssh ops@10.0.12.8
-            </div>
-            <div className="text-muted">connected · tmux keep-alive · 2h 14m</div>
-          </div>
-        </div>
+        <div className="auth-art-caption"><span>01 / THE GATEWAY</span><span>{zh ? "跨越窗口，连接工作。" : "BEYOND THE WINDOW."}</span></div>
       </aside>
-
-      <main className="relative flex flex-1 items-center justify-center px-5 py-10">
-        <div className="absolute right-4 top-4 flex items-center gap-1">
-          <button
-            type="button"
-            onClick={toggleLanguage}
-            className="grid h-8 min-w-8 place-items-center rounded-md px-2 text-2xs font-semibold text-muted transition hover:bg-elevated hover:text-ink"
-            aria-label={zh ? "Switch to English" : "切换到中文"}
-          >
-            {zh ? "EN" : "中"}
-          </button>
-          <button
-            type="button"
-            onClick={toggleTheme}
-            className="grid h-8 w-8 place-items-center rounded-md text-muted transition hover:bg-elevated hover:text-ink"
-            aria-label={zh ? "切换主题" : "Toggle theme"}
-          >
-            {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-          </button>
-        </div>
-
-        <div className="animate-rise-in w-full max-w-[360px]">
-          <div className="mb-6 flex items-center gap-2 lg:hidden">
-            <span className="grid h-8 w-8 place-items-center rounded-md bg-brand/12 text-brand ring-1 ring-inset ring-brand/25">
-              <Terminal className="h-4 w-4" />
-            </span>
-            <span className="text-sm font-semibold">WebSSH</span>
-          </div>
-          <h2 className="text-xl font-semibold tracking-tight">{tr("title")}</h2>
-          <p className="mt-1 text-xs text-muted">{tr("subtitle")}</p>
-
-          <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
-            <div className="space-y-1.5">
-              <label htmlFor="login-username" className="block text-xs font-medium text-soft">
-                {tr("username")}
-              </label>
-              <Input
-                id="login-username"
-                name="username"
-                autoComplete="username"
-                spellCheck={false}
-                autoCapitalize="off"
-                value={username}
-                onChange={(event) => setUsername(event.target.value)}
-              />
+      <main className="auth-panel">
+        <div className="auth-form">
+          <div className="auth-form-heading"><p className="eyebrow">02 / ACCESS</p><ArrowUpRight size={24} strokeWidth={1.25} aria-hidden="true" /></div>
+          <h2>{tr("title")}</h2><p className="auth-subtitle">{tr("subtitle")}</p>
+          <form onSubmit={handleSubmit}>
+            <div className="space-y-2.5"><label htmlFor="login-username" className="block text-ink-soft">{tr("username")}</label>
+              <Input id="login-username" name="username" autoComplete="username" spellCheck={false} autoCapitalize="off" value={username} onChange={event => setUsername(event.target.value)} />
             </div>
-            <div className="space-y-1.5">
-              <label htmlFor="login-password" className="block text-xs font-medium text-soft">
-                {tr("password")}
-              </label>
-              <Input
-                id="login-password"
-                name="password"
-                type="password"
-                autoComplete="current-password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-              />
+            <div className="space-y-2.5"><label htmlFor="login-password" className="block text-ink-soft">{tr("password")}</label>
+              <Input id="login-password" name="password" type="password" autoComplete="current-password" value={password} onChange={event => setPassword(event.target.value)} />
             </div>
-
             <div className="flex items-center justify-between gap-3">
-              <label className="flex cursor-pointer items-center gap-2 text-xs text-muted">
-                <input
-                  type="checkbox"
-                  className="h-3.5 w-3.5 rounded border-line accent-[rgb(var(--brand))]"
-                  checked={rememberMe}
-                  onChange={(event) => setRememberMe(event.target.checked)}
-                />
-                {tr("remember")}
-              </label>
-              <button type="button" onClick={handleOpenResetDialog} className="text-xs text-muted transition hover:text-brand">
-                {tr("forgot")}
-              </button>
+              <label className="flex cursor-pointer items-center gap-2 text-muted"><input type="checkbox" checked={rememberMe} onChange={event => setRememberMe(event.target.checked)} />{tr("remember")}</label>
+              <button type="button" onClick={handleOpenResetDialog} className="text-xs text-muted transition hover:text-brand">{tr("forgot")}</button>
             </div>
-
-            <Button type="submit" size="lg" className="w-full" disabled={isDisabled} loading={loading}>
-              {loading ? tr("submitting") : tr("submit")}
-              {!loading ? <ArrowRight className="h-4 w-4" /> : null}
-            </Button>
+            <Button type="submit" size="lg" disabled={isDisabled} loading={loading}>{loading ? tr("submitting") : tr("submit")}{!loading && <ArrowUpRight size={18} />}</Button>
           </form>
-
-          <p className="mt-5 text-2xs leading-relaxed text-muted">{tr("hint")}</p>
+          <p className="auth-fineprint"><LockKeyhole size={13} aria-hidden="true" />{tr("hint")}</p>
         </div>
       </main>
+      </div>
+      <footer className="auth-bottom">
+        <div className="auth-features">{copy.features.map((feature, index) => {
+          const Icon = [Layers, Network, Fingerprint][index];
+          return <div key={feature.zh}><span className="auth-feature-index">0{index + 1}</span><Icon size={20} strokeWidth={1.4} aria-hidden="true" /><p>{zh ? feature.zh : feature.en}</p></div>;
+        })}</div>
+        <div className="auth-caption"><span>ONE GATEWAY.<br />EVERY POSSIBILITY.</span><span>WEBSSH / GATEWAY</span></div>
+      </footer>
 
       {resetDialogOpen ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-6">

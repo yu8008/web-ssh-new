@@ -21,11 +21,11 @@ export function SessionEmptyState({ state }: SessionEmptyStateProps) {
       className={cn(
         "rounded-lg border px-4 py-6 text-sm",
         state.isDark
-          ? "border-slate-700 bg-slate-900/50 text-slate-400"
-          : "border-slate-200 bg-white text-slate-500 shadow-sm"
+          ? "border-line bg-surface/50 text-muted"
+          : "border-line bg-surface text-muted shadow-sm"
       )}
     >
-      <p className={`font-semibold ${state.isDark ? "text-slate-200" : "text-slate-800"}`}>
+      <p className={`font-semibold ${state.isDark ? "text-ink" : "text-ink"}`}>
         {title}
       </p>
       <p className="mt-1">

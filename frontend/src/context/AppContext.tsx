@@ -89,8 +89,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     if (typeof document !== "undefined") {
       document.documentElement.setAttribute("data-theme", theme);
+      document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "light" ? "#ffffff" : "#212121");
     }
   }, [theme]);
+
+  React.useEffect(() => { document.documentElement.lang = language; }, [language]);
 
   const setTheme = React.useCallback((newTheme: Theme) => {
     setThemeState(newTheme);

@@ -101,16 +101,16 @@ export function TerminalCopyPanel({
       aria-label={t("终端选择复制", "Terminal selection copy")}
       className={`absolute inset-3 z-20 flex min-h-0 flex-col overflow-hidden rounded-lg border ${
         isDark
-          ? "border-slate-700 bg-slate-950 text-slate-100"
-          : "border-slate-300 bg-white text-slate-900"
+          ? "border-line bg-canvas text-ink"
+          : "border-line-strong bg-surface text-ink"
       }`}
     >
-      <div className={`flex min-h-11 items-center gap-2 border-b px-3 ${isDark ? "border-slate-800" : "border-slate-200"}`}>
+      <div className={`flex min-h-11 items-center gap-2 border-b px-3 ${isDark ? "border-line" : "border-line"}`}>
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-semibold">
             {t("选择复制", "Select and copy")}
           </div>
-          <div className={`flex items-center gap-2 text-xs ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+          <div className={`flex items-center gap-2 text-xs ${isDark ? "text-muted" : "text-ink-soft"}`}>
             <span>{snapshotRangeLabel}</span>
             {snapshot.truncated ? (
               <span className={isDark ? "text-amber-300" : "text-amber-700"}>
@@ -145,10 +145,10 @@ export function TerminalCopyPanel({
         onTouchEnd={syncSelection}
         aria-label={t("终端输出快照", "Terminal output snapshot")}
         placeholder={t("暂无可复制的终端输出", "No terminal output to copy")}
-        className={`min-h-0 flex-1 w-full resize-none px-3 py-3 font-mono text-base leading-6 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 ${
+        className={`min-h-0 flex-1 w-full resize-none px-3 py-3 font-mono text-base leading-6 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand ${
           isDark
-            ? "bg-slate-950 text-slate-100 placeholder:text-slate-400"
-            : "bg-white text-slate-900 placeholder:text-slate-600"
+            ? "bg-canvas text-ink placeholder:text-muted"
+            : "bg-surface text-ink placeholder:text-ink-soft"
         }`}
         style={{
           WebkitTouchCallout: "default",
@@ -158,7 +158,7 @@ export function TerminalCopyPanel({
         }}
       />
 
-      <div className={`grid grid-cols-2 gap-2 border-t p-2 ${isDark ? "border-slate-800" : "border-slate-200"}`}>
+      <div className={`grid grid-cols-2 gap-2 border-t p-2 ${isDark ? "border-line" : "border-line"}`}>
         <Button
           type="button"
           variant="secondary"

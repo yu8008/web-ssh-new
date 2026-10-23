@@ -8,21 +8,28 @@ One of its core capabilities is the persistent session design for long-running w
 
 This repository focuses on terminal-history scrolling, large text selections, live light/dark themes, and notification sounds when a CLI finishes a turn or needs your input. Recent output from the same session and notification records can be viewed on another device.
 
+The visual theme, “Gateway,” combines oversized typography, an original metallic sculpture, pointer-driven spring motion, and self-hosted fonts. The workspace provides session cards, connection filters, and a Resume work action. Sign-in, terminals, files, monitoring, settings, and logs share neutral charcoal/white surfaces, a restrained blue accent, and Lucide icons. Terminal backgrounds remain `#212121` in dark mode and `#ffffff` in light mode, with TUI panels and selections switching immediately. The sculpture stops animating when interaction settles, falls back to local artwork when graphics support is unavailable, and respects reduced-motion preferences.
+
 [Quick Start](#quick-start) · [CLI Task Notifications](#cli-task-notifications) · [Architecture](./docs/ARCHITECTURE.en.md) · [Deployment](./docs/DEPLOYMENT.en.md)
 
 ## Project Preview
 
-![WebSSH Gateway Overview](./docs/images/preview-overview.png)
-![WebSSH Gateway Terminal and File Manager](./docs/images/preview-terminal.png)
+Screenshots show the current interface with demonstration data.
+
+![WebSSH Gateway Sign-in](./docs/images/gateway-login.png)
+
+![WebSSH Gateway Overview](./docs/images/gateway-workspace.png)
+![WebSSH Gateway Dark Terminal](./docs/images/gateway-terminal.png)
+
+![WebSSH Gateway Light Terminal](./docs/images/gateway-terminal-light.png)
 
 ## Mobile Experience
 
 A dedicated mobile layout provides touch-friendly interactions for terminal work, file management, and system monitoring in phone browsers.
 
-<img src="./docs/images/mobile-overview.jpg" alt="Mobile Overview" width="320" style="max-width: 100%;" />
-<img src="./docs/images/mobile-terminal.jpg" alt="Mobile Terminal" width="320" style="max-width: 100%;" />
-<img src="./docs/images/mobile-fileManagement.jpg" alt="Mobile File Management" width="320" style="max-width: 100%;" />
-<img src="./docs/images/mobile-systemStatus.jpg" alt="Mobile System Status" width="320" style="max-width: 100%;" />
+<img src="./docs/images/gateway-mobile-workspace.png" alt="Mobile Overview" width="320" style="max-width: 100%;" />
+<img src="./docs/images/gateway-mobile-terminal.png" alt="Mobile Terminal" width="320" style="max-width: 100%;" />
+<img src="./docs/images/gateway-mobile-files.png" alt="Mobile File Management" width="320" style="max-width: 100%;" />
 
 ## Key Features
 

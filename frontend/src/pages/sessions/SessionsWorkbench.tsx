@@ -1,6 +1,9 @@
 import React from "react";
 import {
   ArrowDown,
+  ArrowUpRight,
+  SquareTerminal,
+  ExternalLink,
   ArrowUp,
   Circle,
   Loader2,
@@ -22,7 +25,10 @@ import {
   X,
   Pencil,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
+import { Brand } from "../../components/Brand";
+import { WorkspaceIntro } from "./WorkspaceIntro";
+import { NotificationButton } from "../../notifications/NotificationProvider";
 import { Button } from "../../components/Button";
 import { Input } from "../../components/Input";
 import { clearAuthStorage } from "../../lib/api";
@@ -84,6 +90,7 @@ export function SessionsWorkbench({ state }: SessionsWorkbenchProps) {
   const navigate = useNavigate();
   const online = useOnlineStatus();
   const [connectionFilter, setConnectionFilter] = React.useState("");
+  const [mobileSearchOpen, setMobileSearchOpen] = React.useState(false);
   const [activeConnectionId, setActiveConnectionId] = React.useState<number | null>(null);
   const [openMenuId, setOpenMenuId] = React.useState<string | null>(null);
   const [noteSessionId, setNoteSessionId] = React.useState<string | null>(null);
@@ -134,10 +141,11 @@ export function SessionsWorkbench({ state }: SessionsWorkbenchProps) {
   React.useEffect(() => {
     const handler = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
-      const typing = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
+      const typing = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable || target.closest('[role="dialog"],[role="menu"]'));
       if (event.key === "/" && !typing && !event.metaKey && !event.ctrlKey) {
         event.preventDefault();
-        searchRef.current?.focus();
+        setMobileSearchOpen(true);
+        requestAnimationFrame(() => searchRef.current?.focus());
       }
     };
     window.addEventListener("keydown", handler);
@@ -145,17 +153,16 @@ export function SessionsWorkbench({ state }: SessionsWorkbenchProps) {
   }, []);
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-canvas text-ink">
-      <header className="relative z-30 flex h-14 shrink-0 items-center gap-3 border-b border-line bg-chrome px-3 sm:px-4">
-        <div className="flex items-center gap-2">
-          <span className="grid h-8 w-8 place-items-center rounded-md bg-brand/12 text-brand ring-1 ring-inset ring-brand/25">
-            <TerminalGlyph />
-          </span>
-          <span className="text-sm font-semibold tracking-tight">WebSSH</span>
-          <span className="hidden text-2xs text-muted sm:inline">工作台</span>
-        </div>
+    <div className="sessions-shell flex h-screen flex-col overflow-hidden bg-canvas text-ink">
+      <header className={cx("sessions-header relative z-30 flex shrink-0 items-center border-b border-line bg-chrome", mobileSearchOpen && "sessions-header--search")}>
+        <NavLink to="/sessions" aria-label="WebSSH Gateway"><Brand /></NavLink>
+        <nav className="product-nav" aria-label={state.t("主导航", "Main navigation")}>
+          <NavLink to="/sessions">{state.t("工作空间", "Workspace")}</NavLink>
+          <NavLink to="/settings">{state.t("系统设置", "Settings")}</NavLink>
+          <NavLink to="/logs">{state.t("系统日志", "Logs")}</NavLink>
+        </nav>
 
-        <label className="relative ml-1 hidden w-full max-w-[360px] items-center md:flex">
+        <label className={cx("workspace-search relative w-full items-center md:flex", mobileSearchOpen ? "flex" : "hidden")}>
           <Search className="pointer-events-none absolute left-2.5 h-3.5 w-3.5 text-muted" aria-hidden="true" />
           <Input
             ref={searchRef}
@@ -178,6 +185,8 @@ export function SessionsWorkbench({ state }: SessionsWorkbenchProps) {
         </label>
 
         <div className="ml-auto flex items-center gap-1">
+          <IconAction label={state.t("搜索", "Search")} className="md:hidden" onClick={() => { setMobileSearchOpen(value => !value); requestAnimationFrame(() => searchRef.current?.focus()); }}><Search size={16} /></IconAction>
+          <NotificationButton />
           {!online ? (
             <span className="hidden items-center gap-1.5 rounded-full border border-warn/40 bg-warn/10 px-2.5 py-1 text-2xs font-medium text-warn sm:flex">
               <WifiOff className="h-3 w-3" />
@@ -249,13 +258,14 @@ export function SessionsWorkbench({ state }: SessionsWorkbenchProps) {
       <div className="flex min-h-0 flex-1">
         <aside
           className={cx(
-            "z-20 flex w-[280px] shrink-0 flex-col border-r border-line bg-chrome",
+            "connection-rail z-20 flex w-[280px] shrink-0 flex-col border-r border-line bg-chrome",
             "max-lg:fixed max-lg:inset-y-14 max-lg:left-0 max-lg:shadow-panel",
             railOpen ? "max-lg:flex" : "max-lg:hidden",
             "lg:flex"
           )}
           aria-label={state.t("连接列表", "Connections")}
         >
+          <p className="rail-section-heading">02 / INFRASTRUCTURE</p>
           <div className="flex items-center justify-between gap-2 px-3 pb-2 pt-3">
             <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
               {state.t("连接", "Connections")}
@@ -318,13 +328,15 @@ export function SessionsWorkbench({ state }: SessionsWorkbenchProps) {
 
         {railOpen ? <div className="fixed inset-0 z-10 bg-black/40 lg:hidden" onClick={() => setRailOpen(false)} /> : null}
 
-        <main className="flex min-w-0 flex-1 flex-col bg-content">
-          <div className="flex flex-wrap items-center gap-3 border-b border-line px-4 py-3 sm:px-5">
+        <main className="workspace-main flex min-w-0 flex-1 flex-col bg-content">
+          <div className="workspace-scroll">
+          <WorkspaceIntro state={state} onViewActive={() => { setActiveConnectionId(null); state.setSearch(""); state.setFilter("active"); }} />
+          <div className="workspace-toolbar flex flex-wrap items-center gap-3 border-b border-line">
             <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setRailOpen(true)} aria-label={state.t("打开连接列表", "Open connections")}>
               <Server className="h-4 w-4" />
             </Button>
             <div className="min-w-0">
-              <h1 className="text-sm font-semibold">{state.t("会话", "Sessions")}</h1>
+              <h2>{state.t("会话列表", "Your sessions")}</h2>
               <p className="text-2xs text-muted">
                 {state.t(activeCount + " 个在线 · " + idleCount + " 个离线", activeCount + " active · " + idleCount + " idle")}
                 {activeConnection ? " · " + activeConnection.name : ""}
@@ -368,7 +380,7 @@ export function SessionsWorkbench({ state }: SessionsWorkbenchProps) {
             </div>
           ) : null}
 
-          <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="workspace-session-area">
             {state.loading ? (
               <SkeletonRows />
             ) : visibleSessions.length === 0 ? (
@@ -383,12 +395,13 @@ export function SessionsWorkbench({ state }: SessionsWorkbenchProps) {
                 onCreate={() => state.setShowCreateForm(true)}
               />
             ) : (
-              <ul className="divide-y divide-line/70">
-                {visibleSessions.map((session) => (
+              <ul className="session-list">
+                {visibleSessions.map((session, index) => (
                   <SessionRow
                     key={session.id}
                     state={state}
                     session={session}
+                    ordinal={index + 1}
                     menuOpen={openMenuId === session.id}
                     noteOpen={noteSessionId === session.id}
                     onToggleMenu={() => setOpenMenuId((current) => (current === session.id ? null : session.id))}
@@ -400,7 +413,9 @@ export function SessionsWorkbench({ state }: SessionsWorkbenchProps) {
             )}
           </div>
 
-          <div className="flex h-9 shrink-0 items-center justify-between gap-3 border-t border-line px-4 text-2xs text-muted sm:px-5">
+          </div>
+
+          <div className="workspace-footer flex shrink-0 items-center justify-between gap-3 border-t border-line px-4 text-muted sm:px-5">
             <span className="truncate">
               {state.t(
                 "按 / 搜索 · 点击左侧连接筛选会话 · Enter 打开当前聚焦的会话",
@@ -452,23 +467,8 @@ function IconAction({
   );
 }
 
-function ExternalIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5" aria-hidden="true">
-      <path d="M14 5h5v5M19 5l-8 8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
+function ExternalIcon() { return <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />; }
 
-function TerminalGlyph() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden="true">
-      <path d="M5 7l4 5-4 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M12 17h7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
 
 function ConnectionItem({
   state,
@@ -492,7 +492,7 @@ function ConnectionItem({
     <li>
       <div
         className={cx(
-          "group flex items-center gap-2 rounded-md px-2 py-1.5 transition",
+          "connection-node group flex items-center gap-2 rounded-md px-2 py-1.5 transition",
           selected ? "bg-brand/10 text-ink ring-1 ring-inset ring-brand/25" : "hover:bg-elevated"
         )}
       >
@@ -558,6 +558,7 @@ function StatusDot({ tone, pulse }: { tone: "ok" | "warn" | "danger" | "muted"; 
 function SessionRow({
   state,
   session,
+  ordinal,
   menuOpen,
   noteOpen,
   onToggleMenu,
@@ -566,6 +567,7 @@ function SessionRow({
 }: {
   state: SessionsState;
   session: Session;
+  ordinal: number;
   menuOpen: boolean;
   noteOpen: boolean;
   onToggleMenu: () => void;
@@ -596,23 +598,28 @@ function SessionRow({
   const scope = state.filteredSessions;
 
   return (
-    <li className="group relative">
+    <li className="session-row group relative" data-state={active ? "active" : "idle"} data-menu-open={menuOpen}>
       <div
         role="button"
         tabIndex={0}
         onClick={onOpen}
         onKeyDown={(event) => {
+          if (event.target !== event.currentTarget) return;
           if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
             onOpen();
           }
         }}
         aria-label={state.t("打开会话 " + session.name, "Open session " + session.name)}
-        className="flex cursor-pointer items-center gap-3 px-4 py-3 outline-none transition hover:bg-elevated/60 focus-visible:bg-elevated/60 sm:px-5"
+        className="session-card-main"
       >
-        <StatusDot tone={active ? "ok" : retrying ? "warn" : "muted"} pulse={active || retrying} />
+        <div className="session-card-top"><span>SESSION / {String(ordinal).padStart(2, "0")}</span>
+          <span className={`session-card-status ${active ? "text-ok" : retrying ? "text-warn" : "text-muted"}`}>{active ? state.t("运行中", "Active") : retrying ? state.t("重连中", "Reconnecting") : state.t("已离线", "Offline")}</span>
+          <StatusDot tone={active ? "ok" : retrying ? "warn" : "muted"} />
+        </div>
+        <div className="session-card-icon"><SquareTerminal size={19} strokeWidth={1.4} aria-hidden="true" /></div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
+          <div className="session-title-row flex items-center gap-1.5">
             {renaming ? (
               <input
                 autoFocus
@@ -637,7 +644,7 @@ function SessionRow({
               />
             ) : (
               <>
-                <span className="truncate text-sm font-medium">{session.name}</span>
+                <span className="session-title truncate text-sm font-medium">{session.name}</span>
                 <button
                   type="button"
                   onClick={(event) => {
@@ -654,32 +661,28 @@ function SessionRow({
               </>
             )}
             {session.enhanced_enabled ? (
-              <span className="rounded border border-brand/25 bg-brand/8 px-1.5 py-px text-[10px] font-medium text-brand">
+              <span className="session-badge shrink-0 whitespace-nowrap rounded border border-brand/25 bg-brand/8 px-1.5 py-px text-[10px] font-medium text-brand">
                 {state.t("持久", "Persistent")}
               </span>
             ) : null}
             {retrying ? (
-              <span className="rounded border border-warn/30 bg-warn/10 px-1.5 py-px text-[10px] font-medium text-warn">
+              <span className="session-badge shrink-0 whitespace-nowrap rounded border border-warn/30 bg-warn/10 px-1.5 py-px text-[10px] font-medium text-warn">
                 {state.t("重试中", "Retrying")}
               </span>
             ) : null}
             {noteValue.trim() ? <StickyNote className="h-3 w-3 shrink-0 text-muted/70" aria-hidden="true" /> : null}
           </div>
-          <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-2xs text-muted">
-            <span className="truncate font-mono">
-              {session.username}@{session.host}
-            </span>
-            <span aria-hidden="true">·</span>
-            <span>{active ? state.t("已运行 ", "up ") + durationSince(session.started_at, state.t) : state.mapSessionStatus(session.status)}</span>
-            <span aria-hidden="true">·</span>
-            <span>{state.t("最近活动 ", "last seen ") + relativeTime(session.last_activity, state.t)}</span>
-          </div>
+          <div className="session-card-host">{session.username}@{session.host}</div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="session-card-bottom">
+          <div className="session-card-time">{active ? state.t("已运行 ", "up ") + durationSince(session.started_at, state.t) : state.mapSessionStatus(session.status)}
+            <small>{state.t("最近活动 ", "last seen ") + relativeTime(session.last_activity, state.t)}</small>
+          </div>
+          <div className="flex shrink-0 items-center gap-1">
           {active ? (
-            <Button size="sm" variant="secondary" className="hidden group-hover:inline-flex group-focus-within:inline-flex sm:inline-flex">
-              {state.t("打开", "Open")}
+            <Button size="sm" variant="secondary" className="session-open">
+              {state.t("打开", "Open")}<ArrowUpRight size={12} />
             </Button>
           ) : session.enhanced_enabled && session.allow_auto_retry !== false ? (
             <Button
@@ -707,13 +710,14 @@ function SessionRow({
           >
             <MoreHorizontal className="h-4 w-4" />
           </button>
+          </div>
         </div>
       </div>
 
       {menuOpen ? (
         <>
           <div className="fixed inset-0 z-20" onClick={onToggleMenu} />
-          <div role="menu" className="animate-pop-in absolute right-4 top-12 z-30 w-44 overflow-hidden rounded-lg border border-line bg-surface p-1 shadow-panel sm:right-5">
+          <div role="menu" className="session-card-menu animate-pop-in absolute right-4 top-12 z-30 w-44 overflow-hidden rounded-lg border border-line bg-surface p-1 shadow-panel sm:right-5">
             <MenuItem
               icon={<ExternalIcon />}
               label={state.t("在新标签页打开", "Open in new tab")}
@@ -848,7 +852,7 @@ function EmptySessions({
   onCreate: () => void;
 }) {
   return (
-    <div className="animate-fade-in flex min-h-[320px] flex-col items-center justify-center px-6 py-16 text-center">
+    <div className="workspace-empty animate-fade-in flex min-h-[320px] flex-col items-center justify-center px-6 py-16 text-center">
       <span className="grid h-11 w-11 place-items-center rounded-xl border border-line bg-surface text-muted">
         <Circle className="h-4 w-4" />
       </span>

@@ -1,4 +1,5 @@
 import React from "react";
+import { ArrowDown, ArrowUp } from "lucide-react";
 import { cn } from "../../lib/utils";
 import type { SessionStatusEntry } from "./useSessionStatusSummary";
 import { formatBytesPerSecond } from "./sessionsUtils";
@@ -22,26 +23,26 @@ function MetricCard({ label, value, percent, isDark, accentClassName, muted = fa
   return (
     <div
       className={`rounded-md border px-3 py-2 ${
-        isDark ? "border-slate-700 bg-slate-950/60" : "border-slate-200 bg-slate-50"
+        isDark ? "border-line bg-canvas/60" : "border-line bg-elevated"
       }`}
     >
       <div className="flex items-center justify-between gap-3">
-        <span className={`text-xs font-medium ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+        <span className={`text-xs font-medium ${isDark ? "text-muted" : "text-muted"}`}>
           {label}
         </span>
-        <span className={cn("text-sm font-semibold", muted ? (isDark ? "text-slate-400" : "text-slate-500") : "")}>
+        <span className={cn("text-sm font-semibold", muted ? (isDark ? "text-muted" : "text-muted") : "")}>
           {value}
         </span>
       </div>
       {typeof percent === "number" ? (
-        <div className={`mt-2 h-1.5 rounded-full ${isDark ? "bg-slate-800" : "bg-slate-200"}`}>
+        <div className={`mt-2 h-1.5 rounded-full ${isDark ? "bg-elevated" : "bg-line"}`}>
           <div
             className={`h-1.5 rounded-full transition-all duration-300 ${accentClassName}`}
             style={{ width: `${Math.min(percent, 100)}%` }}
           />
         </div>
       ) : (
-        <div className={`mt-2 h-1.5 rounded-full ${isDark ? "bg-slate-800" : "bg-slate-200"}`} />
+        <div className={`mt-2 h-1.5 rounded-full ${isDark ? "bg-elevated" : "bg-line"}`} />
       )}
     </div>
   );
@@ -50,7 +51,7 @@ function MetricCard({ label, value, percent, isDark, accentClassName, muted = fa
 export function SessionStatusSummary({ entry, isDark, t }: SessionStatusSummaryProps) {
   if (!entry || (entry.loading && !entry.summary)) {
     return (
-      <div className={`rounded-md border px-3 py-3 text-sm ${isDark ? "border-slate-700 bg-slate-950/40 text-slate-400" : "border-slate-200 bg-slate-50 text-slate-500"}`}>
+      <div className={`rounded-md border px-3 py-3 text-sm ${isDark ? "border-line bg-canvas/40 text-muted" : "border-line bg-elevated text-muted"}`}>
         {t("系统状态采集中...", "Loading system status...")}
       </div>
     );
@@ -58,7 +59,7 @@ export function SessionStatusSummary({ entry, isDark, t }: SessionStatusSummaryP
 
   if (!entry.summary) {
     return (
-      <div className={`rounded-md border px-3 py-3 text-sm ${isDark ? "border-slate-700 bg-slate-950/40 text-slate-400" : "border-slate-200 bg-slate-50 text-slate-500"}`}>
+      <div className={`rounded-md border px-3 py-3 text-sm ${isDark ? "border-line bg-canvas/40 text-muted" : "border-line bg-elevated text-muted"}`}>
         {t("系统状态暂不可用", "System status unavailable")}
       </div>
     );
@@ -68,7 +69,7 @@ export function SessionStatusSummary({ entry, isDark, t }: SessionStatusSummaryP
   const swapEnabled = stats.swap.total > 0;
 
   return (
-    <div className={`rounded-lg border p-3 ${isDark ? "border-slate-700 bg-slate-950/30" : "border-slate-200 bg-slate-50/80"}`}>
+    <div className={`rounded-lg border p-3 ${isDark ? "border-line bg-canvas/30" : "border-line bg-elevated/80"}`}>
       <div className="grid gap-2 md:grid-cols-3">
         <MetricCard
           label="CPU"
@@ -92,24 +93,24 @@ export function SessionStatusSummary({ entry, isDark, t }: SessionStatusSummaryP
           accentClassName="bg-amber-500"
           muted={!swapEnabled}
         />
-        <div className={`rounded-md border px-3 py-2 md:col-span-3 ${isDark ? "border-slate-700 bg-slate-950/60" : "border-slate-200 bg-white"}`}>
+        <div className={`rounded-md border px-3 py-2 md:col-span-3 ${isDark ? "border-line bg-canvas/60" : "border-line bg-surface"}`}>
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <span className={`text-xs font-medium ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+            <span className={`text-xs font-medium ${isDark ? "text-muted" : "text-muted"}`}>
               {t("网络", "Network")}
             </span>
             <div className="flex flex-wrap items-center gap-4 text-sm font-medium">
               <span className={isDark ? "text-emerald-300" : "text-emerald-600"}>
-                ↑ {formatBytesPerSecond(network.upload_speed)}
+                <ArrowUp size={11} className="mr-1 inline-block" aria-hidden="true" />{formatBytesPerSecond(network.upload_speed)}
               </span>
               <span className={isDark ? "text-sky-300" : "text-sky-600"}>
-                ↓ {formatBytesPerSecond(network.download_speed)}
+                <ArrowDown size={11} className="mr-1 inline-block" aria-hidden="true" />{formatBytesPerSecond(network.download_speed)}
               </span>
             </div>
           </div>
         </div>
       </div>
       {entry.error ? (
-        <p className={`mt-2 text-[11px] ${isDark ? "text-slate-500" : "text-slate-400"}`}>
+        <p className={`mt-2 text-[11px] ${isDark ? "text-muted" : "text-muted"}`}>
           {t("本次刷新失败，当前显示上次采集结果", "Refresh failed. Showing the previous result.")}
         </p>
       ) : null}

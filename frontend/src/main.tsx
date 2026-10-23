@@ -7,6 +7,7 @@ import { ToastProvider } from "./components/Toast";
 import { AppProvider } from "./context/AppContext";
 import { Login } from "./pages/Login";
 import "./index.css";
+import "./design.css";
 import { NotificationProvider } from "./notifications/NotificationProvider";
 
 const ForcePasswordChange = React.lazy(() =>

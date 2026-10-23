@@ -1,10 +1,10 @@
 import React from "react";
-import { Copy } from "lucide-react";
+import { ArrowDown, ArrowUp, Copy } from "lucide-react";
 import { Button } from "../../components/Button";
 import { FileViewer } from "../../components/FileViewer";
 import type { FileInfo } from "../../lib/api";
 import { TerminalCopyPanel } from "./TerminalCopyPanel";
-import { createTerminalBufferSnapshot, type TerminalBufferSnapshot } from "./terminalUtils";
+import { createTerminalBufferSnapshot, darkTerminalTheme, lightTerminalTheme, type TerminalBufferSnapshot } from "./terminalUtils";
 import type { TerminalSessionState } from "./useTerminalSession";
 import { TerminalLoading } from "./TerminalLoading";
 import { TerminalLatencyStatus } from "./TerminalLatencyStatus";
@@ -26,7 +26,7 @@ type MobileTab = "terminal" | "files" | "system";
 
 function MobilePanelFallback({ isDark }: { isDark: boolean }) {
   return (
-    <div className={`flex h-full min-h-[180px] items-center justify-center rounded-lg border text-sm ${isDark ? "border-slate-800 bg-slate-900/40 text-slate-400" : "border-slate-200 bg-white text-slate-500"}`}>
+    <div className={`flex h-full min-h-[180px] items-center justify-center rounded-lg border text-sm ${isDark ? "border-line bg-surface/40 text-muted" : "border-line bg-surface text-muted"}`}>
       加载中... / Loading...
     </div>
   );
@@ -106,14 +106,14 @@ export function TerminalMobile({ state, onBack }: TerminalMobileProps) {
   const shouldShowCancelReconnect = state.connectionState === "closed" && state.reconnectCountdown !== null;
 
   return (
-    <div className={`flex h-screen flex-col overflow-hidden transition-colors duration-300 supports-[height:100dvh]:h-dvh ${state.isDark ? "bg-slate-950 text-slate-100 dark-scrollbar" : "bg-gray-100 text-slate-900 light-scrollbar"}`}>
-      <div className={`border-b px-4 py-3 ${state.isDark ? "border-slate-800" : "border-slate-200 bg-white"}`}>
+    <div className={`terminal-shell flex h-screen flex-col overflow-hidden transition-colors duration-300 supports-[height:100dvh]:h-dvh ${state.isDark ? "bg-canvas text-ink dark-scrollbar" : "bg-canvas text-ink light-scrollbar"}`}>
+      <div className={`terminal-toolbar border-b px-4 py-3 ${state.isDark ? "border-line" : "border-line bg-surface"}`}>
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <div className={`text-base font-semibold truncate ${state.isDark ? "text-slate-100" : "text-slate-800"}`}>
+            <div className={`text-base font-semibold truncate ${state.isDark ? "text-ink" : "text-ink"}`}>
               {state.sessionInfo?.name || state.t("会话", "Session")}
             </div>
-            <div className={`text-xs truncate ${state.isDark ? "text-slate-500" : "text-slate-400"}`}>
+            <div className={`text-xs truncate ${state.isDark ? "text-muted" : "text-muted"}`}>
               {state.sessionInfo ? new Date(state.sessionInfo.started_at).toLocaleString() : ""}
             </div>
           </div>
@@ -163,7 +163,7 @@ export function TerminalMobile({ state, onBack }: TerminalMobileProps) {
           ) : null}
         </div>
         {state.sessionInfo?.note ? (
-          <div className={`mt-2 text-xs ${state.isDark ? "text-slate-500" : "text-slate-400"}`}>
+          <div className={`mt-2 text-xs ${state.isDark ? "text-muted" : "text-muted"}`}>
             {state.sessionInfo.note}
           </div>
         ) : null}
@@ -172,7 +172,7 @@ export function TerminalMobile({ state, onBack }: TerminalMobileProps) {
       <div className="flex-1 min-h-0 pb-16">
         <div className={`${activeTab === "terminal" ? "flex" : "hidden"} h-full flex-col`}>
           <div className="flex-1 p-3 min-h-0 relative">
-            <div className="h-full w-full overflow-hidden rounded-lg border border-line" style={{ backgroundColor: state.isDark ? "#020617" : "#ffffff" }}>
+            <div className="terminal-frame h-full w-full overflow-hidden rounded-lg border border-line" style={{ backgroundColor: (state.isDark ? darkTerminalTheme : lightTerminalTheme).background }}>
               <div className={`h-full w-full p-2 ${state.isDark ? "" : "xterm-light"} ${state.sessionInfo?.enhanced_enabled ? "xterm-tmux-enhanced" : ""}`}>
                 <div ref={state.terminalRef} className="h-full w-full" tabIndex={-1} onClick={() => state.terminalInstance.current?.focus()} />
               </div>
@@ -185,8 +185,8 @@ export function TerminalMobile({ state, onBack }: TerminalMobileProps) {
                   onClick={() => void state.handleCopySelection()}
                   className={`flex h-11 items-center justify-center gap-1 rounded-full border px-3 text-xs font-medium ${
                     state.isDark
-                      ? "border-indigo-400/60 bg-indigo-500 text-white"
-                      : "border-indigo-300 bg-indigo-500 text-white"
+                      ? "border-brand/60 bg-brand text-white"
+                      : "border-brand bg-brand text-white"
                   }`}
                   aria-label={state.t("复制选中内容", "Copy selected text")}
                 >
@@ -199,24 +199,24 @@ export function TerminalMobile({ state, onBack }: TerminalMobileProps) {
                 onClick={() => scrollTerminal("up", "remote")}
                 className={`h-11 w-11 rounded-full border text-base ${
                   state.isDark
-                    ? "border-slate-700 bg-slate-900/90 text-slate-200"
-                    : "border-slate-200 bg-white text-slate-700"
+                    ? "border-line bg-surface/90 text-ink"
+                    : "border-line bg-surface text-ink-soft"
                 }`}
                 aria-label={state.t("向上滚动终端", "Scroll terminal up")}
               >
-                ↑
+                <ArrowUp size={18} className="mx-auto" aria-hidden="true" />
               </button>
               <button
                 type="button"
                 onClick={() => scrollTerminal("down", "remote")}
                 className={`h-11 w-11 rounded-full border text-base ${
                   state.isDark
-                    ? "border-slate-700 bg-slate-900/90 text-slate-200"
-                    : "border-slate-200 bg-white text-slate-700"
+                    ? "border-line bg-surface/90 text-ink"
+                    : "border-line bg-surface text-ink-soft"
                 }`}
                 aria-label={state.t("向下滚动终端", "Scroll terminal down")}
               >
-                ↓
+                <ArrowDown size={18} className="mx-auto" aria-hidden="true" />
               </button>
             </div>
             {copySnapshot ? (
@@ -264,7 +264,7 @@ export function TerminalMobile({ state, onBack }: TerminalMobileProps) {
         </div>
       </div>
 
-      <div className={`fixed bottom-0 left-0 right-0 z-50 border-t ${state.isDark ? "border-slate-800 bg-slate-950" : "border-slate-200 bg-white"}`}>
+      <div className={`fixed bottom-0 left-0 right-0 z-50 border-t ${state.isDark ? "border-line bg-canvas" : "border-line bg-surface"}`}>
         <div className="flex">
           {[
             { key: "terminal", label: state.t("终端", "Terminal") },
@@ -279,8 +279,8 @@ export function TerminalMobile({ state, onBack }: TerminalMobileProps) {
                 onClick={() => changeTab(tab.key as MobileTab)}
                 className={`flex-1 py-3 text-sm font-medium transition ${
                   active
-                    ? (state.isDark ? "text-indigo-300" : "text-indigo-600")
-                    : (state.isDark ? "text-slate-400" : "text-slate-500")
+                    ? (state.isDark ? "text-brand" : "text-brand")
+                    : (state.isDark ? "text-muted" : "text-muted")
                 }`}
               >
                 {tab.label}
@@ -300,10 +300,10 @@ export function TerminalMobile({ state, onBack }: TerminalMobileProps) {
       ) : null}
 
       {state.sessionDisconnected?.disconnected && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-canvas">
           <div className="text-center">
             <div className="text-2xl mb-4 text-rose-400">{state.t("会话已断开", "Session disconnected")}</div>
-            <div className="text-sm text-slate-400">{state.t("断开时间", "Disconnected at")}: {state.sessionDisconnected.time}</div>
+            <div className="text-sm text-muted">{state.t("断开时间", "Disconnected at")}: {state.sessionDisconnected.time}</div>
           </div>
         </div>
       )}

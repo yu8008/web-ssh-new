@@ -77,7 +77,7 @@ export function SessionsDialogs({ state }: SessionsDialogsProps) {
   const passwordDialogOpen = state.passwordDialogOpen;
   const enhancePrompt = state.enhancePrompt;
   const enhanceDialogOpen = Boolean(enhancePrompt?.open);
-  const fieldLabelClassName = `mb-1 block text-xs font-medium ${state.isDark ? "text-slate-300" : "text-slate-700"}`;
+  const fieldLabelClassName = `mb-1 block text-xs font-medium ${state.isDark ? "text-ink-soft" : "text-ink-soft"}`;
 
   closePasswordDialogRef.current = state.handleClosePasswordDialog;
   passwordSavingRef.current = state.passwordSaving;
@@ -184,10 +184,10 @@ export function SessionsDialogs({ state }: SessionsDialogsProps) {
             aria-describedby={passwordDescriptionId}
             tabIndex={-1}
             onKeyDown={(event) => trapDialogFocus(event, passwordDialogRef.current)}
-            className={`w-full max-w-md rounded-xl border p-6 shadow-xl ${state.isDark ? "border-slate-700 bg-slate-900 text-slate-100" : "border-slate-200 bg-white text-slate-900"}`}
+            className={`w-full max-w-md rounded-xl border p-6 shadow-xl ${state.isDark ? "border-line bg-surface text-ink" : "border-line bg-surface text-ink"}`}
           >
             <h3 id={passwordTitleId} className="mb-2 text-lg font-semibold">{state.t("修改密码", "Change password")}</h3>
-            <p id={passwordDescriptionId} className={`mb-4 text-sm ${state.isDark ? "text-slate-400" : "text-slate-500"}`}>
+            <p id={passwordDescriptionId} className={`mb-4 text-sm ${state.isDark ? "text-muted" : "text-muted"}`}>
               {state.t("请输入当前密码，并设置新的登录密码。", "Enter your current password and set a new login password.")}
             </p>
             <div className="space-y-3">
@@ -201,7 +201,7 @@ export function SessionsDialogs({ state }: SessionsDialogsProps) {
                   type="password"
                   value={state.passwordForm.currentPassword}
                   onChange={(event) => state.setPasswordForm((prev) => ({ ...prev, currentPassword: event.target.value }))}
-                  className={!state.isDark ? "border-slate-300 bg-white text-slate-900 placeholder:text-slate-400" : ""}
+                  className={!state.isDark ? "border-line-strong bg-surface text-ink placeholder:text-muted" : ""}
                 />
               </div>
               <div>
@@ -214,7 +214,7 @@ export function SessionsDialogs({ state }: SessionsDialogsProps) {
                   type="password"
                   value={state.passwordForm.newPassword}
                   onChange={(event) => state.setPasswordForm((prev) => ({ ...prev, newPassword: event.target.value }))}
-                  className={!state.isDark ? "border-slate-300 bg-white text-slate-900 placeholder:text-slate-400" : ""}
+                  className={!state.isDark ? "border-line-strong bg-surface text-ink placeholder:text-muted" : ""}
                 />
               </div>
               <div>
@@ -227,7 +227,7 @@ export function SessionsDialogs({ state }: SessionsDialogsProps) {
                   type="password"
                   value={state.passwordForm.confirmPassword}
                   onChange={(event) => state.setPasswordForm((prev) => ({ ...prev, confirmPassword: event.target.value }))}
-                  className={!state.isDark ? "border-slate-300 bg-white text-slate-900 placeholder:text-slate-400" : ""}
+                  className={!state.isDark ? "border-line-strong bg-surface text-ink placeholder:text-muted" : ""}
                 />
               </div>
             </div>
@@ -270,16 +270,16 @@ export function SessionsDialogs({ state }: SessionsDialogsProps) {
             aria-describedby={`${enhanceDescriptionId} ${enhanceDetailsId}`}
             tabIndex={-1}
             onKeyDown={(event) => trapDialogFocus(event, enhanceDialogRef.current)}
-            className={`w-full max-w-lg rounded-xl border p-6 shadow-xl ${state.isDark ? "border-slate-700 bg-slate-900 text-slate-100" : "border-slate-200 bg-white text-slate-900"}`}
+            className={`w-full max-w-lg rounded-xl border p-6 shadow-xl ${state.isDark ? "border-line bg-surface text-ink" : "border-line bg-surface text-ink"}`}
           >
             <h3 id={enhanceTitleId} className="text-lg font-semibold mb-2">{state.t("是否开启增强持久化连接", "Enable enhanced persistent connection?")}</h3>
-            <p id={enhanceDescriptionId} className={`text-sm ${state.isDark ? "text-slate-400" : "text-slate-500"}`}>
+            <p id={enhanceDescriptionId} className={`text-sm ${state.isDark ? "text-muted" : "text-muted"}`}>
               {state.t(
                 `检测到远端系统为 ${enhancePrompt?.remoteOs || "unknown"} (${enhancePrompt?.remoteArch || "unknown"})，建议开启增强持久化连接以提高稳定性。`,
                 `Detected remote system ${enhancePrompt?.remoteOs || "unknown"} (${enhancePrompt?.remoteArch || "unknown"}). Enable enhanced persistence for better stability.`
               )}
             </p>
-            <label className={`mt-4 flex items-center gap-2 rounded-md border px-3 py-2 text-sm ${state.isDark ? "border-slate-700 bg-slate-800/60" : "border-slate-200 bg-slate-50"}`}>
+            <label className={`mt-4 flex items-center gap-2 rounded-md border px-3 py-2 text-sm ${state.isDark ? "border-line bg-elevated/60" : "border-line bg-elevated"}`}>
               <input
                 type="checkbox"
                 checked={enhancePrompt?.checked ?? false}
@@ -287,7 +287,7 @@ export function SessionsDialogs({ state }: SessionsDialogsProps) {
               />
               <span>{state.t("开启增强持久化连接", "Enable enhanced persistent connection")}</span>
             </label>
-            <div id={enhanceDetailsId} className={`mt-3 text-xs ${state.isDark ? "text-slate-500" : "text-slate-500"}`}>
+            <div id={enhanceDetailsId} className={`mt-3 text-xs ${state.isDark ? "text-muted" : "text-muted"}`}>
               {state.t(
                 "普通连接的可靠性由项目所在机器和目标之间的网络决定。开启此功能会向目标机器搭建 tmux 通道，防止网络波动造成的连接断开。",
                 "Normal connections depend on network stability between this host and the target. Enabling this will create a tmux channel to keep the session alive during network fluctuations."

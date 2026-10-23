@@ -12,7 +12,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(function Inp
       ref={ref}
       type={type}
       className={cn(
-        "h-9 w-full rounded-md border border-line bg-surface px-3 text-sm text-ink",
+        "ui-input h-9 w-full rounded-md border border-line bg-surface px-3 text-sm text-ink",
         "placeholder:text-muted/80",
         "transition-colors duration-150",
         "hover:border-line-strong",

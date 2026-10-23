@@ -1,4 +1,5 @@
-﻿import React from "react";
+import React from "react";
+import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { getSystemOverview, SystemStats, NetworkInfo, ProcessInfo, DiskInfo } from "../lib/api";
 import { useApp } from "../context/AppContextCore";
 import type { NetworkProfile } from "../context/AppContextCore";
@@ -53,7 +54,7 @@ function ProgressBar({ percent, isDark, label, color = "blue" }: ProgressBarProp
 
   return (
     <div
-      className={`h-2 w-full rounded-full ${isDark ? "bg-elevated" : "bg-slate-200"}`}
+      className={`h-2 w-full rounded-full ${isDark ? "bg-elevated" : "bg-line"}`}
       role="progressbar"
       aria-label={label}
       aria-valuemin={0}
@@ -165,7 +166,7 @@ export function SystemMonitor({ sessionId, isDark, networkProfile, compact }: Sy
   const renderSectionHeader = (key: keyof typeof collapsedSections, title: string) => {
     if (!isCompact) {
       return (
-        <h3 className={`text-sm font-semibold mb-3 ${isDark ? "text-ink" : "text-slate-700"}`}>
+        <h3 className={`text-sm font-semibold mb-3 ${isDark ? "text-ink" : "text-ink-soft"}`}>
           {title}
         </h3>
       );
@@ -175,7 +176,7 @@ export function SystemMonitor({ sessionId, isDark, networkProfile, compact }: Sy
         type="button"
         onClick={() => toggleSection(key)}
         className={`w-full flex items-center justify-between text-sm font-semibold mb-2 ${
-          isDark ? "text-ink" : "text-slate-700"
+          isDark ? "text-ink" : "text-ink-soft"
         }`}
       >
         <span>{title}</span>
@@ -196,7 +197,7 @@ export function SystemMonitor({ sessionId, isDark, networkProfile, compact }: Sy
     return (
       <>
         <span aria-hidden="true" className={sortField !== field ? "opacity-30" : ""}>
-          {sortField !== field ? "↕" : sortOrder === "desc" ? "↓" : "↑"}
+          {sortField !== field ? <ArrowUpDown size={11} /> : sortOrder === "desc" ? <ArrowDown size={11} /> : <ArrowUp size={11} />}
         </span>
         <span className="sr-only">{label}</span>
       </>
@@ -222,7 +223,7 @@ export function SystemMonitor({ sessionId, isDark, networkProfile, compact }: Sy
   if (!stats) return null;
 
   return (
-    <div className={isCompact ? "space-y-3" : "space-y-4"}>
+    <div className={`system-monitor ${isCompact ? "space-y-3" : "space-y-4"}`}>
       <div>
         {renderSectionHeader("status", t("系统状态", "System Status"))}
 
@@ -234,7 +235,7 @@ export function SystemMonitor({ sessionId, isDark, networkProfile, compact }: Sy
                 <span className={`text-xs ${isDark ? "text-muted" : "text-muted"}`}>
                   {t(`CPU (${stats.cpu.count} 核)`, `CPU (${stats.cpu.count} Cores)`)}
                 </span>
-                <span className={`text-xs font-medium ${isDark ? "text-ink-soft" : "text-slate-600"}`}>
+                <span className={`text-xs font-medium ${isDark ? "text-ink-soft" : "text-ink-soft"}`}>
                   {stats.cpu.percent.toFixed(1)}%
                 </span>
               </div>
@@ -252,7 +253,7 @@ export function SystemMonitor({ sessionId, isDark, networkProfile, compact }: Sy
                 <span className={`text-xs ${isDark ? "text-muted" : "text-muted"}`}>
                   {t("内存", "Memory")}
                 </span>
-                <span className={`text-xs font-medium ${isDark ? "text-ink-soft" : "text-slate-600"}`}>
+                <span className={`text-xs font-medium ${isDark ? "text-ink-soft" : "text-ink-soft"}`}>
                   {stats.memory.percent.toFixed(1)}% ({formatBytes(stats.memory.used)} / {formatBytes(stats.memory.total)})
                 </span>
               </div>
@@ -270,7 +271,7 @@ export function SystemMonitor({ sessionId, isDark, networkProfile, compact }: Sy
                 <span className={`text-xs ${isDark ? "text-muted" : "text-muted"}`}>
                   {t("交换区", "Swap")}
                 </span>
-                <span className={`text-xs font-medium ${isDark ? "text-ink-soft" : "text-slate-600"}`}>
+                <span className={`text-xs font-medium ${isDark ? "text-ink-soft" : "text-ink-soft"}`}>
                   {stats.swap.total > 0
                     ? `${stats.swap.percent.toFixed(1)}% (${formatBytes(stats.swap.used)} / ${formatBytes(stats.swap.total)})`
                     : t("未启用", "Disabled")
@@ -295,10 +296,10 @@ export function SystemMonitor({ sessionId, isDark, networkProfile, compact }: Sy
                 </span>
                 <div className="flex items-center gap-3">
                   <span className={`text-xs font-medium ${isDark ? "text-purple-400" : "text-purple-600"}`}>
-                    ↑ {network ? formatSpeed(network.upload_speed) : "-"}
+                    <ArrowUp size={11} className="mr-1 inline-block" aria-hidden="true" />{network ? formatSpeed(network.upload_speed) : "-"}
                   </span>
                   <span className={`text-xs font-medium ${isDark ? "text-cyan-400" : "text-cyan-600"}`}>
-                    ↓ {network ? formatSpeed(network.download_speed) : "-"}
+                    <ArrowDown size={11} className="mr-1 inline-block" aria-hidden="true" />{network ? formatSpeed(network.download_speed) : "-"}
                   </span>
                 </div>
               </div>
@@ -318,7 +319,7 @@ export function SystemMonitor({ sessionId, isDark, networkProfile, compact }: Sy
               <div className="flex-1">{t("进程名", "Process")}</div>
               <button
                 type="button"
-                className="w-16 bg-transparent p-0 text-right hover:text-indigo-400 focus:outline-none focus-visible:rounded focus-visible:ring-2 focus-visible:ring-indigo-400"
+                className="w-16 bg-transparent p-0 text-right hover:text-brand focus:outline-none focus-visible:rounded focus-visible:ring-2 focus-visible:ring-brand"
                 onClick={() => handleSort("cpu")}
                 aria-label={t("按 CPU 使用率排序", "Sort by CPU usage")}
                 aria-pressed={sortField === "cpu"}
@@ -327,7 +328,7 @@ export function SystemMonitor({ sessionId, isDark, networkProfile, compact }: Sy
               </button>
               <button
                 type="button"
-                className="w-20 bg-transparent p-0 text-right hover:text-indigo-400 focus:outline-none focus-visible:rounded focus-visible:ring-2 focus-visible:ring-indigo-400"
+                className="w-20 bg-transparent p-0 text-right hover:text-brand focus:outline-none focus-visible:rounded focus-visible:ring-2 focus-visible:ring-brand"
                 onClick={() => handleSort("memory")}
                 aria-label={t("按内存使用量排序", "Sort by memory usage")}
                 aria-pressed={sortField === "memory"}
@@ -341,10 +342,10 @@ export function SystemMonitor({ sessionId, isDark, networkProfile, compact }: Sy
               {sortedProcesses.map((proc) => (
                 <div
                   key={proc.pid}
-                  className={`flex text-xs py-1 rounded px-1 ${isDark ? "hover:bg-elevated" : "hover:bg-slate-100"} group relative`}
+                  className={`flex text-xs py-1 rounded px-1 ${isDark ? "hover:bg-elevated" : "hover:bg-elevated"} group relative`}
                   title={proc.command}
                 >
-                  <div className={`flex-1 truncate ${isDark ? "text-ink-soft" : "text-slate-600"}`}>
+                  <div className={`flex-1 truncate ${isDark ? "text-ink-soft" : "text-ink-soft"}`}>
                     {proc.name}
                   </div>
                   <div className={`w-16 text-right ${isDark ? "text-muted" : "text-muted"}`}>
@@ -376,7 +377,7 @@ export function SystemMonitor({ sessionId, isDark, networkProfile, compact }: Sy
                   <span className={`text-xs ${isDark ? "text-muted" : "text-muted"}`}>
                     {disk.mount}
                   </span>
-                  <span className={`text-xs font-medium ${isDark ? "text-ink-soft" : "text-slate-600"}`}>
+                  <span className={`text-xs font-medium ${isDark ? "text-ink-soft" : "text-ink-soft"}`}>
                     {disk.percent.toFixed(1)}% ({formatBytes(disk.used)} / {formatBytes(disk.total)})
                   </span>
                 </div>
