@@ -71,10 +71,12 @@ A dedicated mobile layout provides touch-friendly interactions for terminal work
 1. Sign in and open a connected SSH terminal.
 2. Open **Task notifications and sound** in the toolbar, then select **Enable sound and preview** to activate audio on this device.
 3. Select **Configure CLI notifications** to configure Codex notifications and Claude hooks for the target SSH user. Setup backs up and merges existing settings; it does not restart running CLI programs.
-4. Use newly launched CLI sessions after initial setup. If Claude asks you to review hooks, open `/hooks`.
-5. Adjust completion sounds, question/approval sounds, volume, and **Only sound when away from this page**. Volume defaults to 35%, with foreground and background alerts allowed; sound must be enabled explicitly.
+4. Inspect the running CLI's integration status. Existing sessions can attach directly; when a shared Codex background process prevents an unambiguous mapping, select **Bind this session**. Claude can load new hooks while running; inspect them with `/hooks`.
+5. Adjust completion sounds, question/approval sounds, volume, and **Only sound when away from this page**. New devices default to 60%; saved volume settings are preserved, with **Use recommended volume: 60%** available. Sound must be enabled explicitly; foreground and background alerts are allowed.
 
 CLI configuration belongs to the SSH user on the target server. Sound preferences belong to the current device. Use **Check setup** to inspect integration and **Remove setup** to undo the managed configuration. To mute immediately, turn off **Play notification sounds**.
+
+Setup records, configuration checks, and live-session verification are shown separately. Verified configuration does not prove the running session has emitted a notification; individual capabilities become verified after an actual event. Linux targets identify existing CLIs from the current terminal's processes. Codex completion can use explicit end-of-turn events appended to its existing session record; questions/approvals still need native waiting signals. Neither conversation text nor silence is used to guess. Attachment and reconnect start at the record's end without replaying historical alerts. Unreadable records and uncertain ownership are reported. After switching conversations in the same CLI, rebind if prompted.
 
 ### Automatic Setup Requirements
 

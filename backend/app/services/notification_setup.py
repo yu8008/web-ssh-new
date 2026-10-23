@@ -6,12 +6,16 @@ from pathlib import Path
 import shlex
 
 
-async def configure_notifications(client, action: str):
+async def configure_notifications(client, action: str, context: dict | None = None):
     # Upload to a private temporary file so __file__ works on the SSH target.
     # No webhook credentials, inbound port, shell profile or model access needed.
     source = base64.b64encode(Path(__file__).with_name("notification_agent.py").read_bytes()).decode()
-    runner = "import base64,json,os,subprocess,sys,tempfile\nif sys.version_info < (3,8):\n print(json.dumps({'error':'Python 3.8 or newer is required on the SSH target'})); sys.exit(1)\nf,p=tempfile.mkstemp(prefix='webssh-notify-',suffix='.py'); os.write(f,base64.b64decode(sys.argv[1])); os.close(f)\ntry: sys.exit(subprocess.call([sys.executable,p,sys.argv[2]]))\nfinally: os.unlink(p)"
-    command = f"python3 -c {shlex.quote(runner)} {shlex.quote(source)} {shlex.quote(action)}"
+    context = context or {}
+    environment = {key: value for key, value in context.get("config", {}).items() if key in {"CODEX_HOME", "CLAUDE_CONFIG_DIR"} and isinstance(value, str)}
+    if context.get("app") in {"codex", "claude"} and isinstance(context.get("version_command"), list):
+        environment["WEBSSH_" + context["app"].upper() + "_COMMAND"] = json.dumps(context["version_command"])
+    runner = "import base64,json,os,subprocess,sys,tempfile\nif sys.version_info < (3,8):\n print(json.dumps({'error':'Python 3.8 or newer is required on the SSH target'})); sys.exit(1)\nos.environ.update(json.loads(sys.argv[3]))\nf,p=tempfile.mkstemp(prefix='webssh-notify-',suffix='.py'); os.write(f,base64.b64decode(sys.argv[1])); os.close(f)\ntry: sys.exit(subprocess.call([sys.executable,p,sys.argv[2]]))\nfinally: os.unlink(p)"
+    command = f"python3 -c {shlex.quote(runner)} {shlex.quote(source)} {shlex.quote(action)} {shlex.quote(json.dumps(environment))}"
     result = await client.run(command, check=False, timeout=40)
     try:
         payload = json.loads(str(result.stdout).strip())

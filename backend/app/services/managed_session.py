@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import shlex
+from typing import TYPE_CHECKING
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -16,6 +17,9 @@ from app.services.terminal_output import TerminalOutput
 
 
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from app.services.notification_monitor import NotificationMonitor
 
 
 @dataclass
@@ -41,6 +45,7 @@ class ManagedSession:
     target_probe_error_streak: int = 0
     target_measured_at: datetime | None = None
     target_rtt_samples: list[int] = field(default_factory=list)
+    notification_monitor: NotificationMonitor | None = None
 
     def __post_init__(self) -> None:
         self.output = TerminalOutput(self.buffer, self.websockets)
@@ -217,5 +222,7 @@ class ManagedSession:
         self.last_activity = utc_now()
 
     async def close(self) -> None:
+        if self.notification_monitor:
+            await self.notification_monitor.close()
         await self.output.close()
         await close_ssh_resources(self.client, self.channel)

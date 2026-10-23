@@ -20,6 +20,30 @@ import uuid
 
 TUI = {"notifications": ["agent-turn-complete", "approval-requested", "async-question"],
        "notification_method": "osc9", "notification_condition": "always"}
+CLAUDE_EVENTS = {"Stop": None, "PermissionRequest": None, "PreToolUse": "^(AskUserQuestion|ExitPlanMode)$", "Notification": "^(permission_prompt|elicitation_dialog|elicitation_url_dialog)$", "PostToolUse": None, "UserPromptSubmit": None}
+
+
+def configuration_status(manifest, codex_path, claude_path):
+    statuses = {}
+    for name, path in (("codex", codex_path), ("claude", claude_path)):
+        profiles = ([manifest[name]] if name in manifest else []) + manifest.get(name + "_profiles", [])
+        profile = next((item for item in profiles if item.get("path") == str(path)), None)
+        if not profile:
+            statuses[name] = "unmanaged"; continue
+        try:
+            if name == "codex":
+                import tomllib
+                config = tomllib.loads(path.read_text()).get("tui", {})
+                correct = all(config.get(key) == value for key, value in TUI.items())
+            else:
+                hooks = json.loads(path.read_text()).get("hooks", {})
+                correct = all(any(group.get("matcher") == matcher and any(item.get("type") == "command" and item.get("command") == profile.get("command") for item in group.get("hooks", [])) for group in hooks.get(event, [])) for event, matcher in CLAUDE_EVENTS.items())
+            statuses[name] = "configured" if correct else "changed"
+        except FileNotFoundError:
+            statuses[name] = "missing"
+        except (ImportError, OSError, ValueError, TypeError, AttributeError):
+            statuses[name] = "unavailable"
+    return statuses
 
 
 def atomic_write(path, content):
@@ -84,12 +108,20 @@ def edit_tui(text, changes):
 
 
 def paths():
-    root = Path.home() / ".local" / "share" / "webssh-gateway"
+    # Installed hooks can inherit a CLI-specific HOME. Their own location is
+    # the stable installer/manifest directory, independent of that override.
+    root = Path(__file__).resolve().parent if Path(__file__).name == "notifications.py" else Path.home() / ".local" / "share" / "webssh-gateway"
     return root, Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))) / "config.toml", Path(os.environ.get("CLAUDE_CONFIG_DIR", str(Path.home() / ".claude"))) / "settings.json"
 
 
 def version(command):
-    executable = shutil.which(command)
+    running = os.environ.get("WEBSSH_" + command.upper() + "_COMMAND")
+    if running:
+        try:
+            return subprocess.check_output(json.loads(running) + ["--version"], stderr=subprocess.DEVNULL, timeout=10).decode().strip()[:100]
+        except (OSError, ValueError, TypeError, subprocess.SubprocessError):
+            return None
+    executable = os.environ.get("WEBSSH_" + command.upper() + "_BINARY") or shutil.which(command)
     if not executable:
         # SSH exec channels do not necessarily load the interactive PATH.
         for directory in (".local/bin", ".npm-global/bin", ".bun/bin", ".cargo/bin"):
@@ -117,6 +149,7 @@ def configure(action):
     result = {"codex_version": version("codex"), "claude_version": version("claude"),
               "installed": bool(manifest), "was_installed": bool(manifest), "notes": [], "agent_path": str(root / "notifications.py")}
     if action == "status":
+        result["configuration"] = configuration_status(manifest, codex_path, claude_path)
         return result
     writes = {}
     def stage(path, content):
@@ -126,6 +159,16 @@ def configure(action):
         agent = root / "notifications.py"
         stage(agent, Path(__file__).read_text())
         command = f"{shlex.quote(sys.executable)} {shlex.quote(str(agent))} hook"
+        # Different already-running CLIs can use separate configuration homes.
+        # Keep every original profile so undo restores all managed settings.
+        for name, path in (("codex", codex_path), ("claude", claude_path)):
+            current = manifest.get(name)
+            if current and current.get("path") != str(path):
+                previous = manifest.setdefault(name + "_profiles", [])
+                previous.append(manifest.pop(name))
+                match = next((item for item in previous if item.get("path") == str(path)), None)
+                if match:
+                    previous.remove(match); manifest[name] = match
         # Claude returns sequences via its own terminal writer, never /dev/tty.
         if result["claude_version"] and not supports(result["claude_version"], (2, 1, 306)):
             result["notes"].append("Claude Code automatic setup requires 2.1.306 or newer; this version was preserved")
@@ -135,9 +178,10 @@ def configure(action):
             if not isinstance(config, dict) or not isinstance(config.get("hooks", {}), dict):
                 raise ValueError("Invalid Claude hooks configuration")
             hooks = config.setdefault("hooks", {})
-            specifications = {"Stop": None, "PermissionRequest": None, "PreToolUse": "^(AskUserQuestion|ExitPlanMode)$", "Notification": "^(permission_prompt|elicitation_dialog|elicitation_url_dialog)$", "PostToolUse": None, "UserPromptSubmit": None}
+            specifications = CLAUDE_EVENTS
             if "claude" not in manifest:
-                stage(root / "claude-settings.backup.json", original)
+                backup = "claude-settings.backup.json" if not manifest.get("claude_profiles") else "claude-settings-" + hashlib.sha256(str(claude_path).encode()).hexdigest()[:12] + ".backup.json"
+                stage(root / backup, original)
                 manifest["claude"] = {"events_before": list(hooks), "had_hooks": "hooks" in json.loads(original), "file_existed": claude_path.exists()}
             for event, matcher in specifications.items():
                 existing = hooks.setdefault(event, [])
@@ -158,7 +202,8 @@ def configure(action):
                 original = codex_path.read_text() if codex_path.exists() else ""
                 parsed = tomllib.loads(original)
                 if "codex" not in manifest:
-                    stage(root / "codex-config.backup.toml", original)
+                    backup = "codex-config.backup.toml" if not manifest.get("codex_profiles") else "codex-config-" + hashlib.sha256(str(codex_path).encode()).hexdigest()[:12] + ".backup.toml"
+                    stage(root / backup, original)
                     before = parsed.get("tui", {})
                     manifest["codex"] = {"path": str(codex_path), "before": {key: before.get(key) for key in TUI}, "had_tui": "tui" in parsed, "file_existed": codex_path.exists()}
                 stage(codex_path, edit_tui(original, TUI))
@@ -168,21 +213,25 @@ def configure(action):
             raise ValueError("No supported CLI found: use Codex 0.163.0+ or Claude Code 2.1.306+ in this SSH user's PATH")
         stage(manifest_path, json.dumps(manifest, indent=2))
         result["installed"] = True
-        result["notes"].append("Codex: use new CLI sessions after initial setup. Review Claude hook changes in /hooks if requested.")
+        result["notes"].append("Existing sessions are checked separately. Claude hook changes can load in the running CLI; inspect /hooks if needed.")
     elif action == "uninstall":
-        codex = manifest.get("codex")
-        if codex:
+        for codex in ([manifest["codex"]] if manifest.get("codex") else []) + manifest.get("codex_profiles", []):
             import tomllib
-            path = Path(codex["path"]); text = path.read_text()
+            path = Path(codex["path"])
+            if not path.exists():
+                continue
+            text = path.read_text()
             current = tomllib.loads(text).get("tui", {})
             changes = {key: codex["before"][key] for key, value in TUI.items() if current.get(key) == value}
             restored = edit_tui(text, changes)
             if not codex.get("had_tui", True) and not tomllib.loads(restored).get("tui"):
                 restored = re.sub(r"(?m)^[ \t]*\[tui\][ \t]*(?:#[^\r\n]*)?\r?\n?", "", restored, count=1)
             stage(path, None if not codex.get("file_existed", True) and not restored.strip() else restored)
-        claude = manifest.get("claude")
-        if claude:
-            path = Path(claude["path"]); config = json.loads(path.read_text())
+        for claude in ([manifest["claude"]] if manifest.get("claude") else []) + manifest.get("claude_profiles", []):
+            path = Path(claude["path"])
+            if not path.exists():
+                continue
+            config = json.loads(path.read_text())
             for event, groups in list(config.get("hooks", {}).items()):
                 kept = []
                 managed = False
@@ -201,6 +250,7 @@ def configure(action):
                 config.pop("hooks", None)
             stage(path, None if not claude.get("file_existed", True) and not config else json.dumps(config, ensure_ascii=False, indent=2) + "\n")
         stage(manifest_path, None)
+        stage(root / "notification-bindings.json", None)
         result["installed"] = False
     previous = {}; committed = []
     try:
@@ -220,6 +270,7 @@ def configure(action):
             else:
                 atomic_write(path, previous[path])
         raise
+    result["configuration"] = configuration_status(manifest if action != "uninstall" else {}, codex_path, claude_path)
     return result
 
 

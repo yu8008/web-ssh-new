@@ -59,6 +59,14 @@ def test_malformed_and_oversized_strings_are_bounded():
     assert parser.feed(CLAUDE)[0]["kind"] == "question"
 
 
+def test_attaching_during_a_running_turn_accepts_the_first_explicit_waiting_state():
+    parser = TerminalNotificationParser()
+    assert parser.feed(BLOCKED) == [{"kind": "attention", "app": "codex"}]
+    assert parser.feed(BLOCKED + osc("9;Waiting for input")) == []
+    parser.feed(START)
+    assert parser.feed(BLOCKED) == [{"kind": "attention", "app": "codex"}]
+
+
 def test_claude_native_completion_waits_until_after_stop_hooks_and_ignores_children():
     parser = TerminalNotificationParser()
     assert "reply" in parser.feed(osc("7501;?"))[0]
@@ -305,6 +313,57 @@ def test_uninstall_removes_only_new_empty_configs_and_preserves_new_comments(tmp
     agent.configure("uninstall")
     assert "# User note added later" in codex.read_text()
     assert not claude.exists()
+
+
+def test_setup_status_checks_real_configuration_instead_of_only_the_manifest(tmp_path, monkeypatch):
+    root = tmp_path / "agent"; codex = tmp_path / "codex.toml"; claude = tmp_path / "claude.json"
+    monkeypatch.setattr(agent, "paths", lambda: (root, codex, claude))
+    monkeypatch.setattr(agent, "version", lambda name: "0.163.0" if name == "codex" else "2.1.306")
+    assert agent.configure("install")["configuration"] == {"codex": "configured", "claude": "configured"}
+    changed_hooks = json.loads(claude.read_text())
+    changed_hooks["hooks"]["PreToolUse"][0]["matcher"] = "Bash"
+    claude.write_text(json.dumps(changed_hooks))
+    assert agent.configure("status")["configuration"]["claude"] == "changed"
+    codex.write_text(codex.read_text().replace('notification_condition = "always"', 'notification_condition = "unfocused"'))
+    claude.unlink()
+    result = agent.configure("status")
+    assert result["installed"]
+    assert result["configuration"] == {"codex": "changed", "claude": "missing"}
+
+
+def test_setup_api_keeps_runtime_verification_distinct_and_passes_running_configuration(database, monkeypatch):
+    from app.services.notification_runtime import public_status
+    context = {"state": "attached", "app": "codex", "identity": "1:1", "binding": "thread", "config": {"CODEX_HOME": "/running/codex"}, "version_command": ["/proc/1/exe"], "capabilities": {"complete": "ready"}, "candidates": []}
+    calls = []
+    class Monitor:
+        task = None
+        async def restart(self): calls.append("restart")
+        async def close(self): calls.append("close")
+        def snapshot(self): return public_status(context)
+    session = SimpleNamespace(user_id=1, status="active", enhanced_enabled=False, client=object(), notification_monitor=Monitor())
+    async def probe(value): assert value is session; return context
+    async def configure(client, action, running):
+        calls.append((action, running))
+        return {"installed": action != "uninstall", "notes": [], "configuration": {"codex": "configured"}}
+    monkeypatch.setattr(api, "probe_runtime", probe)
+    monkeypatch.setattr(api, "configure_notifications", configure)
+    state = SimpleNamespace(session_manager=SimpleNamespace(get_session=lambda value: session))
+    app = FastAPI(); app.include_router(api.router)
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=1)
+    app.dependency_overrides[get_state] = lambda: state
+    def db_override():
+        with database.session() as db: yield db
+    app.dependency_overrides[get_db] = db_override
+    with TestClient(app) as client:
+        result = client.post("/notifications/setup/one", json={"action": "install"})
+        assert result.status_code == 200
+        assert result.json()["runtime"]["capabilities"] == {"complete": "ready"}
+        assert "config" not in result.json()["runtime"] and "version_command" not in result.json()["runtime"]
+        assert calls == [("install", context), "restart"]
+        assert client.post("/notifications/setup/two", json={"action": "install"}).status_code == 404
+        assert client.post("/notifications/setup/one", json={"action": "bind", "binding": "foreign-thread"}).status_code == 409
+        removed = client.post("/notifications/setup/one", json={"action": "uninstall"})
+        assert removed.json()["runtime"]["state"] == "not_configured" and "close" in calls
 
 
 def test_remote_installer_runs_its_actual_uploaded_script_and_restores_configs(tmp_path):

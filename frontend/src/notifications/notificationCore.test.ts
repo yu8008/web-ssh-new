@@ -9,6 +9,8 @@ describe("notification policy", () => {
     expect(parsePreferences(null)).toEqual(DEFAULT_SOUND);
     expect(parsePreferences("broken")).toEqual(DEFAULT_SOUND);
     expect(parsePreferences('{"enabled":true,"volume":5,"bell":"yes"}')).toEqual({ ...DEFAULT_SOUND, enabled: true, volume: 1 });
+    expect(DEFAULT_SOUND.volume).toBe(.6);
+    expect(parsePreferences('{"enabled":true,"volume":0.35}').volume).toBe(.35);
   });
   it("validates event envelopes and bounds their text", () => {
     expect(parseNotice(event)).toEqual(event);

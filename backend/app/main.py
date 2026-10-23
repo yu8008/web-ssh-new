@@ -98,6 +98,7 @@ def create_app() -> FastAPI:
         notifications=NotificationService(database),
     )
     session_manager.on_notification = app_state.notifications.observe
+    session_manager.on_notification_status = app_state.notifications.broadcast
 
     app = FastAPI(title="WebSSH Gateway", version="0.1.0")
     app.dependency_overrides[get_state] = lambda: app_state

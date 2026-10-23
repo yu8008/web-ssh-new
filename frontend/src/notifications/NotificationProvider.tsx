@@ -9,12 +9,16 @@ import { DEFAULT_SOUND, SOUND_KEY, mergeNotices, parseNotice, parsePreferences, 
 import type { NoticeKind, SoundPreferences, TerminalNotice } from "./notificationCore";
 import { NotificationAudio } from "./notificationAudio";
 import { claimNotificationSound } from "./notificationSpeaker";
+import { parseRuntime, type CliRuntime } from "./notificationRuntime";
+import { NotificationRuntimeStatus } from "./NotificationRuntimeStatus";
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
   const { user, language } = useApp();
   const userId = user?.id; const token = user?.token;
   const t = React.useCallback((zh: string, en: string) => language === "en-US" ? en : zh, [language]);
   const location = useLocation(); const navigate = useNavigate();
+  const sessionId = /^\/terminal\/([^/]+)$/.exec(location.pathname)?.[1];
+  const currentSession = React.useRef(sessionId); currentSession.current = sessionId;
   const [events, setEvents] = React.useState<TerminalNotice[]>([]);
   const [preferences, setPreferences] = React.useState(() => { try { return parsePreferences(localStorage.getItem(SOUND_KEY)); } catch { return { ...DEFAULT_SOUND }; } });
   const [ready, setReady] = React.useState(false);
@@ -23,6 +27,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const [opened, setOpened] = React.useState(false);
   const [toast, setToast] = React.useState<TerminalNotice | null>(null);
   const [setup, setSetup] = React.useState(""); const [busy, setBusy] = React.useState(false);
+  const [runtime, setRuntime] = React.useState<CliRuntime | null>(null);
+  const [configured, setConfigured] = React.useState(false);
+  const setupRequest = React.useRef(0);
   const audio = React.useRef<NotificationAudio | null>(null);
   const settings = React.useRef(preferences); settings.current = preferences;
   const pending = React.useRef<NoticeKind | null>(null);
@@ -115,6 +122,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
             setEvents(previous => mergeNotices(previous, [event]));
             const age = Date.now() - Date.parse(event.created_at);
             if (age >= -5000 && age <= 10000 && !event.read_at) { setToast(event); sound(event); }
+          } else if (data.type === "notification_runtime" && typeof data.session_id === "string" && encodeURIComponent(data.session_id) === currentSession.current) {
+            const status = parseRuntime(data.runtime);
+            if (status) setRuntime(status);
           } else if (data.type === "read" && typeof data.id === "string" && typeof data.read_at === "string") {
             setEvents(previous => previous.map(item => item.id === data.id ? { ...item, read_at: data.read_at } : item));
             setToast(previous => previous?.id === data.id ? null : previous);
@@ -154,17 +164,30 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     void readTerminalNotification(event.id).then(updated => setEvents(previous => mergeNotices(previous, [updated]))).catch(() => setSetup(t("未能标记已读，请稍后重试", "Could not mark as read; please retry")));
     setToast(null); setOpened(false); navigate(`/terminal/${encodeURIComponent(event.session_id)}`);
   };
-  const sessionId = /^\/terminal\/([^/]+)$/.exec(location.pathname)?.[1];
-  const configure = async (action: "status" | "install" | "uninstall") => {
+  const configure = React.useCallback(async (action: "status" | "install" | "uninstall" | "bind", binding?: string) => {
     if (!sessionId) return;
+    const request = ++setupRequest.current;
     setBusy(true); setSetup("");
     try {
-      const status = await configureCliNotifications(decodeURIComponent(sessionId), action);
+      const status = await configureCliNotifications(decodeURIComponent(sessionId), action, binding);
+      if (request !== setupRequest.current) return;
       if (status.installed && status.relay_active === false) status.notes.push(t("tmux 通知转发未连接，请重新接入。", "The tmux notification relay is disconnected; configure again."));
-      setSetup(`${status.installed ? t("已接入", "Configured") : t("尚未接入", "Not configured")} · Codex ${status.codex_version || t("未发现", "not found")} · Claude ${status.claude_version || t("未发现", "not found")}${action === "install" ? t("。首次接入后，请在新启动的 CLI 会话中使用；Claude 如提示确认 Hook，请在 /hooks 查看。", ". Use newly launched CLI sessions after initial setup; review Claude hooks in /hooks if prompted.") : ""}${status.notes.filter(note => !note.startsWith("Codex: use")).map(note => ` ${note}`).join("")}`);
-    } catch (error) { setSetup(error instanceof Error ? error.message : String(error)); }
-    finally { setBusy(false); }
-  };
+      setConfigured(status.installed);
+      setRuntime(parseRuntime(status.runtime));
+      const configurationLabel = (app: string) => {
+        const value = status.configuration?.[app];
+        return value === "configured" ? t("配置已验证", "configuration verified") : value === "changed" ? t("配置已变更，请重新接入", "configuration changed; configure again") : value === "missing" ? t("配置文件缺失", "configuration missing") : value === "unavailable" ? t("无法验证配置", "cannot verify configuration") : t("未由网关配置", "not configured by gateway");
+      };
+      setSetup(`${status.installed ? t("已保存接入记录", "Setup record saved") : t("尚未配置提醒", "Notifications not configured")} · Codex ${status.codex_version || t("未发现", "not found")} (${configurationLabel("codex")}) · Claude ${status.claude_version || t("未发现", "not found")} (${configurationLabel("claude")})${status.notes.filter(note => !note.startsWith("Codex: use") && !note.startsWith("Existing sessions")).map(note => ` ${note}`).join("")}`);
+    } catch (error) { if (request === setupRequest.current) setSetup(error instanceof Error ? error.message : String(error)); }
+    finally { if (request === setupRequest.current) setBusy(false); }
+  }, [sessionId, t]);
+  React.useEffect(() => {
+    ++setupRequest.current; setSetup(""); setRuntime(null); setConfigured(false); setBusy(false);
+  }, [sessionId]);
+  React.useEffect(() => {
+    if (opened && sessionId) void configure("status");
+  }, [opened, sessionId, configure]);
   const value = React.useMemo(() => ({ events, preferences, ready, connected, open, update, enable, preview }), [events, preferences, ready, connected, open, update, enable, preview]);
   return <NotificationContext.Provider value={value}>
     {children}
@@ -190,10 +213,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
               ["backgroundOnly", t("仅离开当前网页时响铃", "Only sound when away from this page")],
             ] as const).map(([key, text]) => <label key={key} className="flex items-center gap-2"><input type="checkbox" checked={preferences[key]} onChange={event => update({ [key]: event.target.checked })} />{text}</label>)}
             <label className="flex items-center gap-3">{t("音量", "Volume")} <input aria-label={t("提示音音量", "Notification volume")} className="flex-1" type="range" min="0" max="100" value={Math.round(preferences.volume * 100)} onChange={event => update({ volume: Number(event.target.value) / 100 })} /><span>{Math.round(preferences.volume * 100)}%</span></label>
-            <div className="flex gap-2"><Button size="sm" variant="secondary" onClick={() => void preview(false)}>{t("试听完成音", "Preview completion")}</Button><Button size="sm" variant="secondary" onClick={() => void preview(true)}>{t("试听提问音", "Preview attention")}</Button></div>
+            <div className="flex flex-wrap gap-2"><Button size="sm" variant="secondary" onClick={() => void preview(false)}>{t("试听完成音", "Preview completion")}</Button><Button size="sm" variant="secondary" onClick={() => void preview(true)}>{t("试听提问音", "Preview attention")}</Button><Button size="sm" variant="ghost" onClick={() => update({ volume: DEFAULT_SOUND.volume })}>{t("使用推荐音量 60%", "Use recommended volume: 60%")}</Button></div>
           </div>
           {sessionId && <div className="space-y-2 rounded-lg border border-line p-3 text-sm"><p>{t("当前服务器的 CLI 提醒", "CLI notifications on this server")}</p><p className="text-xs text-ink-soft">{t("接入会为当前 SSH 用户配置 Codex 通知及 Claude Hook，保留已有配置并保存备份。声音和音量仅影响当前设备。", "Configure Codex notifications and Claude hooks for this SSH user, preserving existing settings and keeping backups. Sound preferences apply to this device.")}</p><div className="flex flex-wrap gap-2"><Button size="sm" loading={busy} onClick={() => void configure("install")}>{t("接入 CLI 提醒", "Configure CLI notifications")}</Button><Button size="sm" variant="secondary" disabled={busy} onClick={() => void configure("status")}>{t("检查接入", "Check setup")}</Button><Button size="sm" variant="ghost" disabled={busy} onClick={() => void configure("uninstall")}>{t("撤销接入", "Remove setup")}</Button></div></div>}
           {setup && <p role="status" className="break-words text-xs text-ink-soft">{setup}</p>}
+          {sessionId && runtime && <NotificationRuntimeStatus runtime={runtime} configured={configured} busy={busy} bind={id => void configure("bind", id)} t={t} />}
           <p className="text-xs text-ink-soft">{t("网页保持打开时接收提醒；浏览器休眠、设备锁屏或网页关闭后不保证即时播放。旧通知和重连回放不会补响。", "Keep the page open for alerts. Sleeping browsers, locked devices and closed pages may not play sounds promptly. Old notifications and reconnect history stay silent.")}</p>
           <div className="border-t border-line pt-3"><h3 className="mb-2 text-sm font-medium">{t("最近提醒", "Recent notifications")} ({events.filter(event => !event.read_at).length} {t("未读", "unread")})</h3>
             {!events.length && <p className="text-sm text-ink-soft">{t("暂无提醒", "No notifications yet")}</p>}

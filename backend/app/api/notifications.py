@@ -13,6 +13,8 @@ from app.core.db import utc_now
 from app.models.notification import TerminalNotification, notification_payload
 from app.models.session import SessionRecord
 from app.services.notification_setup import configure_notifications, configure_tmux_relay
+from app.services.notification_monitor import NotificationMonitor, probe_runtime, runtime_command
+from app.services.notification_runtime import public_status
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 logger = logging.getLogger(__name__)
@@ -52,13 +54,21 @@ async def setup_notifications(session_id: str, payload: dict, user=Depends(get_c
     if not session or session.user_id != user.id or session.status != "active":
         raise HTTPException(409, "Connect this terminal before configuring CLI notifications")
     action = payload.get("action", "status")
-    if action not in {"status", "install", "uninstall"}:
+    if action not in {"status", "install", "uninstall", "bind"}:
         raise HTTPException(400, "Invalid notification setup action")
     try:
+        runtime = await probe_runtime(session)
+        if action == "bind":
+            binding = payload.get("binding")
+            if not isinstance(binding, str) or binding not in {item["id"] for item in runtime.get("candidates", [])}:
+                raise ValueError("Choose a session from the current running CLI's candidates")
+            bound = await session.client.run(runtime_command(session, "bind", binding=binding, signature=runtime.get("signature")), check=False, timeout=15)
+            if bound.exit_status or str(bound.stdout).strip() != '{"bound":true}':
+                raise ValueError("The running CLI changed; check the session again before binding")
         relay = None
         if session.enhanced_enabled:
             relay = await configure_tmux_relay(session, "check" if action == "install" else "status")
-        result = await configure_notifications(session.client, action)
+        result = await configure_notifications(session.client, "status" if action == "bind" else action, runtime)
         if session.enhanced_enabled and action in {"install", "uninstall"}:
             try:
                 relay = await configure_tmux_relay(session, action, result["agent_path"])
@@ -69,6 +79,20 @@ async def setup_notifications(session_id: str, payload: dict, user=Depends(get_c
                 raise
         if relay:
             result["relay_active"] = relay["active"]
+        monitor = session.notification_monitor
+        if monitor is None and state.session_manager.on_notification:
+            monitor = NotificationMonitor(session, state.session_manager.on_notification, state.session_manager.on_notification_status)
+            session.notification_monitor = monitor
+        if monitor:
+            if action == "uninstall":
+                await monitor.close()
+            elif result["installed"] and (action in {"install", "bind"} or monitor.task is None or monitor.task.done()):
+                await monitor.restart()
+            result["runtime"] = monitor.snapshot() if result["installed"] else public_status(runtime)
+        else:
+            result["runtime"] = public_status(runtime)
+        if not result["installed"] and result["runtime"].get("app"):
+            result["runtime"].update({"state": "not_configured", "capabilities": {}})
         return result
     except (ValueError, RuntimeError) as error:
         raise HTTPException(409, str(error)) from error

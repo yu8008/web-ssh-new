@@ -26,6 +26,7 @@ from app.services.managed_session import ManagedSession
 from app.services.session_updates import SessionBroadcaster
 from app.services.types import PtyInfo, SessionBuffer
 from app.services.terminal_notifications import TerminalNotificationParser
+from app.services.notification_monitor import NotificationMonitor
 
 LOGGER = logging.getLogger(__name__)
 TARGET_PROBE_RTT_WINDOW = 8
@@ -56,6 +57,7 @@ class SessionManager:
         self._logger = logging.getLogger(__name__)
         self._broadcaster = broadcaster
         self.on_notification = on_notification
+        self.on_notification_status = None
         self._on_session_disconnect = on_session_disconnect
         self._keepalive_binary_dir = Path(keepalive_binary_dir).resolve() if keepalive_binary_dir else None
 
@@ -367,7 +369,10 @@ class SessionManager:
                                 elif not session.enhanced_enabled and session.channel:
                                     session.channel.write(event["reply"])
                             else:
-                                manager.on_notification(session.user_id, session.session_id, event)
+                                if session.notification_monitor:
+                                    session.notification_monitor.native(event)
+                                else:
+                                    manager.on_notification(session.user_id, session.session_id, event)
                     session.last_activity = utc_now()
 
                 def connection_lost(self, exc: Exception | None) -> None:
@@ -384,6 +389,8 @@ class SessionManager:
                     session.last_activity = utc_now()
                     manager._sessions.pop(session.session_id, None)
                     manager._cancel_target_network_probe(session.session_id)
+                    if session.notification_monitor:
+                        asyncio.create_task(session.notification_monitor.close())
                     if manager._broadcaster:
                         asyncio.create_task(manager._broadcaster.broadcast(session.user_id, session.status_payload()))
                     if manager._on_session_disconnect:
@@ -426,6 +433,9 @@ class SessionManager:
             replaced_session = self._sessions.get(resolved_session_id)
             self._sessions[resolved_session_id] = session
             self._ensure_target_network_probe(session)
+            if self.on_notification:
+                session.notification_monitor = NotificationMonitor(session, self.on_notification, self.on_notification_status)
+                session.notification_monitor.start()
             if replaced_session and replaced_session is not session:
                 replaced_session.output.transfer_to(session.output)
                 try:

@@ -9,7 +9,7 @@ export type SoundPreferences = {
 };
 export const SOUND_KEY = "webssh-notification-sound-v1";
 export const DEFAULT_SOUND: SoundPreferences = {
-  enabled: false, complete: true, attention: true, bell: false, volume: 0.35, backgroundOnly: false,
+  enabled: false, complete: true, attention: true, bell: false, volume: 0.60, backgroundOnly: false,
 };
 export function parsePreferences(value: string | null): SoundPreferences {
   try {

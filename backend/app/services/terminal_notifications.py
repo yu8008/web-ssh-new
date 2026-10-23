@@ -128,11 +128,10 @@ class TerminalNotificationParser:
             return None
         if payload.startswith("7501;") and ":app=codex" in payload:
             self.codex = True
-            previous = self.codex_state
             self.codex_state = payload[5:].split(":", 1)[0].removeprefix("state=")
             if self.codex_state == "working":
                 self.blocked_alerted = False
-            if self.codex_state == "blocked" and previous == "working" and not self.blocked_alerted:
+            if self.codex_state == "blocked" and not self.blocked_alerted:
                 self.codex_completion_at = None
                 self.blocked_alerted = True
                 return {"kind": "attention", "app": "codex"}
