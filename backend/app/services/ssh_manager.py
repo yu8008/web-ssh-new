@@ -25,6 +25,7 @@ from app.services.enhanced_session import (
 from app.services.managed_session import ManagedSession
 from app.services.session_updates import SessionBroadcaster
 from app.services.types import PtyInfo, SessionBuffer
+from app.services.terminal_notifications import TerminalNotificationParser
 
 LOGGER = logging.getLogger(__name__)
 TARGET_PROBE_RTT_WINDOW = 8
@@ -42,6 +43,7 @@ class SessionManager:
         auto_add_known_hosts: bool = True,
         on_session_disconnect: Callable[[str], None] | None = None,
         keepalive_binary_dir: str | None = None,
+        on_notification: Callable[[int, str, dict], None] | None = None,
     ) -> None:
         self._sessions: dict[str, ManagedSession] = {}
         self._network_probe_tasks: dict[str, asyncio.Task[None]] = {}
@@ -53,6 +55,7 @@ class SessionManager:
         self._enhanced_connection_locks: dict[int, asyncio.Lock] = {}
         self._logger = logging.getLogger(__name__)
         self._broadcaster = broadcaster
+        self.on_notification = on_notification
         self._on_session_disconnect = on_session_disconnect
         self._keepalive_binary_dir = Path(keepalive_binary_dir).resolve() if keepalive_binary_dir else None
 
@@ -335,10 +338,36 @@ class SessionManager:
 
         def _start_channel() -> asyncssh.SSHClientSession:
             manager = self
+            notifications = TerminalNotificationParser()
+            reply_pending = False
+
+            async def reply_to_tmux_probe(reply: str):
+                nonlocal reply_pending
+                try:
+                    target = shlex.quote(f"{session.enhanced_fingerprint}:0.0")
+                    binary = shlex.quote(session.tmux_binary_path)
+                    # tmux consumes unknown OSC replies on its client input.
+                    # Deliver this capability response to the pane literally.
+                    await session.client.run(f"{binary} send-keys -t {target} -l -- {shlex.quote(reply)}", check=False, timeout=5)
+                except Exception:
+                    LOGGER.debug("Could not answer program-status query; session=%s", session.session_id)
+                finally:
+                    reply_pending = False
 
             class TerminalSession(asyncssh.SSHClientSession):
                 def data_received(self, data: str, datatype: asyncssh.DataType | None = None) -> None:
+                    nonlocal reply_pending
                     session.output.publish(data)
+                    if manager.on_notification:
+                        for event in notifications.feed(data):
+                            if "reply" in event:
+                                if session.enhanced_enabled and session.tmux_binary_path and not reply_pending:
+                                    reply_pending = True
+                                    asyncio.create_task(reply_to_tmux_probe(event["reply"]))
+                                elif not session.enhanced_enabled and session.channel:
+                                    session.channel.write(event["reply"])
+                            else:
+                                manager.on_notification(session.user_id, session.session_id, event)
                     session.last_activity = utc_now()
 
                 def connection_lost(self, exc: Exception | None) -> None:

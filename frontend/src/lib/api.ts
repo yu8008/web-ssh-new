@@ -146,6 +146,25 @@ const WS_BASE = API_BASE
   ? API_BASE.replace(/^http/, "ws")
   : `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}`;
 
+export function openNotificationSocket(): WebSocket {
+  return new WebSocket(`${WS_BASE}/notifications/ws`, ["webssh.notifications.v1", `bearer.${getStoredToken() || ""}`]);
+}
+
+export async function readTerminalNotification(id: string): Promise<import("../notifications/notificationCore").TerminalNotice> {
+  const response = await fetch(`${HTTP_BASE}/notifications/${encodeURIComponent(id)}/read`, { method: "PATCH", headers: getAuthHeader() });
+  if (!response.ok) throw new Error(await safeError(response, "Could not mark notification as read"));
+  return response.json();
+}
+
+export type CliNotificationSetup = { installed: boolean; relay_active?: boolean; codex_version: string | null; claude_version: string | null; notes: string[] };
+export async function configureCliNotifications(sessionId: string, action: "status" | "install" | "uninstall"): Promise<CliNotificationSetup> {
+  const response = await fetch(`${HTTP_BASE}/notifications/setup/${encodeURIComponent(sessionId)}`, {
+    method: "POST", headers: { "Content-Type": "application/json", ...getAuthHeader() }, body: JSON.stringify({ action }),
+  });
+  if (!response.ok) throw new Error(await safeError(response, "Could not configure CLI notifications"));
+  return response.json();
+}
+
 export type LoginResponse = {
   access_token: string;
   expires_at: string;

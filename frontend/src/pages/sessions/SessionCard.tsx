@@ -7,6 +7,7 @@ import { cn } from "../../lib/utils";
 import { SessionStatusChip } from "./SessionStatusChip";
 import { SessionStatusSummary } from "./SessionStatusSummary";
 import type { SessionsState } from "./useSessionsState";
+import { NotificationSessionBadge } from "../../notifications/NotificationProvider";
 
 type SessionCardProps = {
   state: SessionsState;
@@ -45,6 +46,7 @@ export function SessionCard({ state, session, layout, orderingScopeSessions, sho
           label={state.mapSessionStatus(session.status)}
           isDark={state.isDark}
         />
+        <NotificationSessionBadge sessionId={session.id} />
       </div>
       {session.enhanced_enabled ? (
         <p className={`text-xs font-medium ${state.isDark ? "text-indigo-300" : "text-indigo-600"}`}>

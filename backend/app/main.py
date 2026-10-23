@@ -10,7 +10,8 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import update
 from starlette.responses import JSONResponse, Response
 
-from app.api import auth, clipboard_cache, connections, health, session_status, sessions, system, system_settings, ws_sessions
+from app.api import auth, clipboard_cache, connections, health, notifications, session_status, sessions, system, system_settings, ws_sessions
+from app.services.terminal_notifications import NotificationService
 from app.api.dependencies import AppState, get_state
 from app.api.middleware import RequestLoggingMiddleware
 from app.core.db import utc_now
@@ -94,7 +95,9 @@ def create_app() -> FastAPI:
         session_broadcaster=session_broadcaster,
         start_enhanced_retry_worker=start_enhanced_retry_worker,
         start_session_sync_worker=start_session_sync_worker,
+        notifications=NotificationService(database),
     )
+    session_manager.on_notification = app_state.notifications.observe
 
     app = FastAPI(title="WebSSH Gateway", version="0.1.0")
     app.dependency_overrides[get_state] = lambda: app_state
@@ -114,6 +117,7 @@ def create_app() -> FastAPI:
     @app.on_event("startup")
     async def _start_retry_worker() -> None:
         nonlocal clipboard_cleanup_task, latency_monitor_task
+        app_state.notifications.start()
         if app_state.start_enhanced_retry_worker:
             app_state.start_enhanced_retry_worker()
         if app_state.start_session_sync_worker:
@@ -123,6 +127,7 @@ def create_app() -> FastAPI:
 
     @app.on_event("shutdown")
     async def _stop_clipboard_cleanup() -> None:
+        await app_state.notifications.close()
         if latency_monitor_task:
             latency_monitor_task.cancel()
             with suppress(asyncio.CancelledError):
@@ -151,6 +156,7 @@ def create_app() -> FastAPI:
     app.include_router(system_settings.router)
     app.include_router(clipboard_cache.router)
     app.include_router(session_status.router)
+    app.include_router(notifications.router)
 
     static_dir = Path(__file__).resolve().parent.parent / "frontend" / "dist"
     if static_dir.exists():

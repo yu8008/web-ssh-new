@@ -325,3 +325,36 @@ def test_different_connections_can_initialize_in_parallel(tmp_path: Path, monkey
     asyncio.run(scenario())
 
     assert max_active == 2
+
+
+@pytest.mark.parametrize("enhanced", [False, True])
+def test_live_notifications_preserve_raw_output_and_probe_replies_do_not_become_keys(tmp_path, monkeypatch, enhanced):
+    manager = make_manager(tmp_path / "bin")
+    class CapturingClient(FakeSshClient):
+        async def create_session(self, **kwargs):
+            self.receiver = kwargs["session_factory"]()
+            return await super().create_session(**kwargs)
+    client = CapturingClient()
+    observed = []
+    manager.on_notification = lambda user, session, event: observed.append((user, session, event))
+    async def connect(*args): return client
+    async def install(*args): return "existing"
+    monkeypatch.setattr(manager, "connect_client", connect)
+    monkeypatch.setattr(manager, "_ensure_remote_keepalive_binary", install)
+    monkeypatch.setattr(manager, "_schedule_tmux_probe", lambda *args: None)
+    monkeypatch.setattr(manager, "_ensure_target_network_probe", lambda *args: None)
+    async def scenario():
+        session = await manager.create_session(make_connection(), {}, PtyInfo(term="xterm-256color", rows=24, cols=80), enhanced_enabled=enhanced,
+            enhanced_fingerprint="kp_test" if enhanced else None, tmux_binary_path="/tmp/tmux.aarch64" if enhanced else None)
+        stream = "\x1b]7501;state=working:app=codex\x1b\\\x1b]9;Finished\x07\x1b]7501;state=idle:app=codex\x1b\\"
+        client.receiver.data_received(stream)
+        client.receiver.data_received("\x1b]7501;?\x07")
+        await asyncio.sleep(0)
+        assert observed == [(3, session.session_id, {"kind": "complete", "app": "codex"})]
+        assert "".join(item.data for item in session.buffer.dump()) == stream + "\x1b]7501;?\x07"
+        if enhanced:
+            assert any("send-keys" in command and "?supported=1" in command for command in client.commands)
+        else:
+            assert any("write:\x1b]7501;?supported=1" in event for event in client.events)
+        await manager.close_session(session.session_id, terminate_enhanced=enhanced)
+    asyncio.run(scenario())

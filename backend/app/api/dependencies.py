@@ -13,6 +13,7 @@ from app.services.auth import AuthService
 from app.services.session_updates import SessionBroadcaster
 from app.services.ssh_manager import SessionManager
 from app.services.event_loop_lag import EventLoopLag
+from app.services.terminal_notifications import NotificationService
 
 
 @dataclass(frozen=True)
@@ -25,6 +26,7 @@ class AppState:
     start_enhanced_retry_worker: Callable[[], None] | None = None
     start_session_sync_worker: Callable[[], None] | None = None
     event_loop_lag: EventLoopLag = field(default_factory=EventLoopLag)
+    notifications: NotificationService | None = None
 
 
 def get_state() -> AppState:

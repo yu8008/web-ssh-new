@@ -7,6 +7,7 @@ import { ToastProvider } from "./components/Toast";
 import { AppProvider } from "./context/AppContext";
 import { Login } from "./pages/Login";
 import "./index.css";
+import { NotificationProvider } from "./notifications/NotificationProvider";
 
 const ForcePasswordChange = React.lazy(() =>
   import("./pages/ForcePasswordChange").then((module) => ({ default: module.ForcePasswordChange }))
@@ -32,6 +33,7 @@ if (root) {
       <AppProvider>
         <ToastProvider>
           <BrowserRouter>
+            <NotificationProvider>
             <Routes>
               <Route path="/" element={<Login />} />
               <Route
@@ -85,6 +87,7 @@ if (root) {
                 }
               />
             </Routes>
+            </NotificationProvider>
           </BrowserRouter>
         </ToastProvider>
       </AppProvider>

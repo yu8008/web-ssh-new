@@ -10,6 +10,7 @@ import { SessionCard } from "./SessionCard";
 import { SessionEmptyState } from "./SessionEmptyState";
 import { SessionGroupedList } from "./SessionGroupedList";
 import { SessionViewModeToggle } from "./SessionViewModeToggle";
+import { NotificationButton } from "../../notifications/NotificationProvider";
 
 type SessionsMobileProps = {
   state: SessionsState;
@@ -39,6 +40,7 @@ export function SessionsMobile({ state }: SessionsMobileProps) {
             </Button>
           </div>
           <div className="flex flex-wrap gap-2">
+            <NotificationButton />
             <Button
               variant="ghost"
               lightMode={!state.isDark}

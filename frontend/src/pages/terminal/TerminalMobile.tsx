@@ -8,6 +8,7 @@ import { createTerminalBufferSnapshot, type TerminalBufferSnapshot } from "./ter
 import type { TerminalSessionState } from "./useTerminalSession";
 import { TerminalLoading } from "./TerminalLoading";
 import { TerminalLatencyStatus } from "./TerminalLatencyStatus";
+import { NotificationButton } from "../../notifications/NotificationProvider";
 
 const FileBrowser = React.lazy(() =>
   import("../../components/FileBrowser").then((module) => ({ default: module.FileBrowser }))
@@ -128,6 +129,7 @@ export function TerminalMobile({ state, onBack }: TerminalMobileProps) {
           <TerminalLatencyStatus {...state} />
         </div>
         <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+          <NotificationButton />
           {actions.map((action) => (
             <Button
               key={action.key}

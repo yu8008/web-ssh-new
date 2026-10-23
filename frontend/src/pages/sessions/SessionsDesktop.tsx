@@ -10,6 +10,7 @@ import { SessionCard } from "./SessionCard";
 import { SessionEmptyState } from "./SessionEmptyState";
 import { SessionGroupedList } from "./SessionGroupedList";
 import { SessionViewModeToggle } from "./SessionViewModeToggle";
+import { NotificationButton } from "../../notifications/NotificationProvider";
 
 type SessionsDesktopProps = {
   state: SessionsState;
@@ -49,6 +50,7 @@ export function SessionsDesktop({ state }: SessionsDesktopProps) {
             <p className={`text-xs mt-1 ${state.networkProfileTone}`}>{state.networkProfileLabel}</p>
           </div>
           <div className="flex items-center gap-2">
+            <NotificationButton />
             <Button
               variant="ghost"
               lightMode={!state.isDark}

@@ -7,6 +7,7 @@ import type { FileInfo } from "../../lib/api";
 import type { TerminalSessionState } from "./useTerminalSession";
 import { TerminalLoading } from "./TerminalLoading";
 import { TerminalLatencyStatus } from "./TerminalLatencyStatus";
+import { NotificationButton } from "../../notifications/NotificationProvider";
 
 function cx(...values: Array<string | false | null | undefined>): string {
   return values.filter(Boolean).join(" ");
@@ -211,6 +212,7 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
           <TerminalLatencyStatus {...state} />
         </div>
         <div className="ml-auto flex items-center gap-1">
+          <NotificationButton />
           {state.targetLatencyMs !== null ? (
             <div
               className="mr-1 hidden h-5 w-[84px] items-end gap-px rounded bg-elevated px-1 py-1 lg:flex"
