@@ -7,7 +7,7 @@ import { createTerminalInputWriter } from "./terminalInput";
 import { createTerminalLatencyProbe } from "./terminalLatency";
 import { createBrowserLagMonitor, type TerminalDiagnostics } from "./terminalDiagnostics";
 import { configureTerminalRendering } from "./terminalRendering";
-import { createTerminalColors, TERMINAL_MINIMUM_CONTRAST } from "./terminalColors";
+import { createTerminalColors, terminalMinimumContrast } from "./terminalColors";
 import { disposeTerminal } from "./terminalLifecycle";
 import { attachTerminalWheel } from "./terminalWheel";
 import { createTerminalOutput, decodeTerminalOutput, isTerminalOutputProtocol } from "./terminalOutput";
@@ -542,7 +542,7 @@ export function useTerminalSocket({
 
       term = new Terminal({
         theme: initialTheme === "light" ? lightTerminalTheme : darkTerminalTheme,
-        minimumContrastRatio: TERMINAL_MINIMUM_CONTRAST,
+        minimumContrastRatio: terminalMinimumContrast(initialTheme !== "light"),
         fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
         fontSize: 15,
         lineHeight: 1.3,

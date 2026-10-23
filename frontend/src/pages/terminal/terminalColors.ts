@@ -1,7 +1,9 @@
 import type { Terminal } from "@xterm/xterm";
 import { darkTerminalTheme, lightTerminalTheme, xtermPaletteColor } from "./terminalUtils";
+import { LIGHT_TEXT_CONTRAST } from "./terminalContrast";
 
 export const TERMINAL_MINIMUM_CONTRAST = 4.5;
+export const terminalMinimumContrast = (isDark: boolean) => isDark ? TERMINAL_MINIMUM_CONTRAST : LIGHT_TEXT_CONTRAST;
 
 /** Keep near-black/near-white neutral panel backgrounds themeable. Foreground
  * colors, saturated backgrounds and middle grays retain their ANSI meaning. */
@@ -139,9 +141,10 @@ export function createTerminalColors(term: Terminal) {
   const apply = () => {
     if (pendingTheme === undefined || term.modes.synchronizedOutputMode) return;
     const theme = pendingTheme ? darkTerminalTheme : lightTerminalTheme;
+    const contrast = terminalMinimumContrast(pendingTheme);
     pendingTheme = undefined;
-    if (term.options.theme === theme && term.options.minimumContrastRatio === TERMINAL_MINIMUM_CONTRAST) return;
-    term.options.minimumContrastRatio = TERMINAL_MINIMUM_CONTRAST;
+    if (term.options.theme === theme && term.options.minimumContrastRatio === contrast) return;
+    term.options.minimumContrastRatio = contrast;
     term.options.theme = theme;
     term.refresh(0, term.rows - 1);
   };

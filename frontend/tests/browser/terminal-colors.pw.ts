@@ -12,23 +12,32 @@ const scene = (lightStartup: boolean) => "\x1b[0m\x1b[2J\x1b[H" + [
   "\x1b[2;38;2;205;214;244mDimmed secondary information\x1b[0m",
   "\x1b[31mError \x1b[32mSuccess \x1b[33mWarning\x1b[0m",
   "Normal text and readable links",
+  "\x1b[2mWorked for 35s / command results / collapsed output\x1b[0m",
+  "\x1b[2;38;5;189mDimmed indexed purple text\x1b[0m",
+  "\x1b[2;32mDimmed basic green text\x1b[0m",
 ].join("\r\n");
 
 async function open(page: Page, renderer: string, light = false) {
   await page.setViewportSize({ width: 1100, height: 650 });
   await page.goto(`/tests/browser/terminal-selection.html?renderer=${renderer}&cols=80&rows=12&styled=1&${light ? "light=1" : ""}`);
   await expect(page.locator("#terminal")).toHaveAttribute("data-ready", "true");
+  // Keep the whole 80-column screen over its actual terminal background.
+  // The fixture's narrower default host otherwise exposes the page at right.
+  await page.locator("#terminal").evaluate(element => { element.style.width = "1000px"; });
 }
 
-async function painted(page: Page) {
+async function painted(page: Page, foregroundRows = [4, 5, 6, 9, 10, 11], backgroundColumns: Array<number | undefined> = []) {
   const png = PNG.sync.read(await page.locator(".xterm-screen").screenshot());
   const pixel = (x: number, y: number): number[] => [...png.data.subarray((Math.floor(y) * png.width + Math.floor(x)) * 4, (Math.floor(y) * png.width + Math.floor(x)) * 4 + 3)];
   const row = png.height / 12;
-  const backgrounds = Array.from({ length: 9 }, (_, index) => pixel(png.width - 12, row * (index + 0.5)));
-  const foregrounds = [4, 5, 6].map(index => {
+  const backgrounds = Array.from({ length: 12 }, (_, index) => pixel(
+    backgroundColumns[index] === undefined ? png.width - 12 : (backgroundColumns[index]! + 0.5) * png.width / 80,
+    row * (index + 0.5)));
+  const foregrounds = foregroundRows.map(index => {
     const counts = new Map<string, number>();
     for (let y = Math.floor(index * row); y < (index + 1) * row; y++) {
-      for (let x = 0; x < 300; x++) {
+      // Sample a text prefix, excluding the cursor at the end of a short row.
+      for (let x = 0; x < 160; x++) {
         const color = pixel(x, y);
         if (color.every((value, channel) => value === backgrounds[index][channel])) continue;
         const key = color.join(",");
@@ -56,6 +65,81 @@ const panelColors = (light: boolean) => light ? [[226, 232, 240], [241, 245, 249
   : [[17, 28, 48], [11, 18, 32], [11, 18, 32], [17, 28, 48]];
 
 for (const renderer of ["dom", "webgl"]) {
+  test(`${renderer}: inverse and dim colors use their actual backgrounds, while hidden text and blocks retain their meaning`, async ({ page }) => {
+    await open(page, renderer, true);
+    const data = [
+      "\x1b[7mInverse default text MMMM\x1b[K",
+      "\x1b[0;2;7mDim inverse default text MMMM\x1b[K",
+      "\x1b[0;7;38;2;30;41;59;48;5;235mInverse RGB and indexed text MMMM\x1b[K",
+      "\x1b[0;1;2;7;38;5;234;48;5;235mBold dim inverse indexed text\x1b[K",
+      "\x1b[0;8mHidden information remains hidden\x1b[K",
+      "\x1b[0;2;48;2;120;20;20;38;2;205;214;244mDim text on a colored background\x1b[K",
+      "\x1b[0;48;5;235;38;2;241;245;249m██████████████████████████████\x1b[K",
+    ].join("\r\n");
+    await page.evaluate(data => window.writeTerminalForTest(data), "\x1b[0m\x1b[2J\x1b[H" + data + "\x1b[0m");
+    const before = await page.evaluate(() => window.terminalStateForTest());
+    expect(before.rowStyles[0].inverse).toBe(true);
+    expect(before.rowStyles[4].invisible).toBe(true);
+    for (const dark of [false, true, false]) {
+      await page.evaluate(dark => window.themeTerminalForTest(dark), dark);
+      expect((await page.evaluate(() => window.terminalStateForTest())).rowStyles).toEqual(before.rowStyles);
+      if (dark) continue;
+      // An erase-to-end uses the erase background, which does not retain the
+      // inverse attribute. Sample spaces inside the inverse text itself.
+      const colors = await painted(page, [0, 1, 2, 3, 4, 5, 6], [7, 3, 7, 4, 6, 3]);
+      expect(colors.foregrounds[0]).toEqual([255, 255, 255]);
+      for (const row of [0, 1, 2, 3, 5]) {
+        expect(contrast(colors.foregrounds[row], colors.backgrounds[row])).toBeGreaterThanOrEqual([1, 3, 5].includes(row) ? 4.45 : 6.95);
+      }
+      expect(colors.foregrounds[4]).toEqual([]);
+      expect(colors.foregrounds[6]).toEqual([]);
+    }
+    expect((await page.evaluate(() => window.terminalStateForTest())).lines).toEqual(before.lines);
+  });
+
+  test(`${renderer}: light text stays readable on both panels and while selected, preserving ANSI attributes`, async ({ page }, testInfo) => {
+    await open(page, renderer, true);
+    const lines = ["", "48;5;235;", "48;5;236;"].flatMap(surface => [
+      `\x1b[0;${surface}39mNormal body 中文 MMMM\x1b[K`,
+      `\x1b[0;${surface}2mDim command result and elapsed time\x1b[K`,
+      `\x1b[0;${surface}2;38;2;205;214;244mDim RGB secondary information\x1b[K`,
+      `\x1b[0;${surface}1;38;5;189mBold indexed command text\x1b[K`,
+    ]);
+    await page.evaluate(data => window.writeTerminalForTest(data), "\x1b[2J\x1b[H" + lines.join("\r\n") + "\x1b[0m");
+    const rows = Array.from({ length: 12 }, (_, row) => row);
+    const before = await page.evaluate(() => window.terminalStateForTest());
+    expect(before.rowStyles.map(style => style.dim)).toEqual([false, true, true, false, false, true, true, false, false, true, true, false]);
+    const check = async (selected = false) => {
+      const colors = await painted(page, rows);
+      for (const row of rows) {
+        expect(contrast(colors.foregrounds[row], colors.backgrounds[row])).toBeGreaterThanOrEqual(selected || row % 4 === 1 || row % 4 === 2 ? 4.45 : 6.95);
+      }
+    };
+    await check();
+    await page.locator(".xterm-screen").screenshot({ path: testInfo.outputPath("readable-light-text.png") });
+    for (const dark of [true, false, true, false]) {
+      await page.evaluate(dark => window.themeTerminalForTest(dark), dark);
+      expect((await page.evaluate(() => window.terminalStateForTest())).rowStyles).toEqual(before.rowStyles);
+      if (!dark) await check();
+    }
+    const box = (await page.locator(".xterm-screen").boundingBox())!;
+    await page.mouse.move(box.x + 1, box.y + box.height / 12 * 1.5);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width - 1, box.y + box.height / 12 * 9.5, { steps: 4 });
+    await page.mouse.up();
+    await expect(page.locator(".wsg-selection-highlight")).toBeVisible();
+    await check(true);
+    await page.locator("#copy").click();
+    const copied = await page.locator("#copied").textContent();
+    expect(copied).toContain("Dim RGB secondary information");
+    await page.evaluate(() => { window.themeTerminalForTest(true); window.themeTerminalForTest(false); });
+    await check(true);
+    await page.locator("#copy").click();
+    await expect(page.locator("#copied")).toHaveText(copied!);
+    expect((await page.evaluate(() => window.terminalStateForTest())).lines).toEqual(before.lines);
+    expect(await page.locator("#inputs").textContent()).toBe("");
+  });
+
   for (const lightStartup of [false, true]) {
     test(`${renderer}: ${lightStartup ? "light" : "dark"} TUI colors switch in place, including existing text and selection`, async ({ page }, testInfo) => {
       await open(page, renderer, lightStartup);
@@ -65,9 +149,11 @@ for (const renderer of ["dom", "webgl"]) {
         await page.evaluate(light => window.themeTerminalForTest(!light), light);
         await expect.poll(async () => (await painted(page)).backgrounds.slice(0, 4)).toEqual(panelColors(light));
         const colors = await painted(page);
-        expect(contrast(colors.foregrounds[0], colors.backgrounds[4])).toBeGreaterThanOrEqual(4.45);
-        expect(contrast(colors.foregrounds[1], colors.backgrounds[5])).toBeGreaterThanOrEqual(4.45);
-        expect(contrast(colors.foregrounds[2], colors.backgrounds[6])).toBeGreaterThanOrEqual(2.2);
+        expect(contrast(colors.foregrounds[0], colors.backgrounds[4])).toBeGreaterThanOrEqual(light ? 6.95 : 4.45);
+        expect(contrast(colors.foregrounds[1], colors.backgrounds[5])).toBeGreaterThanOrEqual(light ? 6.95 : 4.45);
+        for (const [foreground, row] of [[2, 6], [3, 9], [4, 10], [5, 11]]) {
+          expect(contrast(colors.foregrounds[foreground], colors.backgrounds[row])).toBeGreaterThanOrEqual(light ? 4.45 : 2.2);
+        }
         expect(await page.evaluate(() => window.terminalStateForTest().lines)).toEqual(before.lines);
         expect(await page.evaluate(() => window.terminalStateForTest().viewportY)).toBe(before.viewportY);
       }
@@ -240,7 +326,10 @@ for (const mobile of [false, true]) {
       await expect(page.getByText(light ? "已切换浅色模式" : "已切换深色模式", { exact: true }).first()).toBeVisible();
       await expect(page.getByText(/需要重启程序/)).toHaveCount(0);
       await expect(page.locator(".xterm")).toHaveAttribute("data-identity", "original");
-      if (light) await page.screenshot({ path: testInfo.outputPath("live-light-theme.png") });
+      if (light) {
+        await expect(page.locator(".xterm-rows span").filter({ hasText: "Worked for 35s" }).first()).toHaveCSS("color", "rgb(75, 84, 98)");
+        await page.screenshot({ path: testInfo.outputPath("live-light-theme.png") });
+      }
     }
     expect(connections).toBe(1);
     await page.locator(".xterm-helper-textarea").focus();

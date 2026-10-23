@@ -10,7 +10,7 @@ import { createTerminalOutput } from "../../src/pages/terminal/terminalOutput";
 import { attachTerminalViewport } from "../../src/pages/terminal/terminalViewport";
 import { attachTerminalShortcuts } from "../../src/pages/terminal/terminalShortcuts";
 import { darkTerminalTheme, lightTerminalTheme } from "../../src/pages/terminal/terminalUtils";
-import { createTerminalColors, TERMINAL_MINIMUM_CONTRAST } from "../../src/pages/terminal/terminalColors";
+import { createTerminalColors, terminalMinimumContrast } from "../../src/pages/terminal/terminalColors";
 
 const element = (id: string) => document.getElementById(id)!;
 const parameters = new URLSearchParams(location.search);
@@ -45,7 +45,7 @@ const terminal = new Terminal({
   cols: Number(parameters.get("cols") || "64"), rows: Number(parameters.get("rows") || "12"),
   ...(parameters.has("appFont") ? { fontSize: 15, lineHeight: 1.3, fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" } : { fontSize: 16 }),
   scrollback: Number(parameters.get("shellLines") || "500"), theme: parameters.has("light") ? lightTerminalTheme : parameters.has("styled") ? darkTerminalTheme : { background: "#111827" },
-  minimumContrastRatio: parameters.has("light") || parameters.has("styled") ? TERMINAL_MINIMUM_CONTRAST : 1,
+  minimumContrastRatio: parameters.has("light") || parameters.has("styled") ? terminalMinimumContrast(!parameters.has("light")) : 1,
 });
 terminal.open(element("terminal"));
 const rendering = configureTerminalRendering(terminal, {
@@ -193,6 +193,10 @@ window.terminalStateForTest = () => ({
   buffer: terminal.buffer.active.type,
   baseY: terminal.buffer.active.baseY,
   selected: terminal.getSelection(),
+  rowStyles: Array.from({ length: terminal.rows }, (_, row) => {
+    const cell = terminal.buffer.active.getLine(terminal.buffer.active.viewportY + row)?.getCell(0);
+    return { dim: !!cell?.isDim(), bold: !!cell?.isBold(), inverse: !!cell?.isInverse(), invisible: !!cell?.isInvisible(), foreground: cell?.getFgColor(), foregroundMode: cell?.getFgColorMode() };
+  }),
   selectionActive: selection.hasSelection(),
   renderedLines, renderCount,
   lines: Array.from({ length: terminal.rows }, (_, row) => terminal.buffer.active.getLine(terminal.buffer.active.viewportY + row)?.translateToString(true) ?? ""),
@@ -206,7 +210,7 @@ declare global {
     themeTerminalForTest(isDark: boolean): void;
     scrollTerminalForTest(line: number): void;
     releaseTerminalRepliesForTest(): void;
-    terminalStateForTest(): { viewportY: number; mouse: string; buffer: string; baseY: number; selected: string; selectionActive: boolean; renderedLines: string[]; renderCount: number; lines: string[] };
+    terminalStateForTest(): { viewportY: number; mouse: string; buffer: string; baseY: number; selected: string; selectionActive: boolean; renderedLines: string[]; renderCount: number; lines: string[]; rowStyles: { dim: boolean; bold: boolean; inverse: boolean; invisible: boolean; foreground: number | undefined; foregroundMode: number | undefined }[] };
   }
 }
 
