@@ -24,6 +24,7 @@ export function PageFrame({ title, description, index, children }: { title: stri
     </header>
     <main className="product-page-content">
       <div className="page-heading">
+        <span className="page-index" aria-hidden="true">{index}</span>
         <div><p className="eyebrow"><span>{index}</span> / WEBSSH GATEWAY</p><h1>{title}<span className="heading-period">.</span></h1><p className="page-description">{description}</p></div>
         <Link to="/sessions" className="page-back"><ArrowLeft size={16} />{zh ? "返回工作空间" : "Back to workspace"}<ArrowUpRight size={15} className="ml-3" /></Link>
       </div>

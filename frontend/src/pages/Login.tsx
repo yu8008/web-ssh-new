@@ -1,6 +1,6 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowUpRight, Fingerprint, Layers, LockKeyhole, Moon, Network, Sun } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Fingerprint, Layers, LockKeyhole, Moon, Network, Sun } from "lucide-react";
 import { Brand } from "../components/Brand";
 import { SignalArtwork } from "../components/SignalArtwork";
 import { Button } from "../components/Button";
@@ -105,29 +105,29 @@ export function Login() {
 
   return (
     <div className="auth-layout">
-      <aside className="auth-story">
-        <div className="auth-story-top"><Brand /><span className="auth-kicker">BUILT FOR YOUR NEXT CONNECTION</span></div>
-        <SignalArtwork className="auth-art" interactive />
-        <div className="auth-copy">
-          <p className="eyebrow"><span>01</span> / REMOTE SYSTEMS. HUMAN CONTROL.</p>
-          <h1>{zh ? <>远端，<br />近在<span>眼前。</span></> : <>Remote.<br /><span>Within reach.</span></>}</h1>
-          <p>{tr("lead")}</p>
-        </div>
-        <div className="auth-bottom">
-          <div className="auth-features">{copy.features.map((feature, index) => {
-            const Icon = [Layers, Network, Fingerprint][index];
-            return <div key={feature.zh}><span className="auth-feature-index">0{index + 1}</span><Icon size={19} strokeWidth={1.5} aria-hidden="true" /><p>{zh ? feature.zh : feature.en}</p></div>;
-          })}</div>
-          <div className="auth-caption"><span>ONE GATEWAY. EVERY POSSIBILITY.</span><span>WEBSSH / GATEWAY</span></div>
-        </div>
-      </aside>
-      <main className="auth-panel">
+      <header className="auth-header">
+        <Brand />
+        <span className="auth-header-caption">REMOTE SYSTEMS. HUMAN CONTROL.</span>
         <div className="auth-controls">
           <Button variant="ghost" size="sm" onClick={toggleLanguage} aria-label={zh ? "Switch to English" : "切换到中文"}>{zh ? "EN" : "中"}</Button>
           <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label={zh ? "切换主题" : "Toggle theme"}>{isDark ? <Sun size={17} /> : <Moon size={17} />}</Button>
         </div>
+      </header>
+      <div className="auth-stage">
+      <aside className="auth-story">
+        <span className="auth-wordmark" aria-hidden="true">GATEWAY</span>
+        <SignalArtwork className="auth-art" interactive />
+        <div className="auth-copy">
+          <p className="eyebrow"><span className="eyebrow-rule" /> {zh ? "距离，重新定义。" : "DISTANCE, REDEFINED."}</p>
+          <h1>{zh ? <>远端，<br /><span>触手可及。</span></> : <>Remote.<br /><span>Within reach.</span></>}</h1>
+          <span className="auth-direction" aria-hidden="true"><ArrowDownRight strokeWidth={1} /></span>
+          <p>{tr("lead")}</p>
+        </div>
+        <div className="auth-art-caption"><span>01 / THE GATEWAY</span><span>{zh ? "跨越窗口，连接工作。" : "BEYOND THE WINDOW."}</span></div>
+      </aside>
+      <main className="auth-panel">
         <div className="auth-form">
-          <p className="eyebrow"><span /> {zh ? "你的远端工作空间" : "YOUR REMOTE WORKSPACE"}</p>
+          <div className="auth-form-heading"><p className="eyebrow">02 / ACCESS</p><ArrowUpRight size={24} strokeWidth={1.25} aria-hidden="true" /></div>
           <h2>{tr("title")}</h2><p className="auth-subtitle">{tr("subtitle")}</p>
           <form onSubmit={handleSubmit}>
             <div className="space-y-2.5"><label htmlFor="login-username" className="block text-ink-soft">{tr("username")}</label>
@@ -145,6 +145,14 @@ export function Login() {
           <p className="auth-fineprint"><LockKeyhole size={13} aria-hidden="true" />{tr("hint")}</p>
         </div>
       </main>
+      </div>
+      <footer className="auth-bottom">
+        <div className="auth-features">{copy.features.map((feature, index) => {
+          const Icon = [Layers, Network, Fingerprint][index];
+          return <div key={feature.zh}><span className="auth-feature-index">0{index + 1}</span><Icon size={20} strokeWidth={1.4} aria-hidden="true" /><p>{zh ? feature.zh : feature.en}</p></div>;
+        })}</div>
+        <div className="auth-caption"><span>ONE GATEWAY.<br />EVERY POSSIBILITY.</span><span>WEBSSH / GATEWAY</span></div>
+      </footer>
 
       {resetDialogOpen ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-6">

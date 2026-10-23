@@ -14,15 +14,15 @@ const sessions = [
 ];
 const overview = { stats: { cpu: { percent: 12.4, count: 4 }, memory: { used: 1449551462, total: 4294967296, percent: 33.7 }, swap: { total: 0, used: 0, percent: 0 } }, network: { upload_speed: 21504, download_speed: 142336 }, processes: { processes: [{ pid: 1204, name: "codex", cpu_percent: 1.2, memory_bytes: 244318208, memory_percent: 5.6, command: "codex" }] }, disks: { disks: [{ mount: "/", total: 64424509440, used: 12884901888, percent: 20 }] } };
 
-async function harness(context: BrowserContext, theme: string, authenticated = true) {
-  await context.addInitScript(({ theme, authenticated }) => {
+async function harness(context: BrowserContext, theme: string, authenticated = true, language = "zh-CN") {
+  await context.addInitScript(({ theme, authenticated, language }) => {
     if (!localStorage.getItem("theme")) localStorage.setItem("theme", theme);
-    localStorage.setItem("app_language", "zh-CN");
+    localStorage.setItem("app_language", language);
     if (authenticated) {
       const payload = btoa(JSON.stringify({ sub: "1", exp: Math.floor(Date.now() / 1000) + 3600 }));
       localStorage.setItem("token", `test.${payload}.signature`); localStorage.setItem("user_id", "1");
     }
-  }, { theme, authenticated });
+  }, { theme, authenticated, language });
   let saved: unknown = null;
   await context.route("**/*", async route => {
     if (route.request().resourceType() !== "fetch") return route.continue();
@@ -156,7 +156,7 @@ for (const mobile of [false, true]) for (const theme of ["dark", "light"]) {
     await harness(context, theme, false);
     await page.goto("/"); await expect(page.getByRole("heading", { name: "进入工作空间" })).toBeVisible();
     await page.evaluate(() => document.fonts.ready);
-    await expect.poll(() => page.locator(".auth-art img").evaluate(element => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+    await expect.poll(() => page.locator(".auth-art img").first().evaluate(element => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
     expect(await page.evaluate(() => [...document.fonts].some(font => font.family.includes("Space Grotesk") && font.status === "loaded"))).toBe(true);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
     await page.screenshot({ path: info.outputPath("login.png"), fullPage: true, animations: "disabled" });
@@ -211,4 +211,107 @@ test("login artwork responds to the pointer and honors reduced motion", async ({
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.mouse.move(box.x + box.width * .32, box.y + box.height * .42);
   await expect.poll(() => art.evaluate(element => (element as HTMLElement).style.getPropertyValue("--art-x"))).not.toBe("");
+});
+
+for (const mobile of [false, true]) {
+  test(`${mobile ? "mobile" : "desktop"}: session cards keep keyboard actions separate from navigation`, async ({ page, context }) => {
+    await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 1000 });
+    await harness(context, "light");
+    await page.goto("/sessions");
+    const card = page.locator(".session-row").filter({ has: page.getByRole("button", { name: "打开会话 Production / Release pipeline", exact: true }) });
+    await card.getByRole("button", { name: "更多操作", exact: true }).focus();
+    await page.keyboard.press("Enter");
+    await expect(card.getByRole("menu")).toBeVisible();
+    await expect(page).toHaveURL(/\/sessions$/);
+    await card.getByRole("menuitem", { name: "备注", exact: true }).focus();
+    await page.keyboard.press("Enter");
+    await expect(card.locator("textarea")).toBeFocused();
+    await expect(page).toHaveURL(/\/sessions$/);
+    await card.getByRole("button", { name: "收起", exact: true }).click();
+    await card.getByRole("button", { name: "重命名会话", exact: true }).focus();
+    await page.keyboard.press("Enter");
+    await expect(card.getByLabel("会话标题", { exact: true })).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(page).toHaveURL(/\/sessions$/);
+    await page.locator(".workspace-resume").click();
+    await expect(page).toHaveURL(/\/terminal\/design$/);
+    await expect(page.locator(".xterm")).toBeVisible();
+    await expect(page.locator(".signal-art")).toHaveCount(0);
+  });
+}
+
+test("an empty workspace offers a working first connection action", async ({ page, context }) => {
+  await harness(context, "dark");
+  await context.route("**/sessions", route => route.request().resourceType() === "fetch" ? route.fulfill({ json: [] }) : route.continue());
+  await context.route("**/connections", route => route.request().resourceType() === "fetch" ? route.fulfill({ json: [] }) : route.continue());
+  await page.goto("/sessions");
+  await expect(page.getByRole("button", { name: "查看 0 个在线会话", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "建立第一条连接", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "新建连接", exact: true })).toBeVisible();
+});
+
+test("the sculpture settles at rest and falls back to a local poster after context loss", async ({ page, context }) => {
+  await harness(context, "dark", false);
+  await page.goto("/");
+  const art = page.locator(".auth-art");
+  await expect(art).toHaveAttribute("data-rendered", "true");
+  const box = (await art.boundingBox())!;
+  await page.mouse.move(box.x + box.width * .3, box.y + box.height * .4);
+  await expect.poll(() => art.evaluate(el => (el as HTMLElement).style.getPropertyValue("--art-x"))).not.toBe("");
+  await expect(art).toHaveAttribute("data-moving", "false", { timeout: 5000 });
+  const settled = await art.getAttribute("style");
+  await page.waitForTimeout(180);
+  expect(await art.getAttribute("style")).toBe(settled);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect.poll(() => art.evaluate(el => (el as HTMLElement).style.getPropertyValue("--art-x"))).toBe("");
+  await art.locator("canvas").evaluate(el => (el as HTMLCanvasElement).getContext("webgl")!.getExtension("WEBGL_lose_context")!.loseContext());
+  await expect(art).not.toHaveAttribute("data-rendered", "true");
+  await expect(art.locator(".signal-poster--dark")).toBeVisible();
+  await page.getByRole("button", { name: "切换主题", exact: true }).click();
+  await expect(art.locator(".signal-poster--light")).toBeVisible();
+  await expect(art).not.toHaveAttribute("data-rendered", "true");
+});
+
+test("artwork remains available when WebGL is disabled", async ({ page, context }) => {
+  await harness(context, "light", false);
+  await context.addInitScript(() => {
+    const getContext = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, type: string, ...args: unknown[]) {
+      return type === "webgl" || type === "webgl2" ? null : Reflect.apply(getContext, this, [type, ...args]);
+    } as typeof getContext;
+  });
+  await page.goto("/");
+  const poster = page.locator(".auth-art .signal-poster--light");
+  await expect(poster).toBeVisible();
+  await expect.poll(() => poster.evaluate(el => (el as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+  await page.getByRole("button", { name: "切换主题", exact: true }).click();
+  await expect(page.locator(".auth-art .signal-poster--dark")).toBeVisible();
+  await page.getByLabel("密码", { exact: true }).fill("local-fixture-password");
+  await page.getByLabel("密码", { exact: true }).press("Enter");
+  await expect(page).toHaveURL(/\/sessions$/);
+});
+
+
+test("English typography and actions fit mobile, tablet and desktop layouts", async ({ page, context }, info) => {
+  await harness(context, "light", false, "en-US");
+  for (const width of [360, 768, 1024, 1440]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto("/");
+    await expect(page.locator("html")).toHaveAttribute("lang", "en-US");
+    await expect(page.locator(".auth-form")).toBeVisible();
+    await page.evaluate(() => document.fonts.ready);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+    await page.screenshot({ path: info.outputPath(`login-en-${width}.png`), fullPage: true });
+  }
+  await page.getByLabel("Password", { exact: true }).fill("local-fixture-password");
+  await page.getByLabel("Password", { exact: true }).press("Enter");
+  for (const width of [360, 768, 1024, 1440]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await expect(page.locator(".workspace-intro")).toBeVisible();
+    const stats = (await page.locator(".workspace-stats").boundingBox())!;
+    const copy = (await page.locator(".workspace-intro h1").boundingBox())!;
+    expect(copy.x + copy.width).toBeLessThanOrEqual(stats.x);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+    await page.screenshot({ path: info.outputPath(`workspace-en-${width}.png`) });
+  }
 });

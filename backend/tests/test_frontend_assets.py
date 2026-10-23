@@ -22,16 +22,23 @@ import app.main as main
 fake_source=Path(sys.argv[1])
 main.Path=lambda value: fake_source
 mimetypes.add_type('text/plain','.woff2')
+mimetypes.add_type('text/plain','.webp')
 client=TestClient(main.create_app())
 for path in ('/fonts/space-grotesk.woff2','/fonts/ibm-plex-mono.woff2'):
     response=client.get(path)
     assert response.status_code==200
     assert response.headers['content-type']=='font/woff2'
     assert response.content.startswith(b'wOF2')
-for path in ('/art/signal-orbit.svg','/favicon.svg'):
+for path in ('/favicon.svg',):
     response=client.get(path)
     assert response.status_code==200
     assert response.headers['content-type']=='image/svg+xml'
+for theme in ('dark','light'):
+    response=client.get('/art/gateway-sculpture-'+theme+'.webp')
+    assert response.status_code==200
+    assert response.headers['content-type']=='image/webp'
+    assert response.content[:4]==b'RIFF'
+    assert response.content[8:12]==b'WEBP'
 client.close()
 """
     result = subprocess.run([sys.executable, "-c", code, str(tmp_path / "backend/app/main.py")],

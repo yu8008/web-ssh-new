@@ -162,8 +162,9 @@ def create_app() -> FastAPI:
 
     static_dir = Path(__file__).resolve().parent.parent / "frontend" / "dist"
     if static_dir.exists():
-        # Minimal container images may lack the system MIME entry for WOFF2.
+        # Minimal container images may lack these system MIME entries.
         mimetypes.add_type("font/woff2", ".woff2")
+        mimetypes.add_type("image/webp", ".webp")
         app.mount("/", StaticFiles(directory=static_dir, html=True), name="frontend")
 
         index_path = static_dir / "index.html"

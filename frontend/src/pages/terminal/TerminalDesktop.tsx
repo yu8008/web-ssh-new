@@ -1,5 +1,5 @@
 import React from "react";
-import { ArrowLeft, Copy, Folder, Moon, RefreshCw, Sun, X } from "lucide-react";
+import { Activity, ArrowLeft, Copy, Folder, Moon, RefreshCw, Sun, X } from "lucide-react";
 import { Button } from "../../components/Button";
 import { FileViewer } from "../../components/FileViewer";
 import { getServerClock, type ServerClock } from "../../lib/api";
@@ -368,8 +368,9 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
         />
         <div
           style={{ width: sidebarWidth }}
-          className="hidden min-h-0 flex-shrink-0 flex-col overflow-hidden border-l border-line bg-chrome p-3 md:flex"
+          className="terminal-inspector hidden min-h-0 flex-shrink-0 flex-col overflow-hidden border-l border-line bg-chrome p-3 md:flex"
         >
+          <div className="inspector-heading"><Activity size={14} strokeWidth={1.4} />{state.t("资源监测", "INSPECTOR")}<span>SERVER / LIVE</span></div>
           <div className="mb-2 flex shrink-0 items-center justify-between gap-2 rounded-lg border border-line bg-surface px-3 py-2">
             <span className="text-2xs font-medium text-muted">{state.t("服务器时间", "Server time")}</span>
             <span className="flex items-baseline gap-1.5 font-mono text-xs tabular-nums text-ink">

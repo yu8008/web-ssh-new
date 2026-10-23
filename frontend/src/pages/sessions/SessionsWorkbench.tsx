@@ -1,6 +1,8 @@
 import React from "react";
 import {
   ArrowDown,
+  ArrowUpRight,
+  SquareTerminal,
   ExternalLink,
   ArrowUp,
   Circle,
@@ -326,7 +328,8 @@ export function SessionsWorkbench({ state }: SessionsWorkbenchProps) {
 
         {railOpen ? <div className="fixed inset-0 z-10 bg-black/40 lg:hidden" onClick={() => setRailOpen(false)} /> : null}
 
-        <main className="flex min-w-0 flex-1 flex-col bg-content">
+        <main className="workspace-main flex min-w-0 flex-1 flex-col bg-content">
+          <div className="workspace-scroll">
           <WorkspaceIntro state={state} onViewActive={() => { setActiveConnectionId(null); state.setSearch(""); state.setFilter("active"); }} />
           <div className="workspace-toolbar flex flex-wrap items-center gap-3 border-b border-line">
             <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setRailOpen(true)} aria-label={state.t("打开连接列表", "Open connections")}>
@@ -377,7 +380,7 @@ export function SessionsWorkbench({ state }: SessionsWorkbenchProps) {
             </div>
           ) : null}
 
-          <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="workspace-session-area">
             {state.loading ? (
               <SkeletonRows />
             ) : visibleSessions.length === 0 ? (
@@ -393,11 +396,12 @@ export function SessionsWorkbench({ state }: SessionsWorkbenchProps) {
               />
             ) : (
               <ul className="session-list">
-                {visibleSessions.map((session) => (
+                {visibleSessions.map((session, index) => (
                   <SessionRow
                     key={session.id}
                     state={state}
                     session={session}
+                    ordinal={index + 1}
                     menuOpen={openMenuId === session.id}
                     noteOpen={noteSessionId === session.id}
                     onToggleMenu={() => setOpenMenuId((current) => (current === session.id ? null : session.id))}
@@ -407,6 +411,8 @@ export function SessionsWorkbench({ state }: SessionsWorkbenchProps) {
                 ))}
               </ul>
             )}
+          </div>
+
           </div>
 
           <div className="workspace-footer flex shrink-0 items-center justify-between gap-3 border-t border-line px-4 text-muted sm:px-5">
@@ -552,6 +558,7 @@ function StatusDot({ tone, pulse }: { tone: "ok" | "warn" | "danger" | "muted"; 
 function SessionRow({
   state,
   session,
+  ordinal,
   menuOpen,
   noteOpen,
   onToggleMenu,
@@ -560,6 +567,7 @@ function SessionRow({
 }: {
   state: SessionsState;
   session: Session;
+  ordinal: number;
   menuOpen: boolean;
   noteOpen: boolean;
   onToggleMenu: () => void;
@@ -590,21 +598,26 @@ function SessionRow({
   const scope = state.filteredSessions;
 
   return (
-    <li className="session-row group relative">
+    <li className="session-row group relative" data-state={active ? "active" : "idle"} data-menu-open={menuOpen}>
       <div
         role="button"
         tabIndex={0}
         onClick={onOpen}
         onKeyDown={(event) => {
+          if (event.target !== event.currentTarget) return;
           if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
             onOpen();
           }
         }}
         aria-label={state.t("打开会话 " + session.name, "Open session " + session.name)}
-        className="flex cursor-pointer items-center gap-3 px-4 py-3 outline-none transition hover:bg-elevated/60 focus-visible:bg-elevated/60 sm:px-5"
+        className="session-card-main"
       >
-        <StatusDot tone={active ? "ok" : retrying ? "warn" : "muted"} pulse={active || retrying} />
+        <div className="session-card-top"><span>SESSION / {String(ordinal).padStart(2, "0")}</span>
+          <span className={`session-card-status ${active ? "text-ok" : retrying ? "text-warn" : "text-muted"}`}>{active ? state.t("运行中", "Active") : retrying ? state.t("重连中", "Reconnecting") : state.t("已离线", "Offline")}</span>
+          <StatusDot tone={active ? "ok" : retrying ? "warn" : "muted"} />
+        </div>
+        <div className="session-card-icon"><SquareTerminal size={19} strokeWidth={1.4} aria-hidden="true" /></div>
         <div className="min-w-0 flex-1">
           <div className="session-title-row flex items-center gap-1.5">
             {renaming ? (
@@ -659,21 +672,17 @@ function SessionRow({
             ) : null}
             {noteValue.trim() ? <StickyNote className="h-3 w-3 shrink-0 text-muted/70" aria-hidden="true" /> : null}
           </div>
-          <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-2xs text-muted">
-            <span className="truncate font-mono">
-              {session.username}@{session.host}
-            </span>
-            <span aria-hidden="true">·</span>
-            <span>{active ? state.t("已运行 ", "up ") + durationSince(session.started_at, state.t) : state.mapSessionStatus(session.status)}</span>
-            <span aria-hidden="true">·</span>
-            <span>{state.t("最近活动 ", "last seen ") + relativeTime(session.last_activity, state.t)}</span>
-          </div>
+          <div className="session-card-host">{session.username}@{session.host}</div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="session-card-bottom">
+          <div className="session-card-time">{active ? state.t("已运行 ", "up ") + durationSince(session.started_at, state.t) : state.mapSessionStatus(session.status)}
+            <small>{state.t("最近活动 ", "last seen ") + relativeTime(session.last_activity, state.t)}</small>
+          </div>
+          <div className="flex shrink-0 items-center gap-1">
           {active ? (
-            <Button size="sm" variant="secondary" className="hidden group-hover:inline-flex group-focus-within:inline-flex sm:inline-flex">
-              {state.t("打开", "Open")}
+            <Button size="sm" variant="secondary" className="session-open">
+              {state.t("打开", "Open")}<ArrowUpRight size={12} />
             </Button>
           ) : session.enhanced_enabled && session.allow_auto_retry !== false ? (
             <Button
@@ -701,13 +710,14 @@ function SessionRow({
           >
             <MoreHorizontal className="h-4 w-4" />
           </button>
+          </div>
         </div>
       </div>
 
       {menuOpen ? (
         <>
           <div className="fixed inset-0 z-20" onClick={onToggleMenu} />
-          <div role="menu" className="animate-pop-in absolute right-4 top-12 z-30 w-44 overflow-hidden rounded-lg border border-line bg-surface p-1 shadow-panel sm:right-5">
+          <div role="menu" className="session-card-menu animate-pop-in absolute right-4 top-12 z-30 w-44 overflow-hidden rounded-lg border border-line bg-surface p-1 shadow-panel sm:right-5">
             <MenuItem
               icon={<ExternalIcon />}
               label={state.t("在新标签页打开", "Open in new tab")}

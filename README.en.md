@@ -8,7 +8,7 @@ One of its core capabilities is the persistent session design for long-running w
 
 This repository focuses on terminal-history scrolling, large text selections, live light/dark themes, and notification sounds when a CLI finishes a turn or needs your input. Recent output from the same session and notification records can be viewed on another device.
 
-The interface follows one control-room visual system: neutral charcoal and white themes, a restrained blue accent, original perspective artwork, and self-hosted fonts. Sign-in, sessions, terminals, files, monitoring, settings, and logs share semantic design tokens and Lucide icons. The terminal shares the neutral surfaces: `#212121` in dark mode and `#ffffff` in light mode, with TUI panels and selections switching immediately. Mobile layouts include connection navigation and session search. Presentation motion respects the operating system's reduced-motion preference.
+The visual theme, “Gateway,” combines oversized typography, an original metallic sculpture, pointer-driven spring motion, and self-hosted fonts. The workspace provides session cards, connection filters, and a Resume work action. Sign-in, terminals, files, monitoring, settings, and logs share neutral charcoal/white surfaces, a restrained blue accent, and Lucide icons. Terminal backgrounds remain `#212121` in dark mode and `#ffffff` in light mode, with TUI panels and selections switching immediately. The sculpture stops animating when interaction settles, falls back to local artwork when graphics support is unavailable, and respects reduced-motion preferences.
 
 [Quick Start](#quick-start) · [CLI Task Notifications](#cli-task-notifications) · [Architecture](./docs/ARCHITECTURE.en.md) · [Deployment](./docs/DEPLOYMENT.en.md)
 
