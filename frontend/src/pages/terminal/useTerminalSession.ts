@@ -2,7 +2,7 @@ import React from "react";
 import { useToast } from "../../components/ToastContext";
 import { useApp } from "../../context/AppContextCore";
 import { copyTextToClipboard } from "./clipboardUtils";
-import { darkTerminalTheme, lightTerminalTheme, resolveCopyText } from "./terminalUtils";
+import { resolveCopyText } from "./terminalUtils";
 import { useTerminalSocket } from "./useTerminalSocket";
 import { useTerminalSessionInfo } from "./useTerminalSessionInfo";
 
@@ -68,26 +68,21 @@ export function useTerminalSession(sessionId?: string) {
     setCurrentDir("/");
   }, [sessionId]);
 
-  const { terminalInstance: terminalInstanceRef, announceThemeColors } = socketState;
+  const { setTerminalTheme } = socketState;
   const announcedThemeRef = React.useRef(isDark);
 
   React.useEffect(() => {
-    const term = terminalInstanceRef.current;
-    if (!term) return;
-    term.options.theme = isDark ? darkTerminalTheme : lightTerminalTheme;
-    term.refresh(0, term.rows - 1);
-    // 主题切换后同步给 tmux，避免 TUI（如 Codex）继续按旧配色绘制输入框。
-    announceThemeColors(isDark);
+    setTerminalTheme(isDark);
     if (announcedThemeRef.current !== isDark) {
       announcedThemeRef.current = isDark;
       push(
         t(
-          "终端配色已切换；Codex 等 TUI 需要重启程序才会重新取色",
-          "Terminal colors switched. TUI apps like Codex need a restart to re-detect colors."
+          isDark ? "已切换深色模式" : "已切换浅色模式",
+          isDark ? "Switched to dark mode" : "Switched to light mode"
         )
       );
     }
-  }, [isDark, terminalInstanceRef, announceThemeColors, push, t]);
+  }, [isDark, setTerminalTheme, push, t]);
 
   const { clearSelectionSnapshot, getSelectionText } = socketState;
   const handleClear = React.useCallback(() => {

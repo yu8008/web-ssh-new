@@ -67,8 +67,8 @@ export function xtermPaletteColor(index: number): string {
  * 生成 xterm 的 extendedAnsi 调色板（对应 16~255 号索引），并按需覆盖个别索引。
  *
  * Codex 这类 TUI 在 256 色模式下会用索引色画面板底色（实测用到 235/236，
- * 默认渲染成 #262626 / #303030 的中性灰），与深色主题的 slate 色系不协调。
- * 这里把这些索引重映射到主题的深色表面色。
+ * 默认渲染成 #262626 / #303030 的中性灰）。两种主题都映射这些面板色，
+ * 已显示的单元格因此可以直接跟随主题切换。
  */
 export function buildExtendedAnsiPalette(overrides: Record<number, string> = {}): string[] {
   const palette = Array.from({ length: 240 }, (_, offset) => xtermPaletteColor(offset + 16));
@@ -103,8 +103,7 @@ export const darkTerminalTheme = {
   brightMagenta: "#d8b4fe",
   brightCyan: "#67e8f9",
   brightWhite: "#ffffff",
-  // tmux 将 Codex 历史提问条映射到 235、输入框映射到 236。
-  // 历史条更暗，当前输入区稍亮，保持深蓝灰色的层次。
+  // 面板具体使用哪个色号取决于 TUI 的启动配色；保留两个表面层次。
   extendedAnsi: buildExtendedAnsiPalette({
     235: "#0b1220",
     236: "#111c30",
@@ -133,6 +132,10 @@ export const lightTerminalTheme = {
   brightMagenta: "#a855f7",
   brightCyan: "#06b6d4",
   brightWhite: "#ffffff",
+  extendedAnsi: buildExtendedAnsiPalette({
+    235: "#f1f5f9",
+    236: "#e2e8f0",
+  }),
 };
 
 export const WHEEL_PIXEL_PER_LINE = 40;

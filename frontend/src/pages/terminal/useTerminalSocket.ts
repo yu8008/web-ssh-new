@@ -7,6 +7,7 @@ import { createTerminalInputWriter } from "./terminalInput";
 import { createTerminalLatencyProbe } from "./terminalLatency";
 import { createBrowserLagMonitor, type TerminalDiagnostics } from "./terminalDiagnostics";
 import { configureTerminalRendering } from "./terminalRendering";
+import { createTerminalColors, TERMINAL_MINIMUM_CONTRAST } from "./terminalColors";
 import { disposeTerminal } from "./terminalLifecycle";
 import { attachTerminalWheel } from "./terminalWheel";
 import { createTerminalOutput, decodeTerminalOutput, isTerminalOutputProtocol } from "./terminalOutput";
@@ -56,6 +57,7 @@ export function useTerminalSocket({
   const lastResizeStateRef = React.useRef<ResizeState | null>(null);
   const selectionControllerRef = React.useRef<ReturnType<typeof attachTerminalSelection> | null>(null);
   const outputRef = React.useRef<ReturnType<typeof createTerminalOutput> | null>(null);
+  const colorsRef = React.useRef<ReturnType<typeof createTerminalColors> | null>(null);
   const viewportRef = React.useRef<ReturnType<typeof attachTerminalViewport> | null>(null);
   const latencyProbeRef = React.useRef<ReturnType<typeof createTerminalLatencyProbe> | null>(null);
   const browserLagRef = React.useRef<ReturnType<typeof createBrowserLagMonitor> | null>(null);
@@ -166,9 +168,10 @@ export function useTerminalSocket({
     }
   }, [enhancedSessionRef]);
 
-  const announceThemeColors = React.useCallback(
+  const setTerminalTheme = React.useCallback(
     (isDark: boolean) => {
       themeRef.current = isDark ? "dark" : "light";
+      colorsRef.current?.setTheme(isDark);
       sendThemeAnnouncement();
     },
     [sendThemeAnnouncement]
@@ -232,6 +235,7 @@ export function useTerminalSocket({
         replayingRef.current = true;
         outputWriter.replacePending(() => {
           selectionControllerRef.current?.clear();
+          colorsRef.current?.reset();
           term.reset();
           remotePaintRef.current = false;
           paintedRef.current = false;
@@ -510,6 +514,7 @@ export function useTerminalSocket({
     let viewport: ReturnType<typeof attachTerminalViewport> | null = null;
     let rendered: { dispose(): void } | null = null;
     let rendering: ReturnType<typeof configureTerminalRendering> | null = null;
+    let colors: ReturnType<typeof createTerminalColors> | null = null;
     let pasteController: ReturnType<typeof attachTerminalPaste> | null = null;
     let shortcuts: ReturnType<typeof attachTerminalShortcuts> | null = null;
     let resizeObserver: ResizeObserver | null = null;
@@ -537,6 +542,7 @@ export function useTerminalSocket({
 
       term = new Terminal({
         theme: initialTheme === "light" ? lightTerminalTheme : darkTerminalTheme,
+        minimumContrastRatio: TERMINAL_MINIMUM_CONTRAST,
         fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
         fontSize: 15,
         lineHeight: 1.3,
@@ -551,13 +557,15 @@ export function useTerminalSocket({
 
       terminalInstance.current = term;
       fitAddon.current = fit;
+      colors = createTerminalColors(term);
+      colorsRef.current = colors;
 
       viewport = attachTerminalViewport(term, terminalContainer);
       viewportRef.current = viewport;
       browserLagRef.current = createBrowserLagMonitor(window);
       const activeTerm = term;
       outputWriter = createTerminalOutput({
-        write: (data, onParsed) => activeTerm.write(data, onParsed),
+        write: colors.write,
         beforeWrite: viewport.capture,
         afterWrite: (snapshot) => { viewport?.restore(snapshot); browserLagRef.current?.parsed(); },
         inputPending: () => (navigator as Navigator & { scheduling?: { isInputPending(): boolean } }).scheduling?.isInputPending() ?? false,
@@ -665,9 +673,11 @@ export function useTerminalSocket({
       browserLagRef.current = null;
       inputWriter?.dispose();
       outputWriter?.dispose();
+      colors?.dispose();
       viewport?.dispose();
       rendered?.dispose();
       if (outputRef.current === outputWriter) outputRef.current = null;
+      if (colorsRef.current === colors) colorsRef.current = null;
       if (viewportRef.current === viewport) viewportRef.current = null;
       if (selectionControllerRef.current === selectionController) selectionControllerRef.current = null;
       clearReconnectTimer();
@@ -699,6 +709,6 @@ export function useTerminalSocket({
     getSelectionText,
     clearSelectionSnapshot,
     selectionAnchor,
-    announceThemeColors,
+    setTerminalTheme,
   };
 }

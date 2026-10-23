@@ -10,6 +10,7 @@ import { createTerminalOutput } from "../../src/pages/terminal/terminalOutput";
 import { attachTerminalViewport } from "../../src/pages/terminal/terminalViewport";
 import { attachTerminalShortcuts } from "../../src/pages/terminal/terminalShortcuts";
 import { darkTerminalTheme, lightTerminalTheme } from "../../src/pages/terminal/terminalUtils";
+import { createTerminalColors, TERMINAL_MINIMUM_CONTRAST } from "../../src/pages/terminal/terminalColors";
 
 const element = (id: string) => document.getElementById(id)!;
 const parameters = new URLSearchParams(location.search);
@@ -44,14 +45,16 @@ const terminal = new Terminal({
   cols: Number(parameters.get("cols") || "64"), rows: Number(parameters.get("rows") || "12"),
   ...(parameters.has("appFont") ? { fontSize: 15, lineHeight: 1.3, fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" } : { fontSize: 16 }),
   scrollback: Number(parameters.get("shellLines") || "500"), theme: parameters.has("light") ? lightTerminalTheme : parameters.has("styled") ? darkTerminalTheme : { background: "#111827" },
+  minimumContrastRatio: parameters.has("light") || parameters.has("styled") ? TERMINAL_MINIMUM_CONTRAST : 1,
 });
 terminal.open(element("terminal"));
 const rendering = configureTerminalRendering(terminal, {
   preferWebgl: parameters.get("renderer") === "webgl" ? true : parameters.get("renderer") === "dom" ? false : undefined,
 });
 const viewport = attachTerminalViewport(terminal, element("terminal"));
+const colors = createTerminalColors(terminal);
 const output = createTerminalOutput({
-  write: (data, done) => terminal.write(data, done),
+  write: colors.write,
   beforeWrite: viewport.capture, afterWrite: viewport.restore,
   onOverflow: () => { throw new Error("Fixture output overflow"); },
 });
@@ -165,12 +168,14 @@ element("dispose").addEventListener("click", () => {
   inputWriter.dispose();
   wheelController.dispose();
   output.dispose();
+  colors.dispose();
   viewport.dispose();
   disposeTerminal(terminal, rendering);
 });
 window.resizeTerminalForTest = () => terminal.resize(terminal.cols + 1, terminal.rows + 1);
 window.selectTerminalForTest = (first, last) => terminal.select(0, terminal.buffer.active.viewportY + first, (last - first + 1) * terminal.cols);
 window.writeTerminalForTest = (data) => new Promise(resolve => output.enqueue(data, resolve));
+window.themeTerminalForTest = (isDark) => colors.setTheme(isDark);
 window.scrollTerminalForTest = (line) => terminal.scrollToLine(line);
 let renderedLines: string[] = [];
 let renderCount = 0;
@@ -198,6 +203,7 @@ declare global {
     resizeTerminalForTest(): void;
     selectTerminalForTest(first: number, last: number): void;
     writeTerminalForTest(data: string): Promise<void>;
+    themeTerminalForTest(isDark: boolean): void;
     scrollTerminalForTest(line: number): void;
     releaseTerminalRepliesForTest(): void;
     terminalStateForTest(): { viewportY: number; mouse: string; buffer: string; baseY: number; selected: string; selectionActive: boolean; renderedLines: string[]; renderCount: number; lines: string[] };

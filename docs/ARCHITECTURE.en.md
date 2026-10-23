@@ -67,6 +67,8 @@ Scrollback defaults to 10,000 lines. Settings offer 5,000 / 10,000 / 50,000 / 10
 
 Rendering prefers hardware WebGL to batch dense colored glyphs, with Canvas fallback for software WebGL, browser restrictions, or context loss, and DOM fallback when Canvas is unavailable. TUI selection keeps one remote wheel request in flight and continues after verifying the viewport movement. Continuous output cannot indefinitely postpone this check, and pointer movement within the same cell does not redraw the selection. Remote scrolling remains subject to SSH round-trip time and TUI repaint speed.
 
+Terminal themes are applied locally without restarting the TUI. Both palettes map panel slots 235/236 and use xterm's minimum text contrast of 4.5 (the core uses a lower target for dim text). Before parsing, a streaming adapter maps neutral backgrounds near black or white to those slots: channel spread at most 24, with all channels at most 72 or at least 224. This supports indexed and RGB panels emitted by Codex started in either theme. Foregrounds, saturated backgrounds, middle grays, text and OSC/DCS/APC payloads retain their semantics. Incomplete CSI buffering is limited to 512 characters and reset at the replay barrier; server history and protocol acknowledgements remain based on raw output. Theme switches reuse the terminal, viewport, history and selection. During DEC 2026 the latest requested theme waits for a complete frame or the core's timeout recovery. Default-color announcements to tmux remain for application queries, independently of the local display update.
+
 ## 5. Security Baseline
 
 - AES-GCM encrypted credential storage

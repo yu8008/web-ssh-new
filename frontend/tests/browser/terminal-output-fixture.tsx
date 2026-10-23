@@ -86,6 +86,7 @@ export function Harness() {
       pasteMode: () => state.terminalInstance.current!.modes.bracketedPasteMode,
       diagnostics: () => state.terminalDiagnostics,
       disconnect: (retryable = false) => sockets.at(-1)!.close(retryable ? 1012 : 1000),
+      theme: (isDark) => { localStorage.setItem("theme", isDark ? "dark" : "light"); state.setTerminalTheme(isDark); },
     };
   }, [state]);
   return <>
@@ -115,6 +116,7 @@ declare global {
       pasteMode(): boolean;
       diagnostics(): import("../../src/pages/terminal/terminalDiagnostics").TerminalDiagnostics | null;
       disconnect(retryable?: boolean): void;
+      theme(isDark: boolean): void;
     };
   }
 }
