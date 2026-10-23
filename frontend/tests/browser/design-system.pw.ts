@@ -55,7 +55,26 @@ async function harness(context: BrowserContext, theme: string, authenticated = t
   await context.routeWebSocket("**/sessions/ws/sessions/**", () => {});
   await context.routeWebSocket("**/sessions/ws/terminal/**", socket => {
     socket.send(JSON.stringify({ type: "replay_start" }));
-    socket.send(JSON.stringify({ type: "output", seq: 1, data: "\x1b[1mWebSSH Gateway\x1b[0m\r\n\r\nops@atlas.internal ~\r\n$ git status\r\nOn branch main\r\nYour branch is up to date with origin/main.\r\n\r\nnothing to commit, working tree clean\r\n\r\n$ " }));
+    const data = [
+      "\x1b[1mCodex / Workspace maintenance\x1b[0m",
+      "\x1b[2mops@atlas.internal  /workspace/webssh\x1b[0m",
+      "",
+      "\x1b[48;5;235m检查当前工作区，并运行相关验证。\x1b[K\x1b[0m",
+      "",
+      "已检查工作区，正在验证终端配色与任务提醒。",
+      "",
+      "\x1b[34mRan npm run test\x1b[0m",
+      "\x1b[2m  Test Files  11 passed\x1b[0m",
+      "\x1b[2m  Tests       108 passed\x1b[0m",
+      "",
+      "\x1b[32m验证通过\x1b[0m，终端历史和会话连接正常。",
+      "",
+      "\x1b[2mWorked for 12s\x1b[0m",
+      "",
+      "\x1b[48;5;236m继续处理工作区中的任务\x1b[K\x1b[0m",
+      "\x1b[2mGPT  /  /workspace/webssh\x1b[0m",
+    ].join("\r\n");
+    socket.send(JSON.stringify({ type: "output", seq: 1, data }));
     socket.send(JSON.stringify({ type: "replay_end", seq: 1 }));
   });
   return { saved: () => saved };
@@ -69,6 +88,30 @@ for (const mobile of [false, true]) for (const theme of ["dark", "light"]) {
     for (const [path, selector, name] of [["/sessions", ".workspace-intro", "workspace"], ["/settings", ".page-heading", "settings"], ["/logs", ".page-heading", "logs"], ["/terminal/design", ".xterm", "terminal"]]) {
       await page.goto(path); await expect(page.locator(selector)).toBeVisible();
       await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+      // Validate readable content and helper text on the actual themed
+      // surfaces, rather than just checking that the theme flag changed.
+      const colors = await page.evaluate(() => {
+        const style = getComputedStyle(document.documentElement);
+        return Object.fromEntries(["--canvas", "--chrome", "--surface", "--elevated", "--ink", "--ink-soft", "--muted", "--brand", "--brand-ink"].map(name =>
+          [name, style.getPropertyValue(name).trim().split(/\s+/).map(Number)]));
+      });
+      const luminance = (color: number[]) => color.map(value => value / 255)
+        .map(value => value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4)
+        .reduce((sum, value, index) => sum + value * [.2126, .7152, .0722][index], 0);
+      const contrast = (a: number[], b: number[]) => (Math.max(luminance(a), luminance(b)) + .05) / (Math.min(luminance(a), luminance(b)) + .05);
+      for (const surface of ["--canvas", "--chrome", "--surface", "--elevated"]) {
+        for (const text of ["--ink", "--ink-soft", "--muted", "--brand"]) {
+          expect(contrast(colors[surface], colors[text]), `${text} on ${surface}`).toBeGreaterThanOrEqual(4.5);
+        }
+      }
+      expect(contrast(colors["--brand"], colors["--brand-ink"])).toBeGreaterThanOrEqual(4.5);
+      if (path === "/terminal/design") {
+        await expect(page.locator(".xterm-rows")).toContainText("终端历史和会话连接正常");
+        const background = theme === "dark" ? "rgb(33, 33, 33)" : "rgb(255, 255, 255)";
+        for (const selector of [".terminal-shell", ".terminal-frame", ".xterm-scrollable-element"]) {
+          await expect(page.locator(selector)).toHaveCSS("background-color", background);
+        }
+      }
       await page.evaluate(() => document.fonts.ready);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
       await page.screenshot({ path: info.outputPath(`${name}.png`), fullPage: path !== "/terminal/design", animations: "disabled" });

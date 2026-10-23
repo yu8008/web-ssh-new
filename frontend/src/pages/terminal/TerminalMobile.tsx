@@ -4,7 +4,7 @@ import { Button } from "../../components/Button";
 import { FileViewer } from "../../components/FileViewer";
 import type { FileInfo } from "../../lib/api";
 import { TerminalCopyPanel } from "./TerminalCopyPanel";
-import { createTerminalBufferSnapshot, type TerminalBufferSnapshot } from "./terminalUtils";
+import { createTerminalBufferSnapshot, darkTerminalTheme, lightTerminalTheme, type TerminalBufferSnapshot } from "./terminalUtils";
 import type { TerminalSessionState } from "./useTerminalSession";
 import { TerminalLoading } from "./TerminalLoading";
 import { TerminalLatencyStatus } from "./TerminalLatencyStatus";
@@ -172,7 +172,7 @@ export function TerminalMobile({ state, onBack }: TerminalMobileProps) {
       <div className="flex-1 min-h-0 pb-16">
         <div className={`${activeTab === "terminal" ? "flex" : "hidden"} h-full flex-col`}>
           <div className="flex-1 p-3 min-h-0 relative">
-            <div className="h-full w-full overflow-hidden rounded-lg border border-line" style={{ backgroundColor: state.isDark ? "#020617" : "#ffffff" }}>
+            <div className="terminal-frame h-full w-full overflow-hidden rounded-lg border border-line" style={{ backgroundColor: (state.isDark ? darkTerminalTheme : lightTerminalTheme).background }}>
               <div className={`h-full w-full p-2 ${state.isDark ? "" : "xterm-light"} ${state.sessionInfo?.enhanced_enabled ? "xterm-tmux-enhanced" : ""}`}>
                 <div ref={state.terminalRef} className="h-full w-full" tabIndex={-1} onClick={() => state.terminalInstance.current?.focus()} />
               </div>

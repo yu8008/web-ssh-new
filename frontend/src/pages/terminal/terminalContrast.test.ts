@@ -12,17 +12,17 @@ function contrast(a: number, b: number) {
 
 describe("light terminal glyph contrast", () => {
   it("preserves readable body text and gives default dim text a darker secondary color", () => {
-    const body = rgba(30, 41, 59);
+    const body = rgba(31, 31, 31);
     expect(readableLightForeground(0xffffffff, body, false).rgba).toBe(body);
     const secondary = readableLightForeground(0xffffffff, body, true);
-    expect(secondary.css).toBe("#4b5462");
+    expect(secondary.css).toBe("#4c4c4c");
     expect(contrast(0xffffffff, secondary.rgba)).toBeGreaterThanOrEqual(4.5);
     expect(contrast(0xffffffff, secondary.rgba)).toBeLessThan(contrast(0xffffffff, body));
   });
 
   it("meets final normal/dim contrast on white and both panels for basic, indexed and RGB colors", () => {
     const foregrounds = [rgba(215, 215, 255), rgba(166, 227, 161), rgba(205, 214, 244), rgba(22, 163, 74), rgba(234, 179, 8), rgba(6, 182, 212)];
-    for (const background of [0xffffffff, rgba(241, 245, 249), rgba(226, 232, 240)]) {
+    for (const background of [0xffffffff, rgba(247, 247, 247), rgba(237, 237, 237)]) {
       for (const foreground of foregrounds) {
         for (const dim of [false, true]) {
           const result = readableLightForeground(background, foreground, dim);
@@ -40,9 +40,9 @@ describe("light terminal glyph contrast", () => {
   });
 
   it("reserves contrast for the independent selection overlay on light surfaces", () => {
-    const selection = rgba(191, 219, 254);
-    const darken = (color: number) => rgba(Math.min(color >>> 24, 191), Math.min((color >>> 16) & 255, 219), Math.min((color >>> 8) & 255, 254));
-    for (const background of [0xffffffff, rgba(241, 245, 249), rgba(226, 232, 240)]) {
+    const selection = rgba(220, 231, 247);
+    const darken = (color: number) => rgba(Math.min(color >>> 24, 220), Math.min((color >>> 16) & 255, 231), Math.min((color >>> 8) & 255, 247));
+    for (const background of [0xffffffff, rgba(247, 247, 247), rgba(237, 237, 237)]) {
       for (const foreground of [rgba(205, 214, 244), rgba(215, 215, 255), rgba(166, 227, 161)]) {
         const resolved = readableLightForeground(background, foreground, true, selection);
         expect(contrast(darken(background), darken(resolved.rgba))).toBeGreaterThanOrEqual(4.5);
