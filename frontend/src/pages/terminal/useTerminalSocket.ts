@@ -262,7 +262,12 @@ export function useTerminalSocket({
           }
           if (frame?.type === "replay_start") { resetReplay(); return; }
           if (frame?.type === "replay_end") {
-            outputWriter.enqueue("", () => { replayingRef.current = false; });
+            // The enable sequence may have aged out of the bounded history.
+            // Restore parser state after replay, before any later live output;
+            // this is local output, never a command sent to the remote CLI.
+            const pasteMode = typeof frame.bracketed_paste === "boolean"
+              ? `\x1b[?2004${frame.bracketed_paste ? "h" : "l"}` : "";
+            outputWriter.enqueue(pasteMode, () => { replayingRef.current = false; });
             return;
           }
           if (frame?.type === "output") {

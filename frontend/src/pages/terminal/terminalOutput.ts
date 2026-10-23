@@ -132,7 +132,7 @@ export function createTerminalOutput({
 export type TerminalOutputFrame =
   | { type: "pong"; ping_id: number; gateway_queue_ms?: number; gateway_loop_lag_ms?: number; gateway_queued_chars?: number; gateway_inflight_chars?: number }
   | { type: "replay_start" }
-  | { type: "replay_end"; seq: number }
+  | { type: "replay_end"; seq: number; bracketed_paste?: boolean }
   | { type: "output"; seq: number; data: string; epoch?: string };
 
 export function decodeTerminalOutput(data: string): TerminalOutputFrame | null {
@@ -147,7 +147,8 @@ export function decodeTerminalOutput(data: string): TerminalOutputFrame | null {
       return reply;
     }
     if (!Number.isSafeInteger(frame?.seq) || frame.seq < 0) return null;
-    if (frame.type === "replay_end") return { type: "replay_end", seq: frame.seq };
+    if (frame.type === "replay_end") return { type: "replay_end", seq: frame.seq,
+      ...(typeof frame.bracketed_paste === "boolean" ? { bracketed_paste: frame.bracketed_paste } : {}) };
     if (frame.type === "output" && typeof frame.data === "string") return { type: "output", seq: frame.seq, data: frame.data, ...(typeof frame.epoch === "string" && frame.epoch.length <= 64 ? { epoch: frame.epoch } : {}) };
   } catch { /* Older servers and pre-subscription errors use plain text. */ }
   return null;

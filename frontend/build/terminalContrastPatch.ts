@@ -9,24 +9,24 @@ const core = path.join(root, "node_modules/@xterm/xterm");
 const addon = path.join(root, "node_modules/@xterm/addon-webgl");
 const policy = path.join(root, "src/pages/terminal/terminalContrast.ts");
 const virtualId = "\0webssh-terminal-renderers";
-const policyImport = `import { usesLightTextPolicy, readableLightForeground } from ${JSON.stringify(policy)};\n`;
+const policyImport = `import { usesTerminalTextPolicy, readableTerminalForeground } from ${JSON.stringify(policy)};\n`;
 
 /** Patches are applied to the pinned packages' source in memory. Neither
  * node_modules nor generated vendor bundles need to be edited or committed. */
 const patches = new Map<string, Array<[string, string]>>([
   [path.join(core, "src/browser/renderer/dom/DomRendererRowFactory.ts"), [
     ["this._applyMinimumContrast(charElement, resolvedBg, colors.foreground, cell, bgOverride, fgOverride)",
-      "this._applyMinimumContrast(charElement, resolvedBg, isInverse && usesLightTextPolicy(colors.background.rgba, this._optionsService.rawOptions.minimumContrastRatio) ? colors.background : colors.foreground, cell, bgOverride, fgOverride)"],
+      "this._applyMinimumContrast(charElement, resolvedBg, isInverse && usesTerminalTextPolicy(colors.background.rgba, this._optionsService.rawOptions.minimumContrastRatio) ? colors.background : colors.foreground, cell, bgOverride, fgOverride)"],
     ["if (!bgOverride) {\n        if (cell.isDim()) {",
-      "if (!bgOverride && !usesLightTextPolicy(colors.background.rgba, this._optionsService.rawOptions.minimumContrastRatio)) {\n        if (cell.isDim()) {"],
+      "if (!bgOverride && !usesTerminalTextPolicy(colors.background.rgba, this._optionsService.rawOptions.minimumContrastRatio)) {\n        if (cell.isDim()) {"],
     ["    // Try get from cache first, only use the cache when there are no decoration overrides",
-      `    if (usesLightTextPolicy(this._themeService.colors.background.rgba, this._optionsService.rawOptions.minimumContrastRatio)) {
+      `    if (usesTerminalTextPolicy(this._themeService.colors.background.rgba, this._optionsService.rawOptions.minimumContrastRatio)) {
       const background = bgOverride ? color.blend(bg, bgOverride) : bg;
       const foreground = fgOverride ? color.blend(background, fgOverride) : fg;
       const cache = this._getContrastCache(cell);
       let resolved = cache.getColor(background.rgba, foreground.rgba);
       if (!resolved) {
-        resolved = readableLightForeground(background.rgba, foreground.rgba, !!cell.isDim(), this._themeService.colors.selectionBackgroundOpaque.rgba);
+        resolved = readableTerminalForeground(background.rgba, foreground.rgba, !!cell.isDim(), this._themeService.colors.selectionBackgroundOpaque.rgba, this._optionsService.rawOptions.minimumContrastRatio === 7);
         cache.setColor(background.rgba, foreground.rgba, resolved);
       }
       this._addStyle(element, \`color:\${resolved.css}\`);
@@ -37,8 +37,8 @@ const patches = new Map<string, Array<[string, string]>>([
   ]],
   [path.join(addon, "src/TextureAtlas.ts"), [
     ["    // Dim cells only require half the contrast, otherwise they wouldn't be distinguishable from",
-      `    if (usesLightTextPolicy(this._config.colors.background.rgba, this._config.minimumContrastRatio)) {
-      const resolved = readableLightForeground(bgRgba, fgRgba, dim, this._config.colors.selectionBackgroundOpaque.rgba);
+      `    if (usesTerminalTextPolicy(this._config.colors.background.rgba, this._config.minimumContrastRatio)) {
+      const resolved = readableTerminalForeground(bgRgba, fgRgba, dim, this._config.colors.selectionBackgroundOpaque.rgba, this._config.minimumContrastRatio === 7);
       cache.setColor(bg, fg, resolved);
       return resolved;
     }

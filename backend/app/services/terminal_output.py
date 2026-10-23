@@ -48,7 +48,8 @@ class TerminalOutputSubscription:
             if self.queued_bytes > self.owner.max_queued_bytes:
                 self._overflow()
                 return
-        self.queue.append({"type": "replay_end", "seq": buffer.sequence})
+        self.queue.append({"type": "replay_end", "seq": buffer.sequence,
+                           "bracketed_paste": buffer.modes.bracketed_paste})
         self.replayed_at = None
         self.wake.set()
 

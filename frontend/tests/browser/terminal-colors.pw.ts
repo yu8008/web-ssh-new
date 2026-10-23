@@ -61,10 +61,37 @@ function contrast(a: number[], b: number[]) {
   return (values[1] + 0.05) / (values[0] + 0.05);
 }
 
-const panelColors = (light: boolean) => light ? [[237, 237, 237], [247, 247, 247], [247, 247, 247], [237, 237, 237]]
-  : [[48, 48, 48], [42, 42, 42], [42, 42, 42], [48, 48, 48]];
+const panelColors = (light: boolean) => light ? [[225, 235, 252], [237, 243, 255], [237, 243, 255], [225, 235, 252]]
+  : [[35, 51, 72], [27, 37, 51], [27, 37, 51], [35, 51, 72]];
 
 for (const renderer of ["dom", "webgl"]) {
+  test(`${renderer}: code, model and project accents retain saturated colors after live theme changes`, async ({ page }, info) => {
+    await open(page, renderer);
+    await page.evaluate(data => window.writeTerminalForTest(data), "\x1b[2J\x1b[H" + [
+      "\x1b[38;5;189mIndexed command and code MMMM\x1b[0m",
+      "\x1b[38;2;166;227;161mRGB project path MMMM\x1b[0m",
+      "\x1b[38;2;249;190;128mGPT model and reasoning MMMM\x1b[0m",
+      "\x1b[2;38;2;137;220;235mDimmed project accent MMMM\x1b[0m",
+      "\x1b[48;5;235mProject input surface\x1b[K\x1b[0m",
+      "\x1b[48;5;236mProject history surface\x1b[K\x1b[0m",
+    ].join("\r\n"));
+    const before = await page.evaluate(() => window.terminalStateForTest());
+    for (const light of [false, true, false]) {
+      await page.evaluate(light => window.themeTerminalForTest(!light), light);
+      const colors = await painted(page, [0, 1, 2, 3]);
+      for (let row = 0; row < 4; row++) {
+        const fg = colors.foregrounds[row];
+        expect(Math.max(...fg) - Math.min(...fg)).toBeGreaterThan(55);
+        expect(contrast(fg, colors.backgrounds[row])).toBeGreaterThanOrEqual(light ? row === 3 ? 4.45 : 6.95 : row === 3 ? 2.95 : 4.45);
+      }
+      expect(colors.backgrounds[4]).toEqual(panelColors(light)[1]);
+      expect(colors.backgrounds[5]).toEqual(panelColors(light)[0]);
+      expect((await page.evaluate(() => window.terminalStateForTest())).rowStyles).toEqual(before.rowStyles);
+      await page.locator(".xterm-screen").screenshot({ path: info.outputPath(light ? "vivid-light.png" : "vivid-dark.png") });
+    }
+    expect(await page.locator("#inputs").textContent()).toBe("");
+  });
+
   test(`${renderer}: inverse and dim colors use their actual backgrounds, while hidden text and blocks retain their meaning`, async ({ page }) => {
     await open(page, renderer, true);
     const data = [
@@ -74,7 +101,7 @@ for (const renderer of ["dom", "webgl"]) {
       "\x1b[0;1;2;7;38;5;234;48;5;235mBold dim inverse indexed text\x1b[K",
       "\x1b[0;8mHidden information remains hidden\x1b[K",
       "\x1b[0;2;48;2;120;20;20;38;2;205;214;244mDim text on a colored background\x1b[K",
-      "\x1b[0;48;5;235;38;2;247;247;247m██████████████████████████████\x1b[K",
+      "\x1b[0;48;5;235;38;2;237;243;255m██████████████████████████████\x1b[K",
     ].join("\r\n");
     await page.evaluate(data => window.writeTerminalForTest(data), "\x1b[0m\x1b[2J\x1b[H" + data + "\x1b[0m");
     const before = await page.evaluate(() => window.terminalStateForTest());
@@ -227,7 +254,7 @@ test("local themes survive replay and reconnect without changing another client'
     }
     const surface = (page: Page) => page.locator(".xterm-scrollable-element").evaluate(el => getComputedStyle(el).backgroundColor);
     await expect.poll(() => surface(pages[0])).toBe("rgb(255, 255, 255)");
-    await expect.poll(() => surface(pages[1])).toBe("rgb(33, 33, 33)");
+    await expect.poll(() => surface(pages[1])).toBe("rgb(23, 23, 23)");
     expect(await pages[0].evaluate(() => window.pipeline.screen())).toBe(await pages[1].evaluate(() => window.pipeline.screen()));
     await pages[0].reload();
     await expect(pages[0].locator("#connection")).toHaveText("open");
@@ -241,7 +268,7 @@ test("local themes survive replay and reconnect without changing another client'
     }, scene(true));
     await expect.poll(() => pages[0].evaluate(() => window.pipeline.screen())).toBe(await pages[1].evaluate(() => window.pipeline.screen()));
     await expect.poll(() => surface(pages[0])).toBe("rgb(255, 255, 255)");
-    expect(await surface(pages[1])).toBe("rgb(33, 33, 33)");
+    expect(await surface(pages[1])).toBe("rgb(23, 23, 23)");
     expect(await pages[0].evaluate(() => window.pipeline.inputs().filter(input => input.type === "input"))).toEqual([]);
   } finally { await Promise.all(contexts.map(context => context.close())); }
 });
@@ -323,13 +350,14 @@ for (const mobile of [false, true]) {
       await expect(page.locator("html")).toHaveAttribute("data-theme", light ? "light" : "dark");
       // The frame includes padding outside xterm's renderer. A separate
       // hardcoded color here leaves a visible seam around the terminal.
-      const background = light ? "rgb(255, 255, 255)" : "rgb(33, 33, 33)";
+      const background = light ? "rgb(255, 255, 255)" : "rgb(23, 23, 23)";
       await expect(page.locator(".terminal-frame")).toHaveCSS("background-color", background);
       await expect(page.locator(".xterm-scrollable-element")).toHaveCSS("background-color", background);
       await expect(page.locator(".terminal-shell")).toHaveCSS("background-color", background);
+      if (!mobile) await expect(page.locator(".terminal-inspector")).toHaveCSS("background-color", light ? "rgb(249, 249, 249)" : "rgb(33, 33, 33)");
       await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute("content", light ? "#ffffff" : "#212121");
       await expect.poll(() => page.locator(".xterm-rows > div").first().locator("span").first().evaluate(el => getComputedStyle(el).backgroundColor))
-        .toBe(light ? "rgb(237, 237, 237)" : "rgb(48, 48, 48)");
+        .toBe(light ? "rgb(225, 235, 252)" : "rgb(35, 51, 72)");
       await expect(page.getByText(light ? "已切换浅色模式" : "已切换深色模式", { exact: true }).first()).toBeVisible();
       await expect(page.getByText(/需要重启程序/)).toHaveCount(0);
       await expect(page.locator(".xterm")).toHaveAttribute("data-identity", "original");

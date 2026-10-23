@@ -24,6 +24,28 @@ async function copyImage(page: Page) {
 const inputs = (page: Page) => page.evaluate(() => window.pipeline.inputs().filter(input => input.type === "input"));
 const uploadedPath = "/tmp/webssh-clipboard.test123/image.png";
 
+test("image attachments keep bracketed paste after a truncated replay; later CLI exit restores plain paste", async ({ page }) => {
+  await page.route("**/system/clipboard-image/pipeline", route => route.fulfill({ json: { path: uploadedPath } }));
+  await open(page);
+  await page.locator("#reconnect").click();
+  await expect.poll(() => page.evaluate(() => window.pipeline.count())).toBe(2);
+  await page.evaluate(() => {
+    window.pipeline.frame({ type: "replay_start" });
+    window.pipeline.frame({ type: "output", seq: 10, data: "Recent CLI history without the old mode switch\r\n" });
+    window.pipeline.frame({ type: "replay_end", seq: 10, bracketed_paste: true });
+  });
+  await expect.poll(() => page.evaluate(() => window.pipeline.pasteMode())).toBe(true);
+  await copyImage(page);
+  await page.locator(".xterm-helper-textarea").focus();
+  await page.keyboard.press("Control+v");
+  await expect.poll(() => inputs(page)).toEqual([{ type: "input", data: `\x1b[200~${uploadedPath} \x1b[201~` }]);
+  await page.evaluate(() => window.pipeline.frame({ type: "output", seq: 11, data: "\x1b[?2004l" }));
+  await expect.poll(() => page.evaluate(() => window.pipeline.pasteMode())).toBe(false);
+  await page.evaluate(() => navigator.clipboard.writeText("plain shell input"));
+  await page.keyboard.press("Control+v");
+  await expect.poll(async () => (await inputs(page)).at(-1)).toEqual({ type: "input", data: "plain shell input" });
+});
+
 test("Ctrl+V pastes local clipboard text once without sending the remote clipboard shortcut", async ({ page }) => {
   await open(page);
   await page.evaluate(() => navigator.clipboard.writeText("粘贴中文😀\nsecond line"));

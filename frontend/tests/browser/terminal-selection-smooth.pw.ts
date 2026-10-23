@@ -143,7 +143,7 @@ test("a long styled selection preserves formatting with a bounded native viewpor
   await expect(page.locator("#terminal")).toHaveAttribute("data-offset", "220", { timeout: 15000 });
   const first = page.locator(".xterm-rows > div").nth(1).locator("span").first();
   await expect(first).toHaveCSS("color", "rgb(96, 165, 250)");
-  await expect(first).toHaveCSS("background-color", "rgb(48, 48, 48)");
+  await expect(first).toHaveCSS("background-color", "rgb(35, 51, 72)");
   await expect(first).toHaveCSS("font-weight", "700");
   await expect(first).toHaveCSS("text-decoration-line", "underline");
   expect(await page.locator(".xterm-rows > div").count()).toBe(30);

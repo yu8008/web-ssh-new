@@ -86,6 +86,11 @@ for (const mobile of [false, true]) test(`${mobile ? "mobile" : "desktop"}: real
   const inputsBefore = [...mock.terminalInputs];
   mock.send(notice("finished"));
   await expect.poll(() => starts(page)).toBe(baseline + 1);
+  const trigger = page.getByRole("button", { name: "任务提醒与声音", exact: true });
+  await expect(trigger.locator(".notification-unread-dot")).toBeVisible();
+  await expect(trigger.locator(".notification-unread-dot")).toHaveCSS("border-radius", "9999px");
+  await expect(trigger.locator(".sr-only")).toHaveText("1 条未读提醒");
+  expect(await trigger.locator("span:not(.sr-only)").allTextContents()).not.toContain("1");
   await expect(page.locator(".xterm-helper-textarea")).toBeFocused();
   mock.send(notice("needs-answer", "question"));
   await expect.poll(() => starts(page)).toBe(baseline + 3);
@@ -142,11 +147,15 @@ test("notifications survive changing sessions and marking one read updates both 
   await one.goto("/terminal/notify"); await two.goto("/terminal/other");
   await expect.poll(() => mock.sockets.size).toBe(2);
   mock.send(notice("cross-session", "attention"));
-  await expect(two.getByText("需要你处理", { exact: true })).toBeVisible();
-  await two.getByText("需要你处理", { exact: true }).click();
+  await expect(two.locator(".notification-unread-dot")).toBeVisible();
+  await expect(one.locator(".notification-unread-dot")).toBeVisible();
+  await two.getByRole("button", { name: "任务提醒与声音", exact: true }).click();
+  await two.getByRole("dialog").getByRole("button").filter({ hasText: "需要你处理" }).click();
   await expect(two).toHaveURL(/\/terminal\/notify$/);
   await one.getByRole("button", { name: "任务提醒与声音", exact: true }).click();
   await expect(one.getByText("最近提醒 (0 未读)", { exact: true })).toBeVisible();
+  await expect(one.locator(".notification-unread-dot")).toHaveCount(0);
+  await expect(two.locator(".notification-unread-dot")).toHaveCount(0);
   expect(await starts(one) + await starts(two)).toBe(0);
 });
 

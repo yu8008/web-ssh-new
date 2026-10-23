@@ -44,6 +44,7 @@ async function harness(context: BrowserContext, theme: string, authenticated = t
     if (path.startsWith("/system/overview/")) return route.fulfill({ json: overview });
     if (path.startsWith("/system/session-status/")) return route.fulfill({ json: overview });
     if (path.startsWith("/system/clock/")) return route.fulfill({ json: { epoch: Date.now() / 1000, zone: "Etc/UTC", offset: "+0000", zone_name: "UTC" } });
+    if (path.startsWith("/system/project/")) return route.fulfill({ json: { state: "ready", cwd: "/workspace/webssh", source: "process", app: "codex", checked_at: Date.now() / 1000 } });
     if (path.startsWith("/system/files/")) return route.fulfill({ json: { path: url.searchParams.get("path") || "/", files: [
       { name: "workspace", path: "/workspace", is_dir: true, size: 4096, modified: now, permissions: "drwxr-xr-x", owner: "ops", group: "ops" },
       { name: "README.md", path: "/README.md", is_dir: false, size: 3456, modified: now, permissions: "-rw-r--r--", owner: "ops", group: "ops" },
@@ -51,7 +52,7 @@ async function harness(context: BrowserContext, theme: string, authenticated = t
     if (path.startsWith("/notifications/setup/")) return route.fulfill({ json: { installed: true, codex_version: "0.163.0", claude_version: "2.1.306", configuration: { codex: "configured", claude: "configured" }, notes: [], runtime: { state: "attached", app: "codex", capabilities: { complete: "verified" }, candidates: [] } } });
     return route.fulfill({ json: {} });
   });
-  await context.routeWebSocket("**/notifications/ws", socket => socket.send(JSON.stringify({ type: "snapshot", events: [] })));
+  await context.routeWebSocket("**/notifications/ws", socket => socket.send(JSON.stringify({ type: "snapshot", events: [{ id: "design-completed", kind: "complete", app: "codex", session_id: "design", session_name: sessions[0].name, created_at: now, read_at: null }] })));
   await context.routeWebSocket("**/sessions/ws/sessions/**", () => {});
   await context.routeWebSocket("**/sessions/ws/terminal/**", socket => {
     socket.send(JSON.stringify({ type: "replay_start" }));
@@ -63,7 +64,7 @@ async function harness(context: BrowserContext, theme: string, authenticated = t
       "",
       "已检查工作区，正在验证终端配色与任务提醒。",
       "",
-      "\x1b[34mRan npm run test\x1b[0m",
+      "\x1b[38;5;189mRan npm run test\x1b[0m",
       "\x1b[2m  Test Files  11 passed\x1b[0m",
       "\x1b[2m  Tests       108 passed\x1b[0m",
       "",
@@ -72,7 +73,7 @@ async function harness(context: BrowserContext, theme: string, authenticated = t
       "\x1b[2mWorked for 12s\x1b[0m",
       "",
       "\x1b[48;5;236m继续处理工作区中的任务\x1b[K\x1b[0m",
-      "\x1b[2mGPT  /  /workspace/webssh\x1b[0m",
+      "\x1b[38;5;223mGPT-6.1-Sol xhigh\x1b[0m · \x1b[38;5;151m/workspace/webssh\x1b[0m",
     ].join("\r\n");
     socket.send(JSON.stringify({ type: "output", seq: 1, data }));
     socket.send(JSON.stringify({ type: "replay_end", seq: 1 }));
@@ -107,7 +108,7 @@ for (const mobile of [false, true]) for (const theme of ["dark", "light"]) {
       expect(contrast(colors["--brand"], colors["--brand-ink"])).toBeGreaterThanOrEqual(4.5);
       if (path === "/terminal/design") {
         await expect(page.locator(".xterm-rows")).toContainText("终端历史和会话连接正常");
-        const background = theme === "dark" ? "rgb(33, 33, 33)" : "rgb(255, 255, 255)";
+        const background = theme === "dark" ? "rgb(23, 23, 23)" : "rgb(255, 255, 255)";
         for (const selector of [".terminal-shell", ".terminal-frame", ".xterm-scrollable-element"]) {
           await expect(page.locator(selector)).toHaveCSS("background-color", background);
         }

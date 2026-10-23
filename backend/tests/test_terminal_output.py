@@ -46,6 +46,30 @@ async def until(predicate) -> None:
             await asyncio.sleep(0.001)
 
 
+def test_replay_restores_paste_mode_when_enable_has_aged_out_and_live_output_follows():
+    async def scenario():
+        buffer = SessionBuffer(max_lines=2)
+        buffer.append("\x1b[?2004h")
+        buffer.append("Old output\r\n")
+        buffer.append("Recent output\r\n")
+        assert all("2004" not in item.data for item in buffer.dump())
+        output = TerminalOutput(buffer, set())
+        viewer = Viewer(block=True)
+        subscription = output.subscribe(viewer, framed=True)
+        # A CLI exit during a slow replay must follow the captured mode, not
+        # retroactively change the snapshot or leave the next shell in paste mode.
+        output.publish("\x1b[?2004l")
+        viewer.gate.set()
+        await until(lambda: subscription.replayed_at is not None and not subscription.queue)
+        await output.close()
+        frames = [json.loads(data) for data in viewer.messages]
+        end = next(i for i, frame in enumerate(frames) if frame["type"] == "replay_end")
+        assert frames[end] == {"type": "replay_end", "seq": 3, "bracketed_paste": True}
+        assert frames[end + 1]["data"] == "\x1b[?2004l"
+        assert not buffer.modes.bracketed_paste
+    asyncio.run(scenario())
+
+
 @pytest.mark.parametrize("framed", [False, True])
 def test_replay_and_live_output_share_one_ordered_writer(framed: bool) -> None:
     async def scenario() -> None:

@@ -235,8 +235,11 @@ export function NotificationButton() {
   if (!context) return null;
   const count = context.events.filter(event => !event.read_at).length;
   return <Button variant="ghost" size="sm" onClick={context.open} aria-label={language === "en-US" ? "Task notifications and sound" : "任务提醒与声音"} title={language === "en-US" ? "Task notifications and sound" : "任务提醒与声音"}>
-    <span aria-hidden="true" className="pointer-events-none">{context.preferences.enabled ? context.ready ? <Bell size={16} /> : <Volume2 size={16} /> : <VolumeX size={16} />}</span>
-    {count > 0 && <span className="pointer-events-none text-xs text-brand">{Math.min(count, 99)}</span>}
+    <span aria-hidden="true" className="pointer-events-none relative inline-flex">
+      {context.preferences.enabled ? context.ready ? <Bell size={16} /> : <Volume2 size={16} /> : <VolumeX size={16} />}
+      {count > 0 && <span className="notification-unread-dot absolute -right-1 -top-1 h-2 w-2 rounded-full bg-brand ring-2 ring-surface" />}
+    </span>
+    {count > 0 && <span className="sr-only">{language === "en-US" ? `${count} unread notifications` : `${count} 条未读提醒`}</span>}
   </Button>;
 }
 

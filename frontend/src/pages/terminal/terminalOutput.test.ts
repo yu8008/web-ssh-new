@@ -125,5 +125,9 @@ it("validates framed output without confusing malformed data with control frames
   expect(decodeTerminalOutput('{"type":"pong","ping_id":7,"gateway_queue_ms":5,"gateway_loop_lag_ms":-1,"gateway_queued_chars":null}'))
     .toEqual({ type: "pong", ping_id: 7, gateway_queue_ms: 5 });
   expect(decodeTerminalOutput('{"type":"output","seq":1,"data":"中文"}')).toEqual({ type: "output", seq: 1, data: "中文" });
+  expect(decodeTerminalOutput('{"type":"replay_end","seq":1,"bracketed_paste":true}')).toEqual({ type: "replay_end", seq: 1, bracketed_paste: true });
+  expect(decodeTerminalOutput('{"type":"replay_end","seq":1,"bracketed_paste":false}')).toEqual({ type: "replay_end", seq: 1, bracketed_paste: false });
+  expect(decodeTerminalOutput('{"type":"replay_end","seq":1,"bracketed_paste":"false"}')).toEqual({ type: "replay_end", seq: 1 });
+  expect(decodeTerminalOutput('{"type":"replay_end","seq":1}')).toEqual({ type: "replay_end", seq: 1 });
   for (const data of ["hello", "null", '{"type":"output","seq":-1,"data":"x"}', '{"type":"replay_end","seq":"1"}']) expect(decodeTerminalOutput(data)).toBeNull();
 });

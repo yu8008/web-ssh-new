@@ -55,7 +55,7 @@ export function Harness() {
   const [notice, setNotice] = React.useState("");
   const t = React.useCallback((zh: string) => zh, []);
   const noop = React.useCallback(() => {}, []);
-  const state = useTerminalSocket({ sessionId: "pipeline", t, enhancedSessionRef, push: setNotice, reportNetworkHint: noop, clearNetworkHint: noop, setCurrentDir: noop, onCopyRequest: setCopied });
+  const state = useTerminalSocket({ sessionId: "pipeline", t, enhancedSessionRef, push: setNotice, reportNetworkHint: noop, clearNetworkHint: noop, onCopyRequest: setCopied });
   React.useEffect(() => {
     const term = state.terminalInstance.current;
     if (term && measuredTerminal !== term) {

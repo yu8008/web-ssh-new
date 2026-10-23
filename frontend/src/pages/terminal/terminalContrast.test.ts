@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readableLightForeground, usesLightTextPolicy } from "./terminalContrast";
+import { readableLightForeground, readableTerminalForeground, usesLightTextPolicy, usesTerminalTextPolicy } from "./terminalContrast";
 
 const rgba = (red: number, green: number, blue: number) => ((red << 24) | (green << 16) | (blue << 8) | 255) >>> 0;
 function contrast(a: number, b: number) {
@@ -56,5 +56,26 @@ describe("light terminal glyph contrast", () => {
     expect(usesLightTextPolicy(0xffffffff, 1)).toBe(false);
     expect(usesLightTextPolicy(0xffffffff, 4.5)).toBe(false);
     expect(usesLightTextPolicy(rgba(2, 6, 23), 7)).toBe(false);
+  });
+
+  it("keeps pastel code, model and project colors vivid and readable in both themes", () => {
+    const accents = [rgba(215, 215, 255), rgba(166, 227, 161), rgba(249, 190, 128), rgba(137, 220, 235)];
+    for (const light of [false, true]) {
+      const background = light ? 0xffffffff : 0x171717ff;
+      for (const accent of accents) {
+        for (const dim of [false, true]) {
+          const resolved = readableTerminalForeground(background, accent, dim, background, light);
+          const channels = [resolved.rgba >>> 24, (resolved.rgba >>> 16) & 255, (resolved.rgba >>> 8) & 255];
+          expect(Math.max(...channels) - Math.min(...channels)).toBeGreaterThan(60);
+          expect(contrast(background, resolved.rgba)).toBeGreaterThanOrEqual(light ? dim ? 4.5 : 7 : dim ? 3 : 4.5);
+        }
+      }
+      const neutral = readableTerminalForeground(background, light ? 0x1f1f1fff : 0xecececff, false, background, light);
+      expect(neutral.rgba).toBe(light ? 0x1f1f1fff : 0xecececff);
+    }
+    expect(usesTerminalTextPolicy(0x171717ff, 4.5)).toBe(true);
+    expect(usesTerminalTextPolicy(0xffffffff, 7)).toBe(true);
+    expect(usesTerminalTextPolicy(0x171717ff, 1)).toBe(false);
+    expect(usesTerminalTextPolicy(0x303030ff, 4.5)).toBe(false);
   });
 });
