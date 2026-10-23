@@ -1,4 +1,4 @@
-# WebSSH Gateway 社区版
+# WebSSH Gateway
 
 > English version: [README.en.md](./README.en.md)
 
@@ -23,13 +23,6 @@ WebSSH Gateway 是一个面向运维、开发和 AI CLI 工作流的浏览器 SS
 <img src="./docs/images/mobile-terminal.jpg" alt="移动端终端" width="320" style="max-width: 100%;" />
 <img src="./docs/images/mobile-fileManagement.jpg" alt="移动端文件管理" width="320" style="max-width: 100%;" />
 <img src="./docs/images/mobile-systemStatus.jpg" alt="移动端系统状态" width="320" style="max-width: 100%;" />
-
-## 社区版声明
-
-- 本仓库为 **WebSSH Gateway 社区版（Community Edition）**。
-- 社区版将持续开源，聚焦核心 SSH 网关能力。
-- 项目后续存在付费开发方向意向（商业版/企业版），但具体功能范围与发布时间 **待定**。
-- 社区版与潜在付费版的边界方案 **待定**，社区版仍会保持可独立部署与可持续维护。
 
 ## 核心特性
 
@@ -121,7 +114,7 @@ cd web-ssh-new
 cp .env.example .env
 
 # 先修改 .env 中的 SECRET_KEY 和 INITIAL_ADMIN_PASSWORD，再构建、启动
-docker build -t webssh-gateway:community .
+docker build -t webssh-gateway:local .
 
 docker run -d \
   --name webssh-gateway \
@@ -129,7 +122,7 @@ docker run -d \
   -p 8080:8080 \
   --env-file .env \
   -v webssh-data:/data \
-  webssh-gateway:community
+  webssh-gateway:local
 ```
 
 启动后访问 `http://服务器地址:8080`，使用 `admin` 和配置的初始密码登录，首次登录后按提示修改密码。
@@ -158,11 +151,6 @@ docker run -d \
 ├── docker-compose.yml        # 本地容器编排
 └── LICENSE
 ```
-
-## 版本路线图（Roadmap）
-
-- 社区版（当前）：单租户、基础鉴权、连接管理、终端与文件能力。
-- 付费方向（待定）：仅保留付费开发方向意向，具体能力与里程碑待定。
 
 ## License
 

@@ -1,4 +1,4 @@
-# WebSSH Gateway Community Edition
+# WebSSH Gateway
 
 > English document. 中文文档请见：[README.md](./README.md)
 
@@ -23,13 +23,6 @@ A dedicated mobile layout provides touch-friendly interactions for terminal work
 <img src="./docs/images/mobile-terminal.jpg" alt="Mobile Terminal" width="320" style="max-width: 100%;" />
 <img src="./docs/images/mobile-fileManagement.jpg" alt="Mobile File Management" width="320" style="max-width: 100%;" />
 <img src="./docs/images/mobile-systemStatus.jpg" alt="Mobile System Status" width="320" style="max-width: 100%;" />
-
-## Community Edition Notice
-
-- This repository is the **Community Edition (CE)** of WebSSH Gateway.
-- CE will remain open source and focused on core SSH gateway capabilities.
-- There is an intention to explore a paid development direction in the future, but detailed scope and release timeline are **TBD**.
-- The boundary between CE and any potential paid edition is **TBD**. CE remains independently deployable.
 
 ## Key Features
 
@@ -121,7 +114,7 @@ cd web-ssh-new
 cp .env.example .env
 
 # Set your own SECRET_KEY and INITIAL_ADMIN_PASSWORD in .env before continuing.
-docker build -t webssh-gateway:community .
+docker build -t webssh-gateway:local .
 
 docker run -d \
   --name webssh-gateway \
@@ -129,7 +122,7 @@ docker run -d \
   -p 8080:8080 \
   --env-file .env \
   -v webssh-data:/data \
-  webssh-gateway:community
+  webssh-gateway:local
 ```
 
 Open `http://your-server:8080`, sign in as `admin` with the configured initial password, and change it when prompted on first login.
