@@ -328,7 +328,6 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
                   >
                     <X className="h-3.5 w-3.5" />
                   </button>
-                  {(project.error || project.data?.state === "unavailable") && <p className="mb-2 pr-5 text-xs text-muted">{state.t("暂时无法同步终端目录，可手动浏览。", "Directory sync unavailable. You can browse manually.")}</p>}
                   <div className="min-h-0 flex-1 overflow-hidden pt-1">
                     {state.sessionId ? (
                       <React.Suspense fallback={<TerminalPanelFallback isDark={state.isDark} />}>
@@ -337,6 +336,9 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
                           sessionId={state.sessionId}
                           isDark={state.isDark}
                           currentDir={project.data?.cwd ?? undefined}
+                          scopeToCurrentDir={Boolean(project.data?.app)}
+                          directoryUnavailable={project.error || project.data?.state === "unavailable" || !project.connected}
+                          onRefreshProject={project.refresh}
                           onOpenFile={(file) => {
                             setFilesOpen(false);
                             setOpenedFile(file);

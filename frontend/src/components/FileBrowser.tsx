@@ -1,5 +1,4 @@
 import React from "react";
-import { LocateFixed } from "lucide-react";
 import {
   listDirectory,
   FileInfo,
@@ -13,7 +12,8 @@ import {
   chmodPath,
   uploadBatch,
 } from "../lib/api";
-import { Upload, Folder, File as FileIcon, ChevronDown, ChevronRight, Loader2, RefreshCw, FolderTree } from "lucide-react";
+import { Upload, Folder, File as FileIcon, Loader2, RefreshCw, LocateFixed } from "lucide-react";
+import { isPathWithinDirectory, normalizeDirectoryPath } from "../lib/filePaths";
 import { useApp } from "../context/AppContextCore";
 import type { NetworkProfile } from "../context/AppContextCore";
 import { useToast } from "./ToastContext";
@@ -47,18 +47,13 @@ function permissionsToOctal(permissions: string): string {
   }).join('');
 }
 
-type TreeNode = {
-  name: string;
-  path: string;
-  children?: TreeNode[];
-  expanded?: boolean;
-  loaded?: boolean;
-};
-
 type FileBrowserProps = {
   sessionId: string;
   isDark: boolean;
   currentDir?: string;
+  scopeToCurrentDir?: boolean;
+  directoryUnavailable?: boolean;
+  onRefreshProject?: () => void;
   onFileSelect?: (path: string | null) => void;
   /** 双击文件（或右键「打开」）时回调，用于打开查看器。 */
   onOpenFile?: (file: FileInfo) => void;
@@ -107,11 +102,7 @@ type DirectoryCacheItem = {
   result: DirectoryListing;
 };
 
-function createRootTree(): TreeNode[] {
-  return [{ name: "/", path: "/", expanded: true, loaded: false }];
-}
-
-export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpenFile, networkProfile, compact }: FileBrowserProps) {
+export function FileBrowser({ sessionId, isDark, currentDir, scopeToCurrentDir = false, directoryUnavailable = false, onRefreshProject, onFileSelect, onOpenFile, networkProfile, compact }: FileBrowserProps) {
   const { networkProfile: globalNetworkProfile, language } = useApp();
   const t = React.useCallback((zh: string, en: string) => localizeText(language, zh, en), [language]);
   const effectiveNetworkProfile = networkProfile ?? globalNetworkProfile;
@@ -122,13 +113,12 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
     effectiveNetworkProfile === "poor" ? 800 : effectiveNetworkProfile === "degraded" ? 350 : 120;
   const uploadBatchConcurrent =
     effectiveNetworkProfile === "poor" ? 1 : effectiveNetworkProfile === "degraded" ? 2 : 4;
-  const [followTerminal, setFollowTerminal] = React.useState(true);
+  const scopeRoot = scopeToCurrentDir && currentDir ? normalizeDirectoryPath(currentDir) : null;
+  const syncedDirectoryRef = React.useRef<string | null>(null);
   const directoryRequestRef = React.useRef(0);
-  const [tree, setTree] = React.useState<TreeNode[]>(() => createRootTree());
-  const [selectedPath, setSelectedPath] = React.useState<string>("/");
-  const [pathInput, setPathInput] = React.useState<string>("/");
+  const [selectedPath, setSelectedPath] = React.useState<string>("");
+  const [pathInput, setPathInput] = React.useState<string>("");
   const [files, setFiles] = React.useState<FileInfo[]>([]);
-  const [treeLoading, setTreeLoading] = React.useState<string | null>(null);
   const [filesLoading, setFilesLoading] = React.useState(false);
   const [refreshing, setRefreshing] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -155,29 +145,18 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
   const [chmodLoading, setChmodLoading] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   const directoryCacheRef = React.useRef<Map<string, DirectoryCacheItem>>(new Map());
-  const treeRef = React.useRef<TreeNode[]>(tree);
   const selectedPathRef = React.useRef<string>(selectedPath);
-
-  React.useEffect(() => {
-    treeRef.current = tree;
-  }, [tree]);
 
   React.useEffect(() => {
     selectedPathRef.current = selectedPath;
   }, [selectedPath]);
-
-  const normalizePath = React.useCallback((path: string): string => {
-    const trimmed = path.trim();
-    if (!trimmed || trimmed === "/") return "/";
-    return trimmed.replace(/\/+$/, "") || "/";
-  }, []);
 
   const getDirectoryListing = React.useCallback(
     async (
       path: string,
       options?: { preferCache?: boolean; forceRefresh?: boolean }
     ): Promise<DirectoryListing> => {
-      const normalizedPath = normalizePath(path);
+      const normalizedPath = normalizeDirectoryPath(path);
       const now = Date.now();
       const cached = directoryCacheRef.current.get(normalizedPath);
       const canUseCache = options?.preferCache !== false && !options?.forceRefresh;
@@ -196,7 +175,7 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
       }
       return result;
     },
-    [sessionId, normalizePath, directoryCacheTtlMs]
+    [sessionId, directoryCacheTtlMs]
   );
 
   // 加载目录内容
@@ -206,18 +185,21 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
       updateInput: boolean = true,
       options?: { preferCache?: boolean; forceRefresh?: boolean }
     ) => {
+      const normalizedPath = normalizeDirectoryPath(path);
+      if (!currentDir || directoryUnavailable || (scopeRoot && !isPathWithinDirectory(normalizedPath, scopeRoot))) return;
       const requestId = ++directoryRequestRef.current;
+      setSelectedFiles(new Set());
+      setContextMenu(null);
+      selectedPathRef.current = normalizedPath;
+      setSelectedPath(normalizedPath);
+      if (updateInput) setPathInput(normalizedPath);
       setFilesLoading(true);
       setError(null);
       try {
-        const normalizedPath = normalizePath(path);
         const result = await getDirectoryListing(normalizedPath, options);
         if (requestId !== directoryRequestRef.current) return;
-        setFiles(result.files);
-        setSelectedPath(normalizedPath);
-        if (updateInput) {
-          setPathInput(normalizedPath);
-        }
+        if (scopeRoot && !isPathWithinDirectory(result.path, scopeRoot)) throw new Error(t("目录已超出当前项目范围", "Directory is outside the current project"));
+        setFiles(result.files.filter(file => !scopeRoot || isPathWithinDirectory(file.path, scopeRoot)));
       } catch (err) {
         if (requestId !== directoryRequestRef.current) return;
         console.error("Failed to load directory:", path, err);
@@ -227,158 +209,63 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
         if (requestId === directoryRequestRef.current) setFilesLoading(false);
       }
     },
-    [normalizePath, getDirectoryListing, t]
+    [currentDir, directoryUnavailable, scopeRoot, getDirectoryListing, t]
   );
-
-  // 展开树节点到指定路径
-  const expandTreeToPath = React.useCallback(async (targetPath: string, options?: { preferCache?: boolean; forceRefresh?: boolean }) => {
-    if (targetPath === "/") {
-      setTree([{ name: "/", path: "/", expanded: true, loaded: false }]);
-      return;
-    }
-
-    // 解析路径层级
-    const parts = targetPath.split("/").filter(Boolean);
-
-    // 逐层加载并构建树
-    const buildTree = async (): Promise<TreeNode[]> => {
-      const rootChildren = await loadDirs("/");
-      const root: TreeNode = { name: "/", path: "/", expanded: true, loaded: true, children: rootChildren };
-
-      let currentNodes = rootChildren;
-      for (let i = 0; i < parts.length; i++) {
-        const currentPath = "/" + parts.slice(0, i + 1).join("/");
-        const targetNode = currentNodes.find(n => n.path === currentPath);
-
-        if (targetNode) {
-          const children = await loadDirs(currentPath);
-          targetNode.expanded = true;
-          targetNode.loaded = true;
-          targetNode.children = children;
-          currentNodes = children;
-        } else {
-          break;
-        }
-      }
-
-      return [root];
-    };
-
-    const loadDirs = async (path: string): Promise<TreeNode[]> => {
-      try {
-        const result = await getDirectoryListing(path, options);
-        return result.files.filter(f => f.is_dir).map(d => ({
-          name: d.name,
-          path: d.path,
-          expanded: false,
-          loaded: false,
-        }));
-      } catch {
-        return [];
-      }
-    };
-
-    const newTree = await buildTree();
-    setTree(newTree);
-  }, [getDirectoryListing]);
-
-  // 灞曞紑/鎶樺彔鏍戣妭鐐?
-  const toggleNode = React.useCallback(async (nodePath: string, forceExpand: boolean = false) => {
-    const findNode = (nodes: TreeNode[]): TreeNode | null => {
-      for (const node of nodes) {
-        if (node.path === nodePath) return node;
-        if (node.children) {
-          const found = findNode(node.children);
-          if (found) return found;
-        }
-      }
-      return null;
-    };
-
-    const updateTree = (nodes: TreeNode[]): TreeNode[] => {
-      return nodes.map(node => {
-        if (node.path === nodePath) {
-          return { ...node, expanded: forceExpand || !node.expanded };
-        }
-        if (node.children) {
-          return { ...node, children: updateTree(node.children) };
-        }
-        return node;
-      });
-    };
-
-    const node = findNode(treeRef.current);
-    if (node && !node.loaded) {
-      setTreeLoading(nodePath);
-      try {
-        const result = await getDirectoryListing(nodePath, { preferCache: true });
-        const dirs = result.files.filter(f => f.is_dir);
-        const children: TreeNode[] = dirs.map(d => ({
-          name: d.name,
-          path: d.path,
-          expanded: false,
-          loaded: false,
-        }));
-
-        const updateWithChildren = (nodes: TreeNode[]): TreeNode[] => {
-          return nodes.map(n => {
-            if (n.path === nodePath) {
-              return { ...n, expanded: true, loaded: true, children };
-            }
-            if (n.children) {
-              return { ...n, children: updateWithChildren(n.children) };
-            }
-            return n;
-          });
-        };
-        setTree((prev) => updateWithChildren(prev));
-      } catch {
-        // 静默处理
-      } finally {
-        setTreeLoading(null);
-      }
-    } else {
-      setTree((prev) => updateTree(prev));
-    }
-  }, [getDirectoryListing]);
 
   // 处理路径输入回车
   const handlePathSubmit = React.useCallback(async (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
+    if (e.key === "Enter" && !scopeToCurrentDir && currentDir && !directoryUnavailable) {
       const path = pathInput.trim() || "/";
       await loadDirectory(path, true, { preferCache: true });
-      await expandTreeToPath(path, { preferCache: true });
     }
-  }, [pathInput, loadDirectory, expandTreeToPath]);
+  }, [pathInput, loadDirectory, scopeToCurrentDir, currentDir, directoryUnavailable]);
 
   // 刷新当前目录
   const handleRefresh = React.useCallback(async () => {
     setRefreshing(true);
-    const path = pathInput.trim() || "/";
+    onRefreshProject?.();
+    const path = selectedPathRef.current;
     try {
-      await loadDirectory(path, false, { forceRefresh: true, preferCache: false });
-      await expandTreeToPath(path, { forceRefresh: true, preferCache: false });
+      if (path) await loadDirectory(path, true, { forceRefresh: true, preferCache: false });
     } finally {
       setRefreshing(false);
     }
-  }, [pathInput, loadDirectory, expandTreeToPath]);
+  }, [loadDirectory, onRefreshProject]);
 
-  // 监听终端目录变化：弱网下做防抖并优先走缓存
+  // Never load the system root while project detection is pending. Session
+  // changes/unmounts invalidate old directory responses before they can render.
   React.useEffect(() => {
-    if (!currentDir || !followTerminal || dialog || uploading || downloading || chmodLoading) {
+    directoryCacheRef.current.clear();
+    syncedDirectoryRef.current = null;
+    setSelectedPath(""); setPathInput(""); setFiles([]); setSelectedFiles(new Set());
+    setContextMenu(null); setDialog(null); setError(null);
+    const pendingRequests = directoryRequestRef;
+    return () => { pendingRequests.current++; };
+  }, [sessionId]);
+
+  // Follow a change of terminal directory, while allowing navigation inside
+  // the same CLI project between polls. File dialogs retain their original target.
+  React.useEffect(() => {
+    if (!currentDir || directoryUnavailable) {
+      directoryRequestRef.current++;
+      setContextMenu(null);
+      syncedDirectoryRef.current = null;
+      setFiles([]); setSelectedFiles(new Set()); setFilesLoading(false);
       return;
     }
-    const normalizedCurrentDir = normalizePath(currentDir);
-    if (normalizedCurrentDir === selectedPathRef.current) {
-      return;
-    }
+    const path = normalizeDirectoryPath(currentDir);
+    const key = `${scopeToCurrentDir ? "cli" : "shell"}:${path}`;
+    if (syncedDirectoryRef.current === key) return;
+    directoryRequestRef.current++;
+    setContextMenu(null);
+    if (dialog || uploading || downloading || chmodLoading) return;
+    setFiles([]); setSelectedFiles(new Set()); setFilesLoading(true);
     const timer = window.setTimeout(() => {
-      setSelectedFiles(new Set());
-      loadDirectory(normalizedCurrentDir, true, { preferCache: true });
-      expandTreeToPath(normalizedCurrentDir, { preferCache: true });
+      syncedDirectoryRef.current = key;
+      void loadDirectory(path, true, { preferCache: true });
     }, currentDirDebounceMs);
-    return () => clearTimeout(timer);
-  }, [currentDir, followTerminal, dialog, uploading, downloading, chmodLoading, loadDirectory, expandTreeToPath, currentDirDebounceMs, normalizePath]);
+    return () => window.clearTimeout(timer);
+  }, [currentDir, directoryUnavailable, scopeToCurrentDir, dialog, uploading, downloading, chmodLoading, loadDirectory, currentDirDebounceMs]);
 
   // 鍒涘缓 tar.gz 鍘嬬缉鍖?
   const createTarGz = React.useCallback(
@@ -528,6 +415,7 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
   );
 
   const handleUploadFiles = React.useCallback(async (allFiles: Array<{ file: File; path: string }>) => {
+    if (!currentDir || directoryUnavailable || !selectedPath || (scopeRoot && !isPathWithinDirectory(selectedPath, scopeRoot))) return;
     if (allFiles.length === 0) {
       push(t("没有可上传的文件", "No files to upload"));
       return;
@@ -638,7 +526,7 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
       setUploadStats(INITIAL_UPLOAD_STATS);
       setUploadStage("batch");
     }
-  }, [sessionId, selectedPath, compress, push, loadDirectory, uploadFilesByBatch, createTarGz, t, language]);
+  }, [sessionId, selectedPath, compress, push, loadDirectory, uploadFilesByBatch, createTarGz, t, language, currentDir, directoryUnavailable, scopeRoot]);
 
   // 处理文件拖拽上传
   const handleDrop = React.useCallback(async (e: React.DragEvent) => {
@@ -716,6 +604,7 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
 
   const handleContextMenu = React.useCallback((e: React.MouseEvent, file?: FileInfo) => {
     e.preventDefault();
+    if (!currentDir || directoryUnavailable || filesLoading || !selectedPath || (scopeRoot && !isPathWithinDirectory(selectedPath, scopeRoot))) return;
     const menuHeight = 280;
     const menuWidth = 150;
     const x = e.clientX + menuWidth > window.innerWidth ? e.clientX - menuWidth : e.clientX;
@@ -738,7 +627,7 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
     }
 
     setContextMenu({ x, y, type: menuType, files: menuFiles });
-  }, [selectedFiles, files]);
+  }, [selectedFiles, files, currentDir, directoryUnavailable, filesLoading, selectedPath, scopeRoot]);
 
   const handleCloseContextMenu = React.useCallback(() => {
     setContextMenu(null);
@@ -806,15 +695,6 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
       setDownloadStats(null);
     }
   }, [sessionId, push, t]);
-
-  const getSelectedFiles = React.useCallback(() => {
-    if (selectedFiles.size === 0) {
-      return [];
-    }
-    return Array.from(selectedFiles)
-      .map(path => files.find(f => f.path === path))
-      .filter(Boolean) as FileInfo[];
-  }, [files, selectedFiles]);
 
   const handleActionForFiles = React.useCallback((
     action: "mkdir" | "touch" | "rename" | "chmod" | "delete" | "download",
@@ -977,23 +857,23 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
 
       if (isDoubleClick && file.is_dir) {
         loadDirectory(file.path, true, { preferCache: true });
-        expandTreeToPath(file.path, { preferCache: true });
       }
 
       if (isDoubleClick && !file.is_dir) {
         onOpenFile?.(file);
       }
     }
-  }, [selectedFiles, loadDirectory, expandTreeToPath, onFileSelect, onOpenFile]);
+  }, [selectedFiles, loadDirectory, onFileSelect, onOpenFile]);
 
   const parentPath = React.useMemo(() => {
-    const normalized = normalizePath(selectedPath);
-    if (normalized === "/") {
+    const normalized = normalizeDirectoryPath(selectedPath);
+    if (!selectedPath || normalized === "/" || (scopeRoot && normalized === scopeRoot)) {
       return null;
     }
     const slashIndex = normalized.lastIndexOf("/");
-    return slashIndex <= 0 ? "/" : normalized.slice(0, slashIndex);
-  }, [selectedPath, normalizePath]);
+    const parent = slashIndex <= 0 ? "/" : normalized.slice(0, slashIndex);
+    return scopeRoot && !isPathWithinDirectory(parent, scopeRoot) ? null : parent;
+  }, [selectedPath, scopeRoot]);
 
   const handleNavigateToParent = React.useCallback(() => {
     if (!parentPath) {
@@ -1002,37 +882,12 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
     setSelectedFiles(new Set());
     onFileSelect?.(null);
     loadDirectory(parentPath, true, { preferCache: true });
-    expandTreeToPath(parentPath, { preferCache: true });
-  }, [parentPath, onFileSelect, loadDirectory, expandTreeToPath]);
+  }, [parentPath, onFileSelect, loadDirectory]);
 
   const handleParentItemClick = React.useCallback(() => {
     setSelectedFiles(new Set());
     onFileSelect?.(null);
   }, [onFileSelect]);
-
-  const handleClearSelection = React.useCallback(() => {
-    setSelectedFiles(new Set());
-    onFileSelect?.(null);
-  }, [onFileSelect]);
-
-  const handleTreeNodeKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLDivElement>, node: TreeNode) => {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      loadDirectory(node.path, true, { preferCache: true });
-      return;
-    }
-
-    if (event.key === "ArrowRight" && !node.expanded) {
-      event.preventDefault();
-      toggleNode(node.path, true);
-      return;
-    }
-
-    if (event.key === "ArrowLeft" && node.expanded) {
-      event.preventDefault();
-      toggleNode(node.path);
-    }
-  }, [loadDirectory, toggleNode]);
 
   const handleParentRowKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLTableRowElement>) => {
     if (event.key === "Enter" || event.key === " ") {
@@ -1051,97 +906,11 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
       setSelectedFiles(new Set([file.path]));
       onFileSelect?.(null);
       loadDirectory(file.path, true, { preferCache: true });
-      expandTreeToPath(file.path, { preferCache: true });
       return;
     }
 
     handleFileClick(file, event.ctrlKey || event.metaKey);
-  }, [expandTreeToPath, handleFileClick, loadDirectory, onFileSelect]);
-
-  const loadDirectoryRef = React.useRef(loadDirectory);
-  const toggleNodeRef = React.useRef(toggleNode);
-
-  React.useEffect(() => {
-    loadDirectoryRef.current = loadDirectory;
-    toggleNodeRef.current = toggleNode;
-  }, [loadDirectory, toggleNode]);
-
-  // 会话切换时初始化目录树，避免依赖变化导致重复初始化
-  React.useEffect(() => {
-    directoryCacheRef.current.clear();
-    setTree(createRootTree());
-    setSelectedPath("/");
-    setPathInput("/");
-    setFiles([]);
-    setSelectedFiles(new Set());
-    setDownloading(false);
-    setDownloadStats(null);
-    setContextMenu(null);
-    setDialog(null);
-    setError(null);
-    onFileSelect?.(null);
-
-    loadDirectoryRef.current("/", true, { preferCache: true });
-    toggleNodeRef.current("/", true);
-  }, [sessionId, onFileSelect]);
-
-  // 渲染树节点
-  const renderTreeNode = (node: TreeNode, depth: number = 0): React.ReactNode => {
-    const isLoading = treeLoading === node.path;
-    const isSelected = selectedPath === node.path;
-
-    return (
-      <div key={node.path}>
-        <div
-          role="treeitem"
-          tabIndex={0}
-          aria-selected={isSelected}
-          aria-expanded={!node.loaded || (node.children && node.children.length > 0) ? Boolean(node.expanded) : undefined}
-          aria-label={t(`${node.name} 目录`, `${node.name} directory`)}
-          className={`flex items-center gap-1 ${isCompact ? "py-1 text-sm" : "py-0.5 text-xs"} px-1 rounded cursor-pointer truncate focus:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
-            isSelected
-              ? (isDark ? "bg-brand/50 text-ink" : "bg-brand/[0.08] text-brand")
-              : (isDark ? "hover:bg-elevated text-ink-soft" : "hover:bg-elevated text-ink-soft")
-          }`}
-          style={{ paddingLeft: `${depth * 12 + 4}px` }}
-          onClick={() => {
-            loadDirectory(node.path, true, { preferCache: true });
-          }}
-          onDoubleClick={() => {
-            toggleNode(node.path);
-          }}
-          onKeyDown={(event) => handleTreeNodeKeyDown(event, node)}
-        >
-          <button
-            type="button"
-            tabIndex={-1}
-            className="w-4 flex-shrink-0 text-center focus:outline-none"
-            aria-label={node.expanded ? t("收起目录", "Collapse directory") : t("展开目录", "Expand directory")}
-            onClick={(e) => {
-              e.stopPropagation();
-              toggleNode(node.path);
-            }}
-            onDoubleClick={(e) => {
-              e.stopPropagation();
-            }}
-          >
-            {isLoading ? (
-              <Loader2 size={12} className="animate-spin" aria-hidden="true" />
-            ) : node.children && node.children.length > 0 ? (
-              node.expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />
-            ) : node.loaded ? null : <ChevronRight size={12} />}
-          </button>
-          <Folder size={13} className="flex-shrink-0" aria-hidden="true" />
-          <span className="truncate">{node.name}</span>
-        </div>
-        {node.expanded && node.children && (
-          <div>
-            {node.children.map(child => renderTreeNode(child, depth + 1))}
-          </div>
-        )}
-      </div>
-    );
-  };
+  }, [handleFileClick, loadDirectory, onFileSelect]);
 
   const uploadPercent = calculatePercent(uploadStats.uploadedBytes, uploadStats.totalBytes);
   const uploadStatusText =
@@ -1156,166 +925,30 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
     downloadStats && downloadStats.totalBytes > 0
       ? calculatePercent(downloadStats.loadedBytes, downloadStats.totalBytes)
       : null;
-  const selectedItems = getSelectedFiles();
-  const selectedCount = selectedItems.length;
-  const canRename = selectedCount === 1;
-  const hasSelection = selectedCount > 0;
-
   const rowPaddingClass = isCompact ? "py-2" : "py-1";
   const rowTextClass = isCompact ? "text-sm" : "text-xs";
   const tableColSpan = isCompact ? 2 : 5;
 
   return (
     <div className={`file-workspace space-y-2 h-full flex flex-col ${isCompact ? "text-sm" : ""}`}>
-      <div className="flex items-center gap-2">
-        <h3 className={`text-sm font-semibold ${isDark ? "text-ink" : "text-ink-soft"}`}>
-          <FolderTree size={15} className="mr-2 inline-block text-brand" aria-hidden="true" />{t("文件浏览", "File Browser")}
-        </h3>
-      </div>
-
-      <div className="flex shrink-0 items-center gap-2 text-2xs">
-        <button type="button" aria-pressed={followTerminal} onClick={() => setFollowTerminal(value => !value)}
-          className={`inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-1.5 ${followTerminal ? "border-brand/40 bg-brand/10 text-brand" : "border-line text-muted"}`}>
-          <LocateFixed size={13} />{t("跟随终端", "Follow terminal")}
+      <div className="flex shrink-0 items-center gap-2 pr-5">
+        <h3 className="text-sm font-semibold text-ink"><Folder size={15} className="mr-2 inline-block text-brand" aria-hidden="true" />{t("文件浏览", "File Browser")}</h3>
+        <button type="button" onClick={handleRefresh} disabled={refreshing || uploading || downloading || chmodLoading}
+          className="ml-auto rounded p-1.5 text-muted transition hover:bg-elevated hover:text-brand disabled:opacity-50"
+          aria-label={t("刷新", "Refresh")} title={t("刷新", "Refresh")}>
+          <RefreshCw size={15} className={refreshing ? "animate-spin" : ""} aria-hidden="true" />
         </button>
+      </div>
+      <div className="flex shrink-0 items-center gap-2 text-2xs">
+        <span className="inline-flex shrink-0 items-center gap-1.5 text-brand"><LocateFixed size={13} />{t("跟随终端", "Follow terminal")}</span>
         <span className="min-w-0 truncate text-muted" title={currentDir}>{currentDir || t("等待项目目录", "Waiting for project directory")}</span>
       </div>
-
-      {/* 路径输入框 */}
-      <div className={`flex ${isCompact ? "flex-col items-stretch gap-2" : "items-center gap-2"}`}>
-        <input
-          type="text"
-          aria-label={t("文件路径", "File path")}
-          value={pathInput}
-          onChange={(e) => setPathInput(e.target.value)}
-          onKeyDown={handlePathSubmit}
-          placeholder={t("输入路径，按回车跳转", "Input path and press Enter")}
-          className={`flex-1 px-2 ${isCompact ? "py-2 text-sm" : "py-1 text-xs"} rounded border ${
-            isDark
-              ? "bg-elevated border-line-strong text-ink placeholder:text-muted focus:border-brand"
-              : "bg-surface border-line-strong text-ink-soft placeholder:text-muted focus:border-brand"
-          } focus:outline-none`}
-        />
-        <div className={`flex items-center gap-2 ${isCompact ? "flex-wrap" : ""}`}>
-          <button
-            onClick={handleRefresh}
-            disabled={refreshing}
-            className={`px-2 ${isCompact ? "py-2 text-sm" : "py-1 text-xs"} rounded border ${
-              isDark
-                ? "bg-elevated border-line-strong text-ink hover:bg-line-strong"
-                : "bg-elevated border-line-strong text-ink-soft hover:bg-line"
-            } ${refreshing ? "opacity-50 cursor-not-allowed" : ""}`}
-            title={t("刷新", "Refresh")}
-          >
-            <RefreshCw size={13} className={refreshing ? "animate-spin" : ""} aria-hidden="true" />
-          </button>
-          <label className={`flex items-center gap-1 px-2 ${isCompact ? "py-2 text-sm" : "py-1 text-xs"} rounded border cursor-pointer ${
-            isDark
-              ? "bg-elevated border-line-strong text-ink hover:bg-line-strong"
-              : "bg-elevated border-line-strong text-ink-soft hover:bg-line"
-          }`}>
-            <input
-              type="checkbox"
-              checked={compress}
-              onChange={(e) => setCompress(e.target.checked)}
-              className="w-3 h-3"
-            />
-            <span>{t("压缩上传", "Compressed upload")}</span>
-          </label>
-        </div>
-      </div>
-
-      {isCompact ? (
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className={`rounded-full px-2 py-1 ${isDark ? "bg-elevated text-ink-soft" : "bg-line text-ink-soft"}`}>
-            {t("已选", "Selected")} {selectedCount}
-          </span>
-          <button
-            type="button"
-            onClick={() => handleActionForFiles("mkdir", [])}
-            className={`rounded-full px-3 py-2 ${isDark ? "bg-elevated text-ink" : "bg-surface text-ink border border-line"}`}
-          >
-            {t("新建文件夹", "New folder")}
-          </button>
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
-            className={`rounded-full px-3 py-2 ${uploading ? "opacity-50 cursor-not-allowed" : ""} ${isDark ? "bg-elevated text-ink" : "bg-surface text-ink border border-line"}`}
-          >
-            {t("上传文件", "Upload")}
-          </button>
-          <button
-            type="button"
-            onClick={() => handleActionForFiles("touch", [])}
-            className={`rounded-full px-3 py-2 ${isDark ? "bg-elevated text-ink" : "bg-surface text-ink border border-line"}`}
-          >
-            {t("新建文件", "New file")}
-          </button>
-          <button
-            type="button"
-            onClick={() => handleActionForFiles("rename", selectedItems)}
-            disabled={!canRename}
-            className={`rounded-full px-3 py-2 ${canRename ? "" : "opacity-40 cursor-not-allowed"} ${isDark ? "bg-elevated text-ink" : "bg-surface text-ink border border-line"}`}
-          >
-            {t("重命名", "Rename")}
-          </button>
-          <button
-            type="button"
-            onClick={() => handleActionForFiles("chmod", selectedItems)}
-            disabled={!hasSelection}
-            className={`rounded-full px-3 py-2 ${hasSelection ? "" : "opacity-40 cursor-not-allowed"} ${isDark ? "bg-elevated text-ink" : "bg-surface text-ink border border-line"}`}
-          >
-            {t("权限", "Permissions")}
-          </button>
-          {onOpenFile ? (
-            <button
-              type="button"
-              onClick={() => {
-                const target = selectedItems.find((file) => !file.is_dir);
-                if (target) {
-                  onOpenFile(target);
-                }
-              }}
-              disabled={!hasSelection || selectedItems.every((file) => file.is_dir)}
-              className={`rounded-full px-3 py-2 ${hasSelection ? "" : "opacity-40 cursor-not-allowed"} ${isDark ? "bg-elevated text-ink" : "bg-surface text-ink border border-line"}`}
-            >
-              {t("打开", "Open")}
-            </button>
-          ) : null}
-          <button
-            type="button"
-            onClick={() => handleActionForFiles("download", selectedItems)}
-            disabled={!hasSelection}
-            className={`rounded-full px-3 py-2 ${hasSelection ? "" : "opacity-40 cursor-not-allowed"} ${isDark ? "bg-elevated text-ink" : "bg-surface text-ink border border-line"}`}
-          >
-            {t("下载", "Download")}
-          </button>
-          <button
-            type="button"
-            onClick={() => handleActionForFiles("delete", selectedItems)}
-            disabled={!hasSelection}
-            className={`rounded-full px-3 py-2 ${hasSelection ? "" : "opacity-40 cursor-not-allowed"} ${isDark ? "bg-danger/10 text-danger" : "bg-danger/10 text-danger border border-danger/30"}`}
-          >
-            {t("删除", "Delete")}
-          </button>
-          <button
-            type="button"
-            onClick={handleClearSelection}
-            disabled={!hasSelection}
-            className={`rounded-full px-3 py-2 ${hasSelection ? "" : "opacity-40 cursor-not-allowed"} ${isDark ? "bg-elevated text-ink" : "bg-surface text-ink border border-line"}`}
-          >
-            {t("取消选择", "Clear")}
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            className="hidden"
-            onChange={handleFileInputChange}
-          />
-        </div>
-      ) : null}
+      <input type="text" aria-label={t("文件路径", "File path")} value={currentDir && !directoryUnavailable ? pathInput : ""}
+        readOnly={scopeToCurrentDir || !currentDir || directoryUnavailable}
+        onChange={event => setPathInput(event.target.value)} onKeyDown={handlePathSubmit}
+        placeholder={currentDir ? t("输入路径，按回车跳转", "Input path and press Enter") : t("等待终端目录", "Waiting for terminal directory")}
+        className="w-full shrink-0 rounded border border-line bg-elevated/60 px-2.5 py-2 font-mono text-xs text-ink focus:border-brand focus:outline-none read-only:cursor-default" />
+      <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileInputChange} />
 
       <div
         className={`flex rounded border flex-1 min-h-0 ${isCompact ? "flex-col" : ""} ${isDark ? "border-line" : "border-line"} ${(uploading || downloading) ? "opacity-50" : ""} relative`}
@@ -1445,16 +1078,9 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
             </div>
           </div>
         )}
-        {/* 左侧树形目录 */}
-        <div className={`${isCompact ? "w-full max-h-40 border-b" : "w-1/3 border-r"} overflow-auto ${isDark ? "border-line bg-elevated/50 dark-scrollbar" : "border-line bg-elevated light-scrollbar"}`}>
-          <div className="p-1" role="tree" aria-label={t("目录树", "Directory tree")}>
-            {tree.map(node => renderTreeNode(node))}
-          </div>
-        </div>
-
-        {/* 右侧文件列表 */}
+        {/* One scrolling list for both directories and files. */}
         <div
-          className={`flex-1 overflow-auto ${isDark ? "bg-surface/30 dark-scrollbar" : "bg-surface light-scrollbar"}`}
+          className={`file-list min-h-0 flex-1 overflow-auto ${isDark ? "bg-surface/30 dark-scrollbar" : "bg-surface light-scrollbar"}`}
           onContextMenu={(e) => handleContextMenu(e)}
           onClick={(e) => {
             if (e.target === e.currentTarget) {
@@ -1462,7 +1088,15 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
             }
           }}
         >
-          {filesLoading ? (
+          {!currentDir || directoryUnavailable ? (
+            <div role="status" className="flex h-full items-center justify-center p-5 text-center text-xs leading-relaxed text-muted">
+              {directoryUnavailable ? t("暂时无法同步终端目录，请刷新重试。", "Terminal directory is unavailable. Refresh to retry.") : t("正在同步终端目录…", "Syncing terminal directory…")}
+            </div>
+          ) : scopeRoot && selectedPath && !isPathWithinDirectory(selectedPath, scopeRoot) ? (
+            <div role="status" className="p-5 text-xs text-muted">{dialog || uploading || downloading || chmodLoading
+              ? t("当前文件操作完成后同步新项目目录。", "The new project will open after this file operation finishes.")
+              : t("正在同步终端目录…", "Syncing terminal directory…")}</div>
+          ) : filesLoading ? (
             <div className={`flex items-center justify-center h-full text-xs ${isDark ? "text-muted" : "text-muted"}`}>
               <Loader2 size={14} className="mr-2 inline-block animate-spin" aria-hidden="true" /> {t("加载中...", "Loading...")}
             </div>
@@ -1584,6 +1218,9 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
         >
           {contextMenu.type === 'blank' && (
             <>
+              <button onClick={() => { setContextMenu(null); fileInputRef.current?.click(); }} className="w-full px-4 py-2 text-left text-sm text-ink hover:bg-surface">
+                {t("上传文件", "Upload")}
+              </button>
               <button onClick={() => handleContextAction("mkdir")} className={`w-full px-4 py-2 text-left text-sm ${isDark ? "hover:bg-elevated text-ink" : "hover:bg-elevated text-ink-soft"}`}>
                 {t("新建文件夹", "New Folder")}
               </button>

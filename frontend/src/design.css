@@ -196,7 +196,6 @@ select:focus-visible, textarea:focus-visible { outline: 2px solid rgb(var(--bran
 .file-workspace table td { font-size: 12px; }
 .file-workspace table tr { transition: background-color .15s; }
 .file-workspace table tr svg { display: inline-block; vertical-align: middle; margin-right: 5px; color: rgb(var(--muted)); }
-.file-workspace [role="treeitem"] > svg { color: rgb(var(--ink-soft)); margin-right: 3px; }
 .file-workspace button, .file-workspace input { border-radius: 8px; }
 [role="dialog"] { box-shadow: var(--shadow-panel); border-color: rgb(var(--line-strong)); }
 [role="dialog"] h2, [role="dialog"] h3 { font-family: var(--font-display); letter-spacing: -.035em; }

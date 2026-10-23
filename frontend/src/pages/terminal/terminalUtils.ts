@@ -105,8 +105,8 @@ export const darkTerminalTheme = {
   brightWhite: "#ffffff",
   // 面板具体使用哪个色号取决于 TUI 的启动配色；保留两个表面层次。
   extendedAnsi: buildExtendedAnsiPalette({
-    235: "#1b2533",
-    236: "#233348",
+    235: "#2a2a2a",
+    236: "#303030",
   }),
 };
 
@@ -133,8 +133,8 @@ export const lightTerminalTheme = {
   brightCyan: "#007f98",
   brightWhite: "#ffffff",
   extendedAnsi: buildExtendedAnsiPalette({
-    235: "#edf3ff",
-    236: "#e1ebfc",
+    235: "#f7f7f7",
+    236: "#ededed",
   }),
 };
 

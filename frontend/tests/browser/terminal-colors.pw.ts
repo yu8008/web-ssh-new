@@ -61,8 +61,8 @@ function contrast(a: number[], b: number[]) {
   return (values[1] + 0.05) / (values[0] + 0.05);
 }
 
-const panelColors = (light: boolean) => light ? [[225, 235, 252], [237, 243, 255], [237, 243, 255], [225, 235, 252]]
-  : [[35, 51, 72], [27, 37, 51], [27, 37, 51], [35, 51, 72]];
+const panelColors = (light: boolean) => light ? [[237, 237, 237], [247, 247, 247], [247, 247, 247], [237, 237, 237]]
+  : [[48, 48, 48], [42, 42, 42], [42, 42, 42], [48, 48, 48]];
 
 for (const renderer of ["dom", "webgl"]) {
   test(`${renderer}: code, model and project accents retain saturated colors after live theme changes`, async ({ page }, info) => {
@@ -101,7 +101,7 @@ for (const renderer of ["dom", "webgl"]) {
       "\x1b[0;1;2;7;38;5;234;48;5;235mBold dim inverse indexed text\x1b[K",
       "\x1b[0;8mHidden information remains hidden\x1b[K",
       "\x1b[0;2;48;2;120;20;20;38;2;205;214;244mDim text on a colored background\x1b[K",
-      "\x1b[0;48;5;235;38;2;237;243;255m██████████████████████████████\x1b[K",
+      "\x1b[0;48;5;235;38;2;247;247;247m██████████████████████████████\x1b[K",
     ].join("\r\n");
     await page.evaluate(data => window.writeTerminalForTest(data), "\x1b[0m\x1b[2J\x1b[H" + data + "\x1b[0m");
     const before = await page.evaluate(() => window.terminalStateForTest());
@@ -139,7 +139,7 @@ for (const renderer of ["dom", "webgl"]) {
     const check = async (selected = false) => {
       const colors = await painted(page, rows);
       for (const row of rows) {
-        expect(contrast(colors.foregrounds[row], colors.backgrounds[row])).toBeGreaterThanOrEqual(selected || row % 4 === 1 || row % 4 === 2 ? 4.45 : 6.95);
+        expect(contrast(colors.foregrounds[row], colors.backgrounds[row]), `row=${row} selected=${selected} fg=${colors.foregrounds[row]} bg=${colors.backgrounds[row]}`).toBeGreaterThanOrEqual(selected || row % 4 === 1 || row % 4 === 2 ? 4.45 : 6.95);
       }
     };
     await check();
@@ -357,7 +357,7 @@ for (const mobile of [false, true]) {
       if (!mobile) await expect(page.locator(".terminal-inspector")).toHaveCSS("background-color", light ? "rgb(249, 249, 249)" : "rgb(33, 33, 33)");
       await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute("content", light ? "#ffffff" : "#212121");
       await expect.poll(() => page.locator(".xterm-rows > div").first().locator("span").first().evaluate(el => getComputedStyle(el).backgroundColor))
-        .toBe(light ? "rgb(225, 235, 252)" : "rgb(35, 51, 72)");
+        .toBe(light ? "rgb(237, 237, 237)" : "rgb(48, 48, 48)");
       await expect(page.getByText(light ? "已切换浅色模式" : "已切换深色模式", { exact: true }).first()).toBeVisible();
       await expect(page.getByText(/需要重启程序/)).toHaveCount(0);
       await expect(page.locator(".xterm")).toHaveAttribute("data-identity", "original");
@@ -372,3 +372,31 @@ for (const mobile of [false, true]) {
     await expect.poll(() => inputs.filter(input => !input.startsWith("\x1b]"))).toEqual(["Still running 中文"]);
   });
 }
+
+test("WebGL idle work from an old theme cannot recolor the new theme", async ({ page }) => {
+  await page.addInitScript(() => {
+    const callbacks = new Map<number, IdleRequestCallback>();
+    let next = 0;
+    window.requestIdleCallback = callback => { callbacks.set(++next, callback); return next; };
+    window.cancelIdleCallback = id => { callbacks.delete(id); };
+    Object.assign(window, {
+      switchThemeBeforeOldIdleWork() {
+        const oldWork = [...callbacks];
+        window.themeTerminalForTest(false);
+        for (const [id, callback] of oldWork) {
+          callbacks.delete(id);
+          callback({ didTimeout: false, timeRemaining: () => 1000 });
+        }
+        return oldWork.length;
+      },
+    });
+  });
+  await open(page, "webgl");
+  await page.evaluate(() => window.writeTerminalForTest("\x1b[2J\x1b[HNormal body 中文 MMMM\x1b[0m"));
+  await painted(page, [0]);
+  const queued = await page.evaluate(() => (window as unknown as { switchThemeBeforeOldIdleWork(): number }).switchThemeBeforeOldIdleWork());
+  expect(queued).toBeGreaterThan(0);
+  const colors = await painted(page, [0]);
+  expect(colors.backgrounds[0]).toEqual([255, 255, 255]);
+  expect(contrast(colors.foregrounds[0], colors.backgrounds[0])).toBeGreaterThanOrEqual(6.95);
+});

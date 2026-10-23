@@ -45,10 +45,13 @@ async function harness(context: BrowserContext, theme: string, authenticated = t
     if (path.startsWith("/system/session-status/")) return route.fulfill({ json: overview });
     if (path.startsWith("/system/clock/")) return route.fulfill({ json: { epoch: Date.now() / 1000, zone: "Etc/UTC", offset: "+0000", zone_name: "UTC" } });
     if (path.startsWith("/system/project/")) return route.fulfill({ json: { state: "ready", cwd: "/workspace/webssh", source: "process", app: "codex", checked_at: Date.now() / 1000 } });
-    if (path.startsWith("/system/files/")) return route.fulfill({ json: { path: url.searchParams.get("path") || "/", files: [
-      { name: "workspace", path: "/workspace", is_dir: true, size: 4096, modified: now, permissions: "drwxr-xr-x", owner: "ops", group: "ops" },
-      { name: "README.md", path: "/README.md", is_dir: false, size: 3456, modified: now, permissions: "-rw-r--r--", owner: "ops", group: "ops" },
-    ] } });
+    if (path.startsWith("/system/files/")) {
+      const directory = url.searchParams.get("path") || "/";
+      return route.fulfill({ json: { path: directory, files: [
+        { name: "src", path: `${directory}/src`, is_dir: true, size: 4096, modified: now, permissions: "drwxr-xr-x", owner: "ops", group: "ops" },
+        { name: "README.md", path: `${directory}/README.md`, is_dir: false, size: 3456, modified: now, permissions: "-rw-r--r--", owner: "ops", group: "ops" },
+      ] } });
+    }
     if (path.startsWith("/notifications/setup/")) return route.fulfill({ json: { installed: true, codex_version: "0.163.0", claude_version: "2.1.306", configuration: { codex: "configured", claude: "configured" }, notes: [], runtime: { state: "attached", app: "codex", capabilities: { complete: "verified" }, candidates: [] } } });
     return route.fulfill({ json: {} });
   });

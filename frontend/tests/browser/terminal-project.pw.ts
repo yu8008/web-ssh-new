@@ -9,6 +9,8 @@ const readyGit = {
 async function harness(context: BrowserContext) {
   let snapshot: Record<string, unknown> = { state: "ready", cwd: "/workspace/first", app: "codex", git: readyGit };
   let calls = 0, responseStatus = 200;
+  const fileCalls: string[] = [];
+  const gates = new Map<string, Promise<void>>();
   await context.addInitScript(() => {
     localStorage.setItem("theme", "dark"); localStorage.setItem("app_language", "zh-CN"); localStorage.setItem("user_id", "1");
     localStorage.setItem("token", `test.${btoa(JSON.stringify({ sub: "1", exp: Math.floor(Date.now()/1000)+3600 }))}.sig`);
@@ -19,8 +21,13 @@ async function harness(context: BrowserContext) {
     if (path.startsWith("/system/project/")) { calls++; return route.fulfill({ status: responseStatus, json: { ...snapshot, checked_at: Date.now()/1000 } }); }
     if (path.startsWith("/system/files/")) {
       const directory = url.searchParams.get("path") || "/";
-      if (directory === "/") await new Promise(resolve => setTimeout(resolve, 500));
-      return route.fulfill({ json: { path: directory, files: [{ name: "README.md", path: `${directory}/README.md`, is_dir: false, size: 42, modified: new Date().toISOString() }] } });
+      fileCalls.push(directory);
+      await gates.get(directory);
+      return route.fulfill({ json: { path: directory, files: [
+        { name: "src", path: `${directory}/src`, is_dir: true, size: 0 },
+        { name: "README.md", path: `${directory}/README.md`, is_dir: false, size: 42 },
+        { name: `${directory.split("/").at(-1)}.txt`, path: `${directory}/status.txt`, is_dir: false, size: 9 },
+      ] } });
     }
     if (path.startsWith("/system/overview/")) return route.fulfill({ json: {
       stats: { cpu: { count: 4, percent: 8 }, memory: { used: 1073741824, total: 4294967296, percent: 25 }, swap: { used: 0, total: 0, percent: 0 } },
@@ -38,31 +45,50 @@ async function harness(context: BrowserContext) {
     socket.onMessage(raw => { const frame = JSON.parse(String(raw)); if (frame.type === "input") inputs.push(frame.data); });
     socket.send(JSON.stringify({ type: "output", seq: 1, data: "ops@host:/wrong-output-path$\r\nCodex is running\r\n" }));
   });
-  return { calls: () => calls, inputs, set: (value: Record<string, unknown>, status = 200) => { snapshot = value; responseStatus = status; } };
+  return { calls: () => calls, inputs, fileCalls,
+    hold: (directory: string) => { let release!: () => void; gates.set(directory, new Promise<void>(resolve => { release = resolve; })); return () => { gates.delete(directory); release(); }; },
+    set: (value: Record<string, unknown>, status = 200) => { snapshot = value; responseStatus = status; } };
 }
 
 for (const mobile of [false, true]) {
-  test(`${mobile ? "mobile" : "desktop"}: files follow actual CLI cwd, support pausing, and discard a late root listing`, async ({ page, context }, info) => {
+  test(`${mobile ? "mobile" : "desktop"}: one file list stays inside the CLI directory with only a refresh toolbar`, async ({ page, context }, info) => {
     await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 1000 });
     const mock = await harness(context);
     await page.goto("/terminal/project"); await expect(page.locator(".xterm")).toBeVisible();
-    expect(mock.calls()).toBe(0);
+    expect(mock.calls()).toBe(0); expect(mock.fileCalls).toEqual([]);
     await page.getByRole("button", { name: "文件", exact: true }).click();
+    const panel = page.locator(".file-workspace");
     const input = page.getByRole("textbox", { name: "文件路径", exact: true });
-    await expect(input).toHaveValue("/workspace/first"); await page.waitForTimeout(600);
     await expect(input).toHaveValue("/workspace/first");
-    await expect(page.getByText("README.md", { exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "跟随终端", exact: true }).click();
-    await input.fill("/manual"); await input.press("Enter");
+    await expect(input).toHaveAttribute("readonly", "");
+    await expect(panel.getByText("README.md", { exact: true })).toBeVisible();
+    await expect(panel.getByRole("tree")).toHaveCount(0);
+    await expect(panel.getByRole("table")).toHaveCount(1);
+    await expect(panel.getByRole("checkbox")).toHaveCount(0);
+    await expect(panel.locator("button")).toHaveCount(1);
+    await expect(panel.getByRole("button", { name: "刷新", exact: true })).toBeVisible();
+    await expect(panel.getByRole("button", { name: /返回上一级/ })).toHaveCount(0);
+    expect(mock.fileCalls).toEqual(["/workspace/first"]);
+    await panel.getByRole("row", { name: "src 目录", exact: true }).press("Enter");
+    await expect(input).toHaveValue("/workspace/first/src");
+    await expect(panel.getByText("README.md", { exact: true })).toBeVisible();
+    await panel.getByRole("button", { name: "返回上一级: /workspace/first", exact: true }).press("Enter");
+    await expect(input).toHaveValue("/workspace/first");
+    await expect(panel.getByRole("button", { name: /返回上一级/ })).toHaveCount(0);
     mock.set({ state: "ready", cwd: "/workspace/second", app: "claude", git: { ...readyGit, branch: "other" } });
-    await expect(page.locator('.file-workspace span[title="/workspace/second"]')).toBeVisible({ timeout: 7000 });
-    await expect(input).toHaveValue("/manual");
-    await page.getByRole("button", { name: "跟随终端", exact: true }).click();
+    await panel.getByRole("button", { name: "刷新", exact: true }).click();
     await expect(input).toHaveValue("/workspace/second");
-    await page.screenshot({ path: info.outputPath("project-files.png") });
+    await expect(panel.getByText("second.txt", { exact: true })).toBeVisible();
+    await expect(panel.getByText("first.txt", { exact: true })).toHaveCount(0);
+    expect(mock.fileCalls.every(path => path.startsWith("/workspace/first") || path === "/workspace/second")).toBe(true);
+    await page.screenshot({ path: info.outputPath("project-files-dark.png") });
     if (mobile) await page.getByRole("button", { name: "终端", exact: true }).click();
     else await page.getByRole("button", { name: "关闭文件面板", exact: true }).click();
     const stopped = mock.calls(); await page.waitForTimeout(2800); expect(mock.calls()).toBe(stopped);
+    await page.getByRole("button", { name: mobile ? "浅色" : "切换主题", exact: true }).click();
+    await page.getByRole("button", { name: "文件", exact: true }).click();
+    await expect(panel.getByText("second.txt", { exact: true })).toBeVisible();
+    await page.screenshot({ path: info.outputPath("project-files-light.png") });
     expect(mock.inputs.every(value => !value.includes("pwd") && !value.includes("git"))).toBe(true);
   });
   test(`${mobile ? "mobile" : "desktop"}: Git follows project changes and distinguishes missing remotes, non-repositories and errors`, async ({ page, context }, info) => {
@@ -120,6 +146,7 @@ test("directory following pauses during a file operation dialog", async ({ page,
   await page.getByRole("button", { name: "文件", exact: true }).click();
   const input = page.getByRole("textbox", { name: "文件路径", exact: true });
   await expect(input).toHaveValue("/workspace/first");
+  await page.getByRole("row", { name: "README.md 文件", exact: true }).click({ button: "right" });
   await page.getByRole("button", { name: "新建文件夹", exact: true }).click();
   await page.getByPlaceholder("输入名称", { exact: true }).fill("draft-folder");
   mock.set({ state: "ready", cwd: "/different-project", git: readyGit });
@@ -128,4 +155,63 @@ test("directory following pauses during a file operation dialog", async ({ page,
   await expect(page.getByPlaceholder("输入名称", { exact: true })).toHaveValue("draft-folder");
   await page.getByRole("button", { name: "取消", exact: true }).click();
   await expect(input).toHaveValue("/different-project");
+});
+
+test("pending or unavailable project metadata never opens the system root and refresh recovers", async ({ page, context }) => {
+  const mock = await harness(context);
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  await page.route("**/system/project/project?*", async route => { await gate; await route.fallback(); });
+  await page.goto("/terminal/project");
+  await page.getByRole("button", { name: "文件", exact: true }).click();
+  const panel = page.locator(".file-workspace");
+  await expect(panel.getByRole("status")).toHaveText("正在同步终端目录…");
+  expect(mock.fileCalls).toEqual([]);
+  mock.set({ state: "unavailable" }); release();
+  await expect(panel.getByRole("status")).toHaveText("暂时无法同步终端目录，请刷新重试。");
+  expect(mock.fileCalls).toEqual([]);
+  mock.set({ state: "ready", cwd: "/workspace/first", app: "codex" });
+  await panel.getByRole("button", { name: "刷新", exact: true }).click();
+  await expect(panel.getByText("README.md", { exact: true })).toBeVisible();
+  mock.set({}, 503);
+  await panel.getByRole("button", { name: "刷新", exact: true }).click();
+  await expect(panel.getByRole("status")).toHaveText("暂时无法同步终端目录，请刷新重试。");
+  await expect(panel.getByText("README.md", { exact: true })).toHaveCount(0);
+  expect(mock.fileCalls).not.toContain("/");
+});
+
+test("a slow old-project listing cannot overwrite a newly synchronized CLI directory", async ({ page, context }) => {
+  const mock = await harness(context);
+  const release = mock.hold("/workspace/first");
+  await page.goto("/terminal/project");
+  await page.getByRole("button", { name: "文件", exact: true }).click();
+  await expect.poll(() => mock.fileCalls).toContain("/workspace/first");
+  mock.set({ state: "ready", cwd: "/workspace/second", app: "claude" });
+  const panel = page.locator(".file-workspace");
+  await panel.getByRole("button", { name: "刷新", exact: true }).click();
+  await expect(panel.getByText("second.txt", { exact: true })).toBeVisible();
+  release();
+  await expect(panel.getByRole("button", { name: "刷新", exact: true })).toBeEnabled();
+  await expect(panel.getByRole("textbox", { name: "文件路径" })).toHaveValue("/workspace/second");
+  await expect(panel.getByText("first.txt", { exact: true })).toHaveCount(0);
+  expect(mock.fileCalls).not.toContain("/");
+});
+
+test("shell navigation remains available until a CLI scopes the same terminal directory", async ({ page, context }) => {
+  const mock = await harness(context);
+  mock.set({ state: "ready", cwd: "/workspace/first", app: null });
+  await page.goto("/terminal/project");
+  await page.getByRole("button", { name: "文件", exact: true }).click();
+  const panel = page.locator(".file-workspace");
+  const input = panel.getByRole("textbox", { name: "文件路径" });
+  await expect(input).toHaveValue("/workspace/first");
+  await expect(panel.getByText("README.md", { exact: true })).toBeVisible();
+  await input.fill("/manual"); await input.press("Enter");
+  await expect(panel.getByText("manual.txt", { exact: true })).toBeVisible();
+  mock.set({ state: "ready", cwd: "/workspace/first", app: "codex" });
+  await panel.getByRole("button", { name: "刷新", exact: true }).click();
+  await expect(input).toHaveValue("/workspace/first");
+  await expect(input).toHaveAttribute("readonly", "");
+  await expect(panel.getByText("first.txt", { exact: true })).toBeVisible();
+  await expect(panel.getByRole("button", { name: /返回上一级/ })).toHaveCount(0);
 });

@@ -244,6 +244,9 @@ export function TerminalMobile({ state, onBack }: TerminalMobileProps) {
                   sessionId={state.sessionId}
                   isDark={state.isDark}
                   currentDir={project.data?.cwd ?? undefined}
+                  scopeToCurrentDir={Boolean(project.data?.app)}
+                  directoryUnavailable={project.error || project.data?.state === "unavailable" || !project.connected}
+                  onRefreshProject={project.refresh}
                   onOpenFile={setOpenedFile}
                   networkProfile={state.sessionNetworkProfile}
                   compact

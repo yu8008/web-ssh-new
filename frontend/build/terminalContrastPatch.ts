@@ -45,6 +45,11 @@ const patches = new Map<string, Array<[string, string]>>([
     // Dim cells only require half the contrast, otherwise they wouldn't be distinguishable from`],
   ]],
   [path.join(addon, "src/CharAtlasUtils.ts"), [
+    // Disposed atlases can still finish idle glyph warmup. A cache shared with
+    // ThemeService lets that old palette overwrite the new theme's colors.
+    ["import { NULL_COLOR } from 'common/Color';", "import { NULL_COLOR } from 'common/Color';\nimport { ColorContrastCache } from 'browser/ColorContrastCache';"],
+    ["contrastCache: colors.contrastCache", "contrastCache: new ColorContrastCache()"],
+    ["halfContrastCache: colors.halfContrastCache", "halfContrastCache: new ColorContrastCache()"],
     ["selectionBackgroundOpaque: NULL_COLOR", "selectionBackgroundOpaque: colors.selectionBackgroundOpaque"],
     ["a.minimumContrastRatio === b.minimumContrastRatio &&",
       "a.minimumContrastRatio === b.minimumContrastRatio &&\n      a.colors.selectionBackgroundOpaque.rgba === b.colors.selectionBackgroundOpaque.rgba &&"],
