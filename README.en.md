@@ -2,9 +2,13 @@
 
 > English document. 中文文档请见：[README.md](./README.md)
 
-WebSSH Gateway is a browser-based SSH gateway for operations and development teams. It provides SSH connection management, terminal sessions, system monitoring, and file operations in a single web interface.
+WebSSH Gateway is a browser-based SSH gateway for operations, development, and AI CLI workflows. Use terminal tools such as Codex and Claude Code alongside SSH connection management, file operations, and server monitoring.
 
 One of its core capabilities is the persistent session design for long-running workloads. With enhanced sessions powered by `tmux`, background jobs can keep running even if the browser closes, the network briefly drops, or the page is refreshed. This is useful for long-lived scripts, AI coding workflows, scheduled data monitoring, log collection, and similar automation scenarios.
+
+This repository focuses on terminal-history scrolling, large text selections, live light/dark themes, and notification sounds when a CLI finishes a turn or needs your input. Recent output from the same session and notification records can be viewed on another device.
+
+[Quick Start](#quick-start) · [CLI Task Notifications](#cli-task-notifications) · [Architecture](./docs/ARCHITECTURE.en.md) · [Deployment](./docs/DEPLOYMENT.en.md)
 
 ## Project Preview
 
@@ -31,13 +35,12 @@ A dedicated mobile layout provides touch-friendly interactions for terminal work
 
 - Latency details: click the gateway latency to inspect browser/gateway round trips, gateway/SSH command round trips, gateway reply queues, scheduling delays and browser output/render waits. These independent samples cannot be subtracted to obtain pure network latency. Scheduling delays show the 5-second maximum; hidden tabs are excluded from browser sampling.
 - Per-viewer output acknowledgements bound the amount of unparsed data sent to a browser while allowing input and latency probes to continue. Legacy clients/servers remain compatible; update both sides for full diagnostics and flow control.
-
 - Browser terminal with real-time WebSocket streaming
 - AI CLI output handling: ordered transport and rendering batches, stable reading position during output, and reset followed by recent-history replay on reconnect
 - Terminal selection and copy: drag to an edge to extend selection, with progressive acceleration while held at an edge and stable highlighting across complete redraws; `Ctrl+C` copies selected text and sends an interrupt without a selection; `Ctrl+Shift+C` / `Cmd+C` also copy. Settings control this browser's scrollback limit, defaulting to 10,000 lines.
 - The terminal uses xterm 6 synchronized rendering with hardware WebGL and a DOM fallback. Wheel distance is reduced to 0.85× while retaining fractional trackpad movement. Cross-screen selection keeps its highlight visible and advances in small steps, aligned with complete terminal frames. Reading existing history preserves the viewport while new output continues to reach other devices.
 - Live terminal themes: the browser adapts neutral TUI panel backgrounds and darkens colored and dim secondary text in light mode while applications such as Codex keep running. Existing content, selection highlights and new output follow the current theme.
-- CLI task notifications: distinct sounds for a finished turn and a question/approval request, cross-session delivery, device-local volume, tab deduplication, and synchronized unread records. Open **Task notifications and sound**, enable the preview, and configure the SSH user's CLI integration. Use newly launched CLI sessions after initial setup. Automatic setup supports Codex 0.163.0+ and Claude Code 2.1.306+, requires Python 3.8+ on the target, and Python 3.11+ for Codex configuration. Keep the page open; old records and replay stay silent. Closed pages and locked devices are outside this release's notification scope.
+- CLI task notifications: distinct completion and question/approval sounds, previews, volume controls, cross-session delivery, tab deduplication, and synchronized unread records. See [CLI Task Notifications](#cli-task-notifications) for setup and compatibility.
 - Connection asset management with encrypted credentials
 - Session lifecycle management with reconnect and notes
 - Grouped session view: sessions can be grouped by connection/machine, with list/grouped view switching, persisted display preference, and machine status preview in group headers
@@ -57,6 +60,49 @@ A dedicated mobile layout provides touch-friendly interactions for terminal work
 - Frontend: React + TypeScript + Vite + TailwindCSS + xterm.js
 - Deployment: Docker / Docker Compose
 
+## CLI Task Notifications
+
+### Notification Types
+
+| Event | Notification |
+| --- | --- |
+| The main CLI session finishes its current turn | One short tone |
+| A question, choice, or approval needs your input | Two short tones, with the source session shown |
+| An intermediate command, tool, or subtask finishes | Does not announce completion of the main turn |
+| A generic notification or bell from another terminal program | Optional; disabled by default |
+
+“Turn finished” means the CLI ended its current response, rather than a guarantee that every operation succeeded. Detection uses CLI notification/state events, without guessing from conversation keywords, question marks, or a period without output.
+
+### Initial Setup
+
+1. Sign in and open a connected SSH terminal.
+2. Open **Task notifications and sound** in the toolbar, then select **Enable sound and preview** to activate audio on this device.
+3. Select **Configure CLI notifications** to configure Codex notifications and Claude hooks for the target SSH user. Setup backs up and merges existing settings; it does not restart running CLI programs.
+4. Use newly launched CLI sessions after initial setup. If Claude asks you to review hooks, open `/hooks`.
+5. Adjust completion sounds, question/approval sounds, volume, and **Only sound when away from this page**. Volume defaults to 35%, with foreground and background alerts allowed; sound must be enabled explicitly.
+
+CLI configuration belongs to the SSH user on the target server. Sound preferences belong to the current device. Use **Check setup** to inspect integration and **Remove setup** to undo the managed configuration. To mute immediately, turn off **Play notification sounds**.
+
+### Automatic Setup Requirements
+
+The versions below were exercised in isolated local CLI and tmux tests. Newer versions must retain compatible notification interfaces.
+
+| Tool | Minimum version for automatic setup | SSH target requirements |
+| --- | --- | --- |
+| Codex CLI | 0.163.0 | Python 3.11+ to read and preserve TOML configuration |
+| Claude Code | 2.1.306 | Python 3.8+ |
+| Other CLIs | Depends on terminal notification/bell support | Generic alerts may not distinguish completion from questions |
+
+Enhanced sessions configure tmux state forwarding. If a custom output pipe already exists, automatic setup stops and preserves it rather than overwriting it. Custom Stop/continuation hooks need separate verification; when other user/project Stop hooks are detected, completion relies on native end-of-turn status to avoid premature alerts.
+
+### Records and Scope
+
+- Notifications remain available when you switch sessions or visit the session management page. Select a notification to open its source session.
+- The Gateway stores notifications and read state for synchronization between devices signed into the same account. Audio settings remain local to each device; browser tabs coordinate playback to avoid duplicate sounds for the same event.
+- The inbox retains up to 200 notifications per account for seven days. Refreshing, reconnecting, and loading old records do not replay accumulated sounds.
+- This retention applies only to notification records. Recent terminal output and browser scrollback keep their existing limits; seven-day terminal-output archiving has not been added.
+- Keep the page open and running. Frozen browsers, sleeping/locked devices, closed pages, and disconnected gateway SSH transports cannot guarantee prompt playback. Background push and system desktop notifications are not implemented.
+
 ## Quick Start
 
 > Security notice: before deployment, you must replace both `SECRET_KEY` and `INITIAL_ADMIN_PASSWORD` in `.env` with your own strong values. Never keep example/default values.
@@ -65,31 +111,32 @@ A dedicated mobile layout provides touch-friendly interactions for terminal work
 
 See [docs/DEPLOYMENT.en.md](./docs/DEPLOYMENT.en.md) for step-by-step setup.
 
-### Docker Deployment
+### Build a Docker Image from This Repository
 
-Docker Hub image: `https://hub.docker.com/r/beibeizi/websshgateway`
-
-Quick start example (note: both `SECRET_KEY` and `INITIAL_ADMIN_PASSWORD` below are examples and must be replaced in your own deployment):
+Build from this repository to include its terminal scrolling, theme, and task-notification changes.
 
 ```bash
-docker run -d -p 8080:8080 \
-  -e SECRET_KEY="67e457b4eab14012b34382b3d634f297" \
-  -e INITIAL_ADMIN_PASSWORD="ChangeMe123" \
-  beibeizi/websshgateway:latest
-```
+git clone https://github.com/yu8008/web-ssh-new.git
+cd web-ssh-new
+cp .env.example .env
 
-```bash
-export DOCKER_IMAGE=beibeizi/websshgateway:latest
-
-# You can also build a local image yourself
+# Set your own SECRET_KEY and INITIAL_ADMIN_PASSWORD in .env before continuing.
 docker build -t webssh-gateway:community .
+
 docker run -d \
   --name webssh-gateway \
+  --restart unless-stopped \
   -p 8080:8080 \
   --env-file .env \
   -v webssh-data:/data \
-  ${DOCKER_IMAGE:-webssh-gateway:community}
+  webssh-gateway:community
 ```
+
+Open `http://your-server:8080`, sign in as `admin` with the configured initial password, and change it when prompted on first login.
+
+Existing deployments should retain their original `.env` and data volume, then rebuild and update the container through their existing deployment process. A GitHub push or frontend build alone does not update a running Docker container.
+
+The [beibeizi/websshgateway image](https://hub.docker.com/r/beibeizi/websshgateway) referenced by the original documentation is maintained upstream and may not contain this repository's additions. See [docs/DEPLOYMENT.en.md](./docs/DEPLOYMENT.en.md) for the full development/deployment guide; use the source-build instructions above for these changes.
 
 ## Documentation
 
