@@ -1120,3 +1120,50 @@ export async function writeFile(sessionId: string, path: string, content: string
     throw new Error(detail);
   }
 }
+
+export type GitProjectStatus = {
+  state: "ready" | "not_repository" | "unavailable";
+  reason?: string;
+  root?: string;
+  branch?: string | null;
+  oid?: string | null;
+  upstream?: string | null;
+  ahead?: number;
+  behind?: number;
+  remotes?: string[];
+  branches?: string[];
+  branches_truncated?: boolean;
+  detached?: boolean;
+  unborn?: boolean;
+  added_lines?: number;
+  deleted_lines?: number;
+  changed_files?: number;
+  untracked_files?: number;
+  conflicted_files?: number;
+  binary_files?: number;
+  files_truncated?: boolean;
+  files?: Array<{ path: string; status: string }>;
+};
+
+export type SessionProject = {
+  state: "ready" | "unavailable";
+  cwd: string | null;
+  source?: "process" | "tmux";
+  app?: string | null;
+  reason?: string;
+  git?: GitProjectStatus;
+  checked_at: number;
+};
+
+export async function getSessionProject(sessionId: string, includeGit: boolean, signal: AbortSignal): Promise<SessionProject> {
+  const response = await fetch(`${HTTP_BASE}/system/project/${encodeURIComponent(sessionId)}?include_git=${includeGit}`, {
+    headers: getAuthHeader(), signal,
+  });
+  if (!response.ok) throw new Error("Project status unavailable");
+  const result = await response.json() as SessionProject;
+  if (!result || !["ready", "unavailable"].includes(result.state) ||
+    (result.state === "ready" && (typeof result.cwd !== "string" || !result.cwd.startsWith("/")))) {
+    throw new Error("Invalid project status");
+  }
+  return result;
+}

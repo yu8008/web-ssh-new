@@ -10,6 +10,9 @@ import { TerminalLoading } from "./TerminalLoading";
 import { TerminalLatencyStatus } from "./TerminalLatencyStatus";
 import { NotificationButton } from "../../notifications/NotificationProvider";
 
+import { useSessionProject } from "./useSessionProject";
+import { TerminalGitPanel } from "./TerminalGitPanel";
+
 const FileBrowser = React.lazy(() =>
   import("../../components/FileBrowser").then((module) => ({ default: module.FileBrowser }))
 );
@@ -22,7 +25,7 @@ type TerminalMobileProps = {
   onBack: () => void;
 };
 
-type MobileTab = "terminal" | "files" | "system";
+type MobileTab = "terminal" | "files" | "git" | "system";
 
 function MobilePanelFallback({ isDark }: { isDark: boolean }) {
   return (
@@ -34,6 +37,7 @@ function MobilePanelFallback({ isDark }: { isDark: boolean }) {
 
 export function TerminalMobile({ state, onBack }: TerminalMobileProps) {
   const [activeTab, setActiveTab] = React.useState<MobileTab>("terminal");
+  const project = useSessionProject(state.sessionId, state.connectionState === "open", activeTab === "files" || activeTab === "git", activeTab === "git");
   const [copySnapshot, setCopySnapshot] = React.useState<TerminalBufferSnapshot | null>(null);
   const [openedFile, setOpenedFile] = React.useState<FileInfo | null>(null);
   const closeViewer = React.useCallback(() => setOpenedFile(null), []);
@@ -233,12 +237,13 @@ export function TerminalMobile({ state, onBack }: TerminalMobileProps) {
 
         <div className={`${activeTab === "files" ? "flex" : "hidden"} h-full flex-col`}>
           <div className="flex-1 p-3 min-h-0">
-            {state.sessionId ? (
+            {state.sessionId && activeTab === "files" ? (
               <React.Suspense fallback={<MobilePanelFallback isDark={state.isDark} />}>
                 <FileBrowser
+                  key={state.sessionId}
                   sessionId={state.sessionId}
                   isDark={state.isDark}
-                  currentDir={state.currentDir}
+                  currentDir={project.data?.cwd ?? undefined}
                   onOpenFile={setOpenedFile}
                   networkProfile={state.sessionNetworkProfile}
                   compact
@@ -247,6 +252,8 @@ export function TerminalMobile({ state, onBack }: TerminalMobileProps) {
             ) : null}
           </div>
         </div>
+
+        {activeTab === "git" && <div className="h-full min-h-0 p-3"><TerminalGitPanel project={project} t={state.t} /></div>}
 
         <div className={`${activeTab === "system" ? "flex" : "hidden"} h-full flex-col`}>
           <div className="flex-1 p-3 min-h-0 overflow-y-auto">
@@ -269,6 +276,7 @@ export function TerminalMobile({ state, onBack }: TerminalMobileProps) {
           {[
             { key: "terminal", label: state.t("终端", "Terminal") },
             { key: "files", label: state.t("文件", "Files") },
+            { key: "git", label: "Git" },
             { key: "system", label: state.t("系统", "System") },
           ].map((tab) => {
             const active = activeTab === tab.key;

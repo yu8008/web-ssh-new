@@ -1,5 +1,5 @@
 import React from "react";
-import { Activity, ArrowLeft, Copy, Folder, Moon, RefreshCw, Sun, X } from "lucide-react";
+import { Activity, ArrowLeft, Copy, Folder, GitBranch, Moon, RefreshCw, Sun, X } from "lucide-react";
 import { Button } from "../../components/Button";
 import { FileViewer } from "../../components/FileViewer";
 import { getServerClock, type ServerClock } from "../../lib/api";
@@ -9,6 +9,9 @@ import { TerminalLoading } from "./TerminalLoading";
 import { TerminalLatencyStatus } from "./TerminalLatencyStatus";
 import { NotificationButton } from "../../notifications/NotificationProvider";
 import { darkTerminalTheme, lightTerminalTheme } from "./terminalUtils";
+
+import { useSessionProject } from "./useSessionProject";
+import { TerminalGitPanel } from "./TerminalGitPanel";
 
 function cx(...values: Array<string | false | null | undefined>): string {
   return values.filter(Boolean).join(" ");
@@ -103,22 +106,25 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
   });
   const [isDragging, setIsDragging] = React.useState(false);
   const [filesOpen, setFilesOpen] = React.useState(false);
+  const [gitOpen, setGitOpen] = React.useState(false);
+  const project = useSessionProject(state.sessionId, state.connectionState === "open", filesOpen || gitOpen, gitOpen);
   const { clock, serverMs } = useServerClock(state.sessionId);
   const [openedFile, setOpenedFile] = React.useState<FileInfo | null>(null);
   const closeViewer = React.useCallback(() => setOpenedFile(null), []);
 
   React.useEffect(() => {
-    if (!filesOpen) {
+    if (!filesOpen && !gitOpen) {
       return;
     }
     const handler = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setFilesOpen(false);
+        setGitOpen(false);
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [filesOpen]);
+  }, [filesOpen, gitOpen]);
   const containerRef = React.useRef<HTMLDivElement | null>(null);
 
   const { hasSelection, selectionAnchor, handleCopySelection } = state;
@@ -201,7 +207,7 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
               : state.connectionLabel}
           </span>
           {state.sessionInfo?.enhanced_enabled ? (
-            <span className="hidden rounded border border-brand/25 bg-brand/8 px-1.5 py-px text-[10px] font-medium text-brand sm:inline">
+            <span className="terminal-persistent-tag hidden rounded border border-brand/25 bg-brand/[0.08] px-1.5 py-px text-[10px] font-medium text-brand sm:inline">
               {state.t("持久", "Persistent")}
             </span>
           ) : null}
@@ -278,25 +284,39 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
             <TerminalLoading state={state} />
             <button
               type="button"
-              onClick={() => setFilesOpen((open) => !open)}
+              onClick={() => { setFilesOpen((open) => !open); setGitOpen(false); }}
               aria-expanded={filesOpen}
               aria-label={state.t("文件", "Files")}
               title={state.t("文件", "Files")}
               className={cx(
                 "absolute right-6 top-6 z-20 grid h-8 w-8 place-items-center rounded-md border text-ink-soft shadow-sm backdrop-blur transition",
                 filesOpen
-                  ? "border-brand/40 bg-brand/12 text-brand"
+                  ? "border-brand/40 bg-brand/[0.12] text-brand"
                   : "border-line bg-surface/90 hover:border-line-strong hover:text-ink"
               )}
             >
               <Folder className="h-4 w-4" />
             </button>
 
+            <button type="button" onClick={() => { setGitOpen(value => !value); setFilesOpen(false); }}
+              aria-label={state.t("Git 管理", "Git")} aria-expanded={gitOpen}
+              className={cx("absolute right-6 top-16 z-20 grid h-8 w-8 place-items-center rounded-md border shadow-sm transition", gitOpen ? "border-brand/60 bg-brand/[0.15] text-brand" : "border-line bg-surface/90 text-ink-soft hover:border-brand/50 hover:text-brand")}>
+              <GitBranch size={16} />
+            </button>
+            {gitOpen && <>
+              <div className="fixed inset-0 z-10" onClick={() => setGitOpen(false)} />
+              <div className="terminal-project-popover animate-pop-in absolute right-16 top-6 z-20 flex h-[min(560px,calc(100%-3rem))] w-[min(430px,calc(100%-6rem))] flex-col overflow-hidden rounded-xl border border-line bg-surface p-3 shadow-panel" role="dialog" aria-label={state.t("Git 管理", "Git")}>
+                <button type="button" onClick={() => setGitOpen(false)} aria-label={state.t("关闭 Git 面板", "Close Git")}
+                  className="absolute right-2 top-3 z-10 rounded p-1 text-muted hover:bg-elevated hover:text-ink"><X size={14} /></button>
+                <TerminalGitPanel project={project} t={state.t} />
+              </div>
+            </>}
+
             {filesOpen ? (
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setFilesOpen(false)} />
                 <div
-                  className="animate-pop-in absolute right-6 top-16 z-20 flex h-[min(560px,calc(100%-5rem))] w-[min(430px,calc(100%-3rem))] origin-top-right flex-col overflow-hidden rounded-lg border border-line bg-surface p-3 shadow-panel"
+                  className="terminal-project-popover animate-pop-in absolute right-16 top-6 z-20 flex h-[min(560px,calc(100%-3rem))] w-[min(430px,calc(100%-6rem))] origin-top-right flex-col overflow-hidden rounded-lg border border-line bg-surface p-3 shadow-panel"
                   role="dialog"
                   aria-label={state.t("文件", "Files")}
                 >
@@ -308,13 +328,15 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
                   >
                     <X className="h-3.5 w-3.5" />
                   </button>
+                  {(project.error || project.data?.state === "unavailable") && <p className="mb-2 pr-5 text-xs text-muted">{state.t("暂时无法同步终端目录，可手动浏览。", "Directory sync unavailable. You can browse manually.")}</p>}
                   <div className="min-h-0 flex-1 overflow-hidden pt-1">
                     {state.sessionId ? (
                       <React.Suspense fallback={<TerminalPanelFallback isDark={state.isDark} />}>
                         <FileBrowser
+                          key={state.sessionId}
                           sessionId={state.sessionId}
                           isDark={state.isDark}
-                          currentDir={state.currentDir}
+                          currentDir={project.data?.cwd ?? undefined}
                           onOpenFile={(file) => {
                             setFilesOpen(false);
                             setOpenedFile(file);

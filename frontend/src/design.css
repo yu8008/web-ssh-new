@@ -129,7 +129,8 @@ select:focus-visible, textarea:focus-visible { outline: 2px solid rgb(var(--bran
 .workspace-intro { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 138px; align-items: center; gap: 40px; min-height: 328px; padding: 35px 42px; border-bottom: 1px solid rgb(var(--line)); overflow: hidden; isolation: isolate; }
 .workspace-intro-copy { position: relative; z-index: 2; pointer-events: none; }
 .workspace-intro-copy h1 { pointer-events: auto; }
-.workspace-intro h1 { font: 500 clamp(42px, 4.2vw, 66px)/1.12 var(--font-display); letter-spacing: -.075em; margin: 23px 0 15px; }
+.workspace-intro h1 { font: 500 clamp(42px, 4.2vw, 66px)/1.12 var(--font-display); letter-spacing: -.035em; margin: 23px 0 15px; }
+:lang(zh-CN) .workspace-intro h1 { letter-spacing: .015em; line-height: 1.18; }
 .workspace-intro h1 span { color: rgb(var(--ink-soft)); }
 .workspace-intro-copy > p:last-of-type { font-size: 11px; color: rgb(var(--muted)); }
 .workspace-resume { display: inline-flex; align-items: center; gap: 9px; margin-top: 23px; padding: 9px 13px; max-width: 100%; border: 1px solid rgb(var(--line-strong)); border-radius: 999px; background: rgb(var(--surface) / .9); font-size: 10px; transition: border-color .2s, background .2s, transform .25s var(--ease-out); pointer-events: auto; }
@@ -335,4 +336,14 @@ select:focus-visible, textarea:focus-visible { outline: 2px solid rgb(var(--bran
 @media (prefers-reduced-motion: reduce) {
   .signal-art-object, .ui-button, .workspace-resume { transform: none !important; transition: none; }
   .auth-form { animation: none; }
+}
+
+/* Project tools share the terminal chrome; only the accent gains saturation. */
+[data-theme="dark"] .terminal-persistent-tag,
+[data-theme="dark"] .notification-status { border-color: rgb(var(--brand) / .5); background: rgb(var(--brand) / .14); }
+.git-branches summary::-webkit-details-marker { display: none; }
+.git-branches[open] summary > svg:last-child { transform: rotate(180deg); }
+.git-change-summary { font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) {
+  .terminal-project-popover { animation: none; }
 }

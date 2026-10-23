@@ -30,7 +30,6 @@ type TerminalSocketOptions = {
   reportNetworkHint: (profile: "degraded" | "poor", durationMs: number) => void;
   clearNetworkHint: () => void;
   enhancedSessionRef: React.MutableRefObject<boolean>;
-  setCurrentDir: (dir: string) => void;
   /** 用户在终端里触发了复制快捷键时的回调（Ctrl/Cmd+Shift+C 等）。 */
   onCopyRequest?: (text: string) => void;
 };
@@ -44,7 +43,6 @@ export function useTerminalSocket({
   reportNetworkHint,
   clearNetworkHint,
   enhancedSessionRef,
-  setCurrentDir,
   onCopyRequest,
 }: TerminalSocketOptions) {
   const terminalRef = React.useRef<HTMLDivElement | null>(null);
@@ -283,13 +281,6 @@ export function useTerminalSocket({
         const output = sanitized.output;
 
         outputWriter.enqueue(output, () => { remotePaintRef.current = true; parsedAck?.(); });
-
-        // 检测目录变化：解析提示符中的路径
-        const text = output.replace(/\x1b\[[0-9;]*m/g, "");
-        const promptMatch = text.match(/:([/][^\s$#]+)[\s$#]/);
-        if (promptMatch && promptMatch[1] && !promptMatch[1].startsWith("//")) {
-          setCurrentDir(promptMatch[1]);
-        }
       };
 
       socket.onopen = () => {
@@ -411,7 +402,6 @@ export function useTerminalSocket({
       clearNetworkHint,
       autoReconnect,
       enhancedSessionRef,
-      setCurrentDir,
     ]
   );
 

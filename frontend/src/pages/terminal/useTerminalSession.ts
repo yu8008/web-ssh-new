@@ -39,7 +39,6 @@ export function useTerminalSession(sessionId?: string) {
     clearNetworkHint,
   } = useApp();
   const t = React.useCallback((zh: string, en: string) => localizeText(language, zh, en), [language]);
-  const [currentDir, setCurrentDir] = React.useState<string>("/");
   const enhancedSessionRef = React.useRef(false);
   const copyTextRef = React.useRef<(text: string) => Promise<boolean>>(async () => false);
 
@@ -50,7 +49,6 @@ export function useTerminalSession(sessionId?: string) {
     reportNetworkHint,
     clearNetworkHint,
     enhancedSessionRef,
-    setCurrentDir,
     onCopyRequest: (text) => {
       void copyTextRef.current(text);
     },
@@ -63,10 +61,6 @@ export function useTerminalSession(sessionId?: string) {
     reconnectCountdown: socketState.reconnectCountdown,
     enhancedSessionRef,
   });
-
-  React.useEffect(() => {
-    setCurrentDir("/");
-  }, [sessionId]);
 
   const { setTerminalTheme } = socketState;
   const announcedThemeRef = React.useRef(isDark);
@@ -165,7 +159,6 @@ export function useTerminalSession(sessionId?: string) {
     toggleLanguage,
     language,
     sessionId,
-    currentDir,
     terminalRef: socketState.terminalRef,
     terminalInstance: socketState.terminalInstance,
     hasRenderedOutput: socketState.hasRenderedOutput,

@@ -1,4 +1,5 @@
 import React from "react";
+import { LocateFixed } from "lucide-react";
 import {
   listDirectory,
   FileInfo,
@@ -121,6 +122,8 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
     effectiveNetworkProfile === "poor" ? 800 : effectiveNetworkProfile === "degraded" ? 350 : 120;
   const uploadBatchConcurrent =
     effectiveNetworkProfile === "poor" ? 1 : effectiveNetworkProfile === "degraded" ? 2 : 4;
+  const [followTerminal, setFollowTerminal] = React.useState(true);
+  const directoryRequestRef = React.useRef(0);
   const [tree, setTree] = React.useState<TreeNode[]>(() => createRootTree());
   const [selectedPath, setSelectedPath] = React.useState<string>("/");
   const [pathInput, setPathInput] = React.useState<string>("/");
@@ -203,22 +206,25 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
       updateInput: boolean = true,
       options?: { preferCache?: boolean; forceRefresh?: boolean }
     ) => {
+      const requestId = ++directoryRequestRef.current;
       setFilesLoading(true);
       setError(null);
       try {
         const normalizedPath = normalizePath(path);
         const result = await getDirectoryListing(normalizedPath, options);
+        if (requestId !== directoryRequestRef.current) return;
         setFiles(result.files);
         setSelectedPath(normalizedPath);
         if (updateInput) {
           setPathInput(normalizedPath);
         }
       } catch (err) {
+        if (requestId !== directoryRequestRef.current) return;
         console.error("Failed to load directory:", path, err);
         setError(err instanceof Error ? err.message : t("加载失败", "Load failed"));
         setFiles([]);
       } finally {
-        setFilesLoading(false);
+        if (requestId === directoryRequestRef.current) setFilesLoading(false);
       }
     },
     [normalizePath, getDirectoryListing, t]
@@ -359,7 +365,7 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
 
   // 监听终端目录变化：弱网下做防抖并优先走缓存
   React.useEffect(() => {
-    if (!currentDir) {
+    if (!currentDir || !followTerminal || dialog || uploading || downloading || chmodLoading) {
       return;
     }
     const normalizedCurrentDir = normalizePath(currentDir);
@@ -367,11 +373,12 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
       return;
     }
     const timer = window.setTimeout(() => {
+      setSelectedFiles(new Set());
       loadDirectory(normalizedCurrentDir, true, { preferCache: true });
       expandTreeToPath(normalizedCurrentDir, { preferCache: true });
     }, currentDirDebounceMs);
     return () => clearTimeout(timer);
-  }, [currentDir, loadDirectory, expandTreeToPath, currentDirDebounceMs, normalizePath]);
+  }, [currentDir, followTerminal, dialog, uploading, downloading, chmodLoading, loadDirectory, expandTreeToPath, currentDirDebounceMs, normalizePath]);
 
   // 鍒涘缓 tar.gz 鍘嬬缉鍖?
   const createTarGz = React.useCallback(
@@ -1093,7 +1100,7 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
           aria-label={t(`${node.name} 目录`, `${node.name} directory`)}
           className={`flex items-center gap-1 ${isCompact ? "py-1 text-sm" : "py-0.5 text-xs"} px-1 rounded cursor-pointer truncate focus:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
             isSelected
-              ? (isDark ? "bg-brand/50 text-ink" : "bg-brand/8 text-brand")
+              ? (isDark ? "bg-brand/50 text-ink" : "bg-brand/[0.08] text-brand")
               : (isDark ? "hover:bg-elevated text-ink-soft" : "hover:bg-elevated text-ink-soft")
           }`}
           style={{ paddingLeft: `${depth * 12 + 4}px` }}
@@ -1166,10 +1173,19 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
         </h3>
       </div>
 
+      <div className="flex shrink-0 items-center gap-2 text-2xs">
+        <button type="button" aria-pressed={followTerminal} onClick={() => setFollowTerminal(value => !value)}
+          className={`inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-1.5 ${followTerminal ? "border-brand/40 bg-brand/10 text-brand" : "border-line text-muted"}`}>
+          <LocateFixed size={13} />{t("跟随终端", "Follow terminal")}
+        </button>
+        <span className="min-w-0 truncate text-muted" title={currentDir}>{currentDir || t("等待项目目录", "Waiting for project directory")}</span>
+      </div>
+
       {/* 路径输入框 */}
       <div className={`flex ${isCompact ? "flex-col items-stretch gap-2" : "items-center gap-2"}`}>
         <input
           type="text"
+          aria-label={t("文件路径", "File path")}
           value={pathInput}
           onChange={(e) => setPathInput(e.target.value)}
           onKeyDown={handlePathSubmit}
@@ -1515,7 +1531,7 @@ export function FileBrowser({ sessionId, isDark, currentDir, onFileSelect, onOpe
                     aria-label={file.is_dir ? t(`${file.name} 目录`, `${file.name} directory`) : t(`${file.name} 文件`, `${file.name} file`)}
                     className={`cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand ${
                       selectedFiles.has(file.path)
-                        ? (isDark ? "bg-brand/30" : "bg-brand/8")
+                        ? (isDark ? "bg-brand/30" : "bg-brand/[0.08]")
                         : (isDark ? "hover:bg-elevated text-ink-soft" : "hover:bg-elevated text-ink-soft")
                     }`}
                     onClick={(e) => handleFileClick(file, e.ctrlKey || e.metaKey)}

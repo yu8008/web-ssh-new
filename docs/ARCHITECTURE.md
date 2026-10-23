@@ -51,6 +51,14 @@ flowchart LR
 
 终端默认深色底为 #212121，浅色底为 #ffffff，与页面内容底色一致；外框直接读取终端主题，避免边缘色差。TUI 面板 235/236 在深色下为 #2a2a2a/#303030，浅色下为 #f7f7f7/#ededed。ANSI 状态色保留语义，滚动、拖选、输出确认和同步逻辑保持原样。终端页面不挂载装饰图形。浏览器回归覆盖深浅色、手机与英文布局、表单、文件、提醒、卡片键盘交互、动效静止与图形回退。
 
+### 3.2 会话项目目录与 Git 状态
+
+`GET /system/project/{session_id}?include_git=true` 先校验会话所有权及在线状态，再读取项目元数据。`project_context.py` 对同一会话串行查询并缓存两秒；`project_runtime.py` 在 SSH 目标上使用 Python 标准库运行，无需落盘安装或修改 CLI 配置。增强会话用固定 tmux pane PID 定位；Linux 下仅检查当前账号的进程，按前台进程组选择交互式 CLI，工具子进程的临时目录不会覆盖项目目录。普通 SSH 通过原连接的 sshd 祖先识别唯一终端，有歧义时返回不可用。Git 查询使用独立 SSH 连接，避免影响终端数据流。tmux 目录信息可作为非 Linux 环境的回退。
+
+Git 读取 `status --porcelain=v2 -z`、`diff --numstat -z` 与本地引用；配置禁用可选索引锁和 fsmonitor，diff 禁用外部 diff/textconv。不发送网络 Git 命令，不暴露远端 URL 中的凭据。增删行数是相对 HEAD 的已跟踪净变化，首次提交前相对空树计算；未跟踪、二进制、冲突、分离 HEAD 和未配置远端均单独展示。详情最多展示 100 个文件和 100 个分支；命令总预算六秒、单条输出上限 512 KiB，超限显示不可用而不是错误的零变更。格式与统计语义参照 [Git diff](https://git-scm.com/docs/git-diff) 和 [Git status](https://git-scm.com/docs/git-status) 官方文档。
+
+`useSessionProject` 只在文件或 Git 面板打开且页面可见时查询，请求完成后间隔 2.5／4 秒刷新；关闭、隐藏、断开或切换会话会取消请求，旧结果不能覆盖新会话。文件列表不再解析提示符猜路径，按当前项目目录跟随，可暂停跟随；文件操作期间不自动换目录，异步目录列表只接受最后一次请求的结果。远端 Python/Git 不可用或进程识别失败时，文件手动导航继续可用。所有展示均为只读 Git 状态，分支列表不触发 checkout。
+
 ## 4. 核心数据流
 
 ### 4.1 登录与鉴权

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import shlex
@@ -46,6 +47,8 @@ class ManagedSession:
     target_measured_at: datetime | None = None
     target_rtt_samples: list[int] = field(default_factory=list)
     notification_monitor: NotificationMonitor | None = None
+    project_lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
+    project_cache: dict = field(default_factory=dict, repr=False)
 
     def __post_init__(self) -> None:
         self.output = TerminalOutput(self.buffer, self.websockets)

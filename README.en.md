@@ -50,9 +50,12 @@ A dedicated mobile layout provides touch-friendly interactions for terminal work
 - Mobile terminal selection copy: select and copy partial output using native touch selection, with the copy view opening near the current terminal viewport
 - System monitoring for CPU, memory, network, process, and disk
 - System log viewer from the session management page, showing recent backend process logs for troubleshooting login, session, and system API issues
-- File management: browse, upload/download, rename, delete, chmod, batch upload
+- File management: browse, upload/download, rename, delete, chmod, and batch upload. The browser follows the current SSH session / foreground CLI directory, with a pause toggle. Directory following pauses during file dialogs, uploads, and downloads.
+- Git project status: a desktop Git button below Files and a mobile Git tab show the current branch, configured remotes, changed files, line additions/deletions, untracked files, and conflicts. Missing remotes are shown explicitly. Queries run only while a project panel and the page are visible; they never type into the terminal or automatically commit, switch branches, or fetch/pull/push.
 - Pasted image cache: Settings provides per-connection image lists, disk usage, expiration times, previews, downloads, deletion, and manual expiry cleanup. Retention defaults to 3 days with a 7-day option. A background worker cleans expired images at startup and hourly, even with no open terminal, and retries offline targets on subsequent checks. Older `/tmp/webssh-clipboard.*` images are supported; only cache images owned by the remote account are removed. Connections sharing an SSH account share its cache. Download images you want to keep; removing a saved connection prevents further Gateway cleanup through that connection.
 - Security baseline: JWT auth, password policy, lockout policy, request-id logging
+
+Directory and Git synchronization require Python 3.8+ on the SSH target; Git status also requires Git. Linux foreground-process metadata identifies the session directory, with tmux directory information available for enhanced sessions. Unresolved directories are reported as unavailable; manual file browsing remains available. Line totals are tracked working-tree changes against HEAD, with untracked and binary files labeled separately. Ahead/behind uses locally stored remote refs, without contacting the remote.
 
 ## Tech Stack
 

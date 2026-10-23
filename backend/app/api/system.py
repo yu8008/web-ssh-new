@@ -22,6 +22,7 @@ from app.core.logging import get_logger, get_recent_logs
 from app.models.connection import Connection
 from app.models.session import SessionRecord
 from app.services.crypto import CryptoService, EncryptedPayload
+from app.services.project_context import read_project
 from app.services.clipboard_image import MAX_CLIPBOARD_IMAGE_BYTES, image_extension, store_clipboard_image
 from app.schemas.system_metrics import (
     DiskList, NetworkInfo, ProcessList, SystemOverview, SystemStats,
@@ -293,6 +294,23 @@ def parse_ls_output(ls_output: str, base_path: str) -> List[FileInfo]:
     dirs = sorted([f for f in files if f.is_dir], key=lambda x: x.name.lower())
     regular_files = sorted([f for f in files if not f.is_dir], key=lambda x: x.name.lower())
     return dirs + regular_files
+
+
+@router.get("/project/{session_id}")
+async def get_project_context(
+    session_id: str,
+    include_git: bool = False,
+    state: AppState = Depends(get_state),
+    user=Depends(get_current_user),
+    db=Depends(get_db),
+) -> dict:
+    record = db.execute(
+        select(SessionRecord).where(SessionRecord.id == session_id, SessionRecord.user_id == user.id)
+    ).scalar_one_or_none()
+    session = state.session_manager.get_session(session_id)
+    if not record or record.status != "active" or not session or session.user_id != user.id or session.status != "active":
+        raise HTTPException(status_code=404, detail="会话不存在")
+    return await read_project(session, lambda: resolve_ssh_client(session_id, state, user, db), include_git)
 
 
 @router.get("/clock/{session_id}")

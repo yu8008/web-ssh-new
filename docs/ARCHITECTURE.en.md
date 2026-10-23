@@ -45,6 +45,14 @@ flowchart LR
 
 The terminal uses #212121 in dark mode and #ffffff in light mode, matching page content. Its frame reads the terminal palette directly to prevent edge seams. TUI panel slots 235/236 use #2a2a2a/#303030 in dark mode and #f7f7f7/#ededed in light mode. ANSI status colors retain their meaning; scrolling, selection, output acknowledgements, and synchronization logic are preserved. Terminal pages do not mount the decorative scene. Browser regressions cover both themes, mobile and English layouts, forms, files, notifications, card keyboard actions, motion settling, and graphics fallback.
 
+### 3.2 Session Project Directory and Git Status
+
+`GET /system/project/{session_id}?include_git=true` checks session ownership and liveness before reading metadata. `project_context.py` serializes requests per session and caches results for two seconds. `project_runtime.py` runs with Python's standard library on the SSH target, without installation or CLI configuration changes. Enhanced sessions use their exact tmux pane PID. On Linux, only the current account's processes are inspected; foreground interactive CLIs take precedence over temporary tool subprocess directories. Regular SSH uses its transport's sshd ancestry to identify a unique terminal, returning unavailable when ambiguous. Git queries use a separate SSH connection. tmux directory metadata provides a fallback outside Linux.
+
+Git reads `status --porcelain=v2 -z`, `diff --numstat -z`, and local refs, with optional index locks and fsmonitor disabled and external diff/textconv disabled. No network Git commands run and remote URL credentials are never returned. Tracked line totals compare the working tree against HEAD, or the empty tree before the initial commit. Untracked files, binary files, conflicts, detached HEAD, and missing remotes are separate states. Lists display at most 100 files and 100 branches. Commands share a six-second budget and each output is limited to 512 KiB; exceeding a limit reports unavailable instead of zero changes. Parsing and counts follow the official [Git diff](https://git-scm.com/docs/git-diff) and [Git status](https://git-scm.com/docs/git-status) formats.
+
+`useSessionProject` queries only while Files or Git is open and the page is visible, waiting 2.5/4 seconds after each response. Closing, hiding, disconnecting, or changing sessions cancels requests; old responses cannot replace a new session. The file browser no longer guesses directories from prompt text. Following can be paused, is suspended during file operations, and ignores obsolete directory-list responses. Manual browsing remains available without remote Python/Git or reliable process detection. Git presentation is read-only; expanding the branch list does not check out a branch.
+
 ## 4. Critical Flows
 
 - Auth flow: `/auth/login` -> JWT -> protected APIs

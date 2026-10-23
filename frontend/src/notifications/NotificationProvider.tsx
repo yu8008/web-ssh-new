@@ -246,7 +246,7 @@ export function NotificationSessionBadge({ sessionId }: { sessionId: string }) {
   const latest = context?.events.find(event => event.session_id === sessionId && !event.read_at);
   if (!latest || !context) return null;
   const attention = soundPriority(latest.kind) === 2;
-  return <button type="button" onClick={context.open} className="rounded border border-brand/30 bg-brand/10 px-2 py-0.5 text-xs text-brand" title={new Date(latest.created_at).toLocaleString()}>
+  return <button type="button" onClick={context.open} className="notification-status rounded border border-brand/30 bg-brand/10 px-2 py-0.5 text-xs text-brand" title={new Date(latest.created_at).toLocaleString()}>
     {language === "en-US" ? attention ? "Unread: needs attention" : "Unread notification" : attention ? "未读：需要处理" : "有未读提醒"}
   </button>;
 }
