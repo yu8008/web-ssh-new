@@ -72,7 +72,7 @@ test("loading waits for visible output; replay replies are suppressed but keys w
   await open(page);
   await page.evaluate(() => {
     window.pipeline.frame({ type: "replay_start" });
-    window.pipeline.frame({ type: "output", seq: 1, data: "\x1b[2J\x1b[H\x1b[c" });
+    window.pipeline.frame({ type: "output", seq: 1, data: "\x1b[2J\x1b[H\x1b[c\x1b[?2026$p" });
   });
   await expect(page.getByRole("status")).toHaveText("等待终端输出…");
   await expect(page.locator("#painted")).toHaveText("false");
@@ -86,6 +86,70 @@ test("loading waits for visible output; replay replies are suppressed but keys w
   await expect(page.getByRole("status")).toHaveCount(0);
   const inputs = await page.evaluate(() => window.pipeline.inputs().filter((input) => input.type === "input"));
   expect(inputs).toEqual([{ type: "input", data: "x" }]);
+});
+
+test("a synchronized frame larger than the flow window is acknowledged before its end marker", async ({ page }) => {
+  await open(page);
+  await page.evaluate(() => {
+    const body = Array.from({ length: 800 }, (_, i) => `synchronized line ${i}: ${"x".repeat(80)}\r\n`).join("");
+    window.pipeline.frame({ type: "replay_start" });
+    window.pipeline.frame({ type: "output", seq: 1, epoch: "synchronized", data: "\x1b[?2026h" + body });
+  });
+  // Rendering waits, but parsing/ACKs must continue so the server can send the
+  // rest of a frame exceeding its 64 Ki-character flow-control window.
+  await expect.poll(() => page.evaluate(() => window.pipeline.inputs().filter(frame => frame.type === "ack").at(-1)?.ack_seq)).toBe(1);
+  await expect(page.locator("#painted")).toHaveText("false");
+  await page.evaluate(() => {
+    window.pipeline.frame({ type: "output", seq: 2, epoch: "synchronized", data: "COMPLETE\x1b[?2026l" });
+    window.pipeline.frame({ type: "replay_end", seq: 2 });
+  });
+  await expect(page.locator("#painted")).toHaveText("true");
+  await expect.poll(() => page.evaluate(() => window.pipeline.screen())).toContain("COMPLETE");
+});
+
+test("two viewers receive the same ordered output while one reads and selects history", async ({ page, context }) => {
+  const other = await context.newPage();
+  try {
+    await Promise.all([open(page), open(other)]);
+    const history = Array.from({ length: 500 }, (_, i) => `shared row ${i}`).join("\r\n");
+    for (const viewer of [page, other]) {
+      await viewer.evaluate(history => {
+        window.pipeline.frame({ type: "replay_start" });
+        window.pipeline.frame({ type: "output", seq: 1, epoch: "shared", data: history });
+        window.pipeline.frame({ type: "replay_end", seq: 1 });
+      }, history);
+      await expect.poll(() => viewer.evaluate(() => window.pipeline.screen())).toContain("shared row 499");
+    }
+    await page.evaluate(() => window.pipeline.scroll(100));
+    const box = (await page.locator(".xterm-screen").boundingBox())!;
+    const dimensions = await page.evaluate(() => window.pipeline.dimensions());
+    const line = box.height / dimensions.rows;
+    await page.mouse.move(box.x + 1, box.y + line * 2.5);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 140, box.y + line * 5.5, { steps: 4 });
+    const top = await page.evaluate(() => window.pipeline.top());
+    const update = Array.from({ length: 200 }, (_, i) => `\r\nshared new row ${i}`).join("");
+    await Promise.all([page, other].map(viewer => viewer.evaluate(data => {
+      const frame = { type: "output", seq: 2, epoch: "shared", data };
+      window.pipeline.frame(frame);
+      window.pipeline.frame(frame); // A duplicate must not append twice.
+    }, update)));
+    for (const viewer of [page, other]) {
+      await expect.poll(() => viewer.evaluate(() => window.pipeline.screen())).toContain("shared new row 199");
+      expect(await viewer.evaluate(() => window.pipeline.screen().match(/shared new row 199/g)?.length)).toBe(1);
+      await expect.poll(() => viewer.evaluate(() => window.pipeline.inputs().filter(frame => frame.type === "ack").at(-1)?.ack_seq)).toBe(2);
+    }
+    expect(await page.evaluate(() => window.pipeline.top())).toBe(top);
+    expect(await other.evaluate(() => window.pipeline.top())).toContain("shared new row");
+    await page.mouse.up();
+    expect(await page.evaluate(() => window.pipeline.selected())).toContain("shared row 102");
+    await other.evaluate(() => window.pipeline.disconnect());
+    expect(await page.locator("#connection").textContent()).toBe("open");
+    expect(await page.evaluate(() => window.pipeline.top())).toBe(top);
+  } finally {
+    await page.mouse.up();
+    await other.close();
+  }
 });
 
 test("ordered replay deduplicates packets and reconnect does not append history twice", async ({ page }) => {

@@ -1,4 +1,4 @@
-import type { IMarker, Terminal } from "xterm";
+import type { IMarker, Terminal } from "@xterm/xterm";
 
 type ViewportSnapshot = { revision: number; follow: boolean; marker?: IMarker };
 

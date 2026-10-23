@@ -1,6 +1,5 @@
-import type { IDisposable, Terminal } from "xterm";
-import { CanvasAddon } from "xterm-addon-canvas";
-import { WebglAddon } from "xterm-addon-webgl";
+import type { IDisposable, Terminal } from "@xterm/xterm";
+import { WebglAddon } from "@xterm/addon-webgl";
 
 function hardwareWebglAvailable(doc: Document): boolean {
   const probe = doc.createElement("canvas");
@@ -10,7 +9,7 @@ function hardwareWebglAvailable(doc: Document): boolean {
     if (!gl) return false;
     const debug = gl.getExtension("WEBGL_debug_renderer_info");
     const renderer = debug ? String(gl.getParameter(debug.UNMASKED_RENDERER_WEBGL)) : "";
-    // Software WebGL adds GPU emulation overhead and can be slower than Canvas.
+    // Software WebGL adds GPU emulation overhead; use the DOM renderer there.
     return !/swiftshader|llvmpipe|softpipe|software|basic render/i.test(renderer);
   } catch {
     return false;
@@ -19,13 +18,15 @@ function hardwareWebglAvailable(doc: Document): boolean {
   }
 }
 
-/** Batch colored glyphs on the GPU; keep Canvas/DOM available when WebGL is
+/** Batch colored glyphs on the GPU; keep DOM available when WebGL is
  * restricted or its context is lost while a terminal is open.
  * Dispose this controller before the terminal: renderer addons restore the DOM
  * renderer on disposal and need xterm's render service to still be alive. */
 export function configureTerminalRendering(term: Terminal, { preferWebgl }: { preferWebgl?: boolean } = {}): IDisposable {
-  term.options.smoothScrollDuration = 100;
-  let renderer: CanvasAddon | WebglAddon | undefined;
+  // Render actual scroll positions once per frame without adding inertia to
+  // gestures that the OS/trackpad has already accelerated or smoothed.
+  term.options.smoothScrollDuration = 0;
+  let renderer: WebglAddon | undefined;
   let lossListener: IDisposable | undefined;
   let disposed = false;
   const rendering: IDisposable = {
@@ -41,17 +42,7 @@ export function configureTerminalRendering(term: Terminal, { preferWebgl }: { pr
   const mark = (renderer: string) => {
     if (term.element) term.element.dataset.terminalRenderer = renderer;
   };
-  const fallback = () => {
-    const canvas = new CanvasAddon();
-    try {
-      term.loadAddon(canvas);
-      renderer = canvas;
-      mark("canvas");
-    } catch {
-      canvas.dispose();
-      mark("dom");
-    }
-  };
+  const fallback = () => { mark("dom"); };
   if (preferWebgl ?? hardwareWebglAvailable(term.element!.ownerDocument)) {
     let webgl: WebglAddon | undefined;
     const recover = () => {

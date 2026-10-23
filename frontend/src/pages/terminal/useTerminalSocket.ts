@@ -1,6 +1,6 @@
 import React from "react";
-import { Terminal } from "xterm";
-import { FitAddon } from "xterm-addon-fit";
+import { Terminal } from "@xterm/xterm";
+import { FitAddon } from "@xterm/addon-fit";
 import { clearAuthStorage, getSession, getStoredToken, openTerminalSocket, uploadClipboardImage } from "../../lib/api";
 import { attachTerminalSelection } from "./terminalSelection";
 import { createTerminalInputWriter } from "./terminalInput";
@@ -475,20 +475,16 @@ export function useTerminalSocket({
       sendTmuxWheelPage(lineDelta);
       return;
     }
-    const viewport = container.querySelector<HTMLElement>(".xterm-viewport");
-    if (viewport) {
-      const maxScrollTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
-      const isAtTop = viewport.scrollTop <= 0;
-      const isAtBottom = viewport.scrollTop >= maxScrollTop;
-      const isEnhancedSession = enhancedSessionRef.current;
-      if (isEnhancedSession && lineDelta < 0 && isAtTop) {
-        sendTmuxWheelPage(lineDelta);
-        return;
-      }
-      if (isEnhancedSession && lineDelta > 0 && isAtBottom) {
-        sendTmuxWheelPage(lineDelta);
-        return;
-      }
+    const isAtTop = activeBuffer.viewportY <= 0;
+    const isAtBottom = activeBuffer.viewportY >= activeBuffer.baseY;
+    const isEnhancedSession = enhancedSessionRef.current;
+    if (isEnhancedSession && lineDelta < 0 && isAtTop) {
+      sendTmuxWheelPage(lineDelta);
+      return;
+    }
+    if (isEnhancedSession && lineDelta > 0 && isAtBottom) {
+      sendTmuxWheelPage(lineDelta);
+      return;
     }
     term.scrollLines(lineDelta);
   }, [sendInput, enhancedSessionRef]);
@@ -588,7 +584,7 @@ export function useTerminalSocket({
       term.onData((data) => {
         // Replayed device/color/cursor queries must not inject replies into the
         // remote prompt. Real keystrokes remain usable while history loads.
-        if (replayingRef.current && /^\x1b(?:\[[?=>\d;]*[cnR]|\]\d+;[^]*?(?:\x07|\x1b\\))$/.test(data)) return;
+        if (replayingRef.current && /^\x1b(?:\[[?=>\d;]*(?:[cnR]|\$y)|\]\d+;[^]*?(?:\x07|\x1b\\))$/.test(data)) return;
         inputWriter!.write(data);
       });
 
@@ -637,7 +633,7 @@ export function useTerminalSocket({
 
       shortcuts = attachTerminalShortcuts(term, getSelectionText, (text) => copyRequestRef.current?.(text));
 
-      wheelController = attachTerminalWheel(term, terminalContainer, () => enhancedSessionRef.current, inputWriter.write);
+      wheelController = attachTerminalWheel(term, terminalContainer, () => enhancedSessionRef.current, inputWriter.write, inputWriter.flush);
       handleResize = () => {
         if (!term) {
           return;

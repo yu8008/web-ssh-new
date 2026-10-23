@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Terminal } from "xterm";
+import type { Terminal } from "@xterm/xterm";
 import { captureSelectionRows, SelectionTranscript, type SelectionRow } from "./selectionTranscript";
 
 const row = (text: string, wrapped = false): SelectionRow => ({
@@ -39,6 +39,19 @@ it("reuses column offsets across moved rows without sharing duplicate row identi
 });
 
 describe("TUI selection transcript", () => {
+  it("keeps selection coordinates on the displayed frame while parsing advances", () => {
+    const selection = new SelectionTranscript(frame("H", "A", "B", "C", "D", "F"), { row: 1, col: 0 });
+    selection.move({ row: 3, col: 1 });
+    const displayed = selection.frameRows;
+    expect(selection.scroll(frame("H", "B", "C", "D", "E", "F"), 1)).toBe("moved");
+    expect(selection.getVisibleRange(displayed)).toEqual({ start: { row: 1, col: 0 }, end: { row: 3, col: 1 } });
+    expect(selection.getVisibleRange()).toEqual({ start: { row: 1, col: 0 }, end: { row: 2, col: 1 } });
+    expect(selection.move({ row: 3, col: 1 }, displayed)).toBe(false);
+    expect(selection.getText()).toBe("A\nB\nC");
+    selection.move({ row: 3, col: 1 });
+    expect(selection.getText()).toBe("A\nB\nC\nD");
+  });
+
   it("keeps an offscreen anchor in the full animation range while clipping native selection", () => {
     const selection = new SelectionTranscript(frame("H", "A", "B", "C", "F"), { row: 1, col: 2 });
     selection.scroll(frame("H", "B", "C", "D", "F"), 1);

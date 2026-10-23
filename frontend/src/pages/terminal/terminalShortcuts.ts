@@ -1,4 +1,4 @@
-import type { Terminal } from "xterm";
+import type { Terminal } from "@xterm/xterm";
 
 export function attachTerminalShortcuts(term: Terminal, getSelection: () => string, copy: (text: string) => void) {
   const doc = term.element!.ownerDocument;

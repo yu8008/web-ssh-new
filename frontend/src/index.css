@@ -133,6 +133,6 @@ body {
   }
 }
 
-.xterm .xterm-viewport {
+.xterm .xterm-scrollable-element {
   scrollbar-width: thin;
 }

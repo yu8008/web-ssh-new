@@ -5,7 +5,7 @@ import { expect, test } from "@playwright/test";
 // text and pinned footer; DOM styles alone cannot detect their seam.
 const { PNG } = createRequire(import.meta.url)("playwright-core/lib/utilsBundle");
 
-for (const renderer of ["canvas", "webgl"]) {
+for (const renderer of ["dom", "webgl"]) {
   for (const direction of ["up", "down"]) {
     test(`${renderer}: ${direction} drag keeps one selection appearance after the anchor leaves the screen`, async ({ page }, testInfo) => {
       await page.goto(`/tests/browser/terminal-selection.html?renderer=${renderer}&styled=1&dim=1&footerStyled=1&delay=240&chunkDelay=0&synchronized=1&offset=500&maxOffset=10000&holdAfter=10`);
@@ -17,30 +17,32 @@ for (const renderer of ["canvas", "webgl"]) {
       await page.mouse.down();
       await page.mouse.move(box.x + 40, direction === "up" ? box.y + 2 : box.y + box.height - 2, { steps: 4 });
       await expect.poll(async () => Math.abs(Number(await page.locator("#terminal").getAttribute("data-offset")) - 500)).toBeGreaterThanOrEqual(18);
-      // Hold further server replies and select the entire frame for comparison
-      // with the same text attributes in its pinned footer. Keep the real drag
-      // at the edge so its transcript still selects the whole moving body.
+      // Inspect the actual drag highlight after its anchor leaves the screen.
       await page.waitForTimeout(400);
-      await page.evaluate(() => window.selectTerminalForTest(0, 11));
-      const highlights = await page.locator(".wsg-selection-scroll").evaluate((layer) => {
-        const clip = layer.getBoundingClientRect();
-        return [...layer.querySelectorAll<HTMLElement>(".wsg-selection-row")].filter((row) => {
-          const rect = row.getBoundingClientRect();
-          return rect.top >= clip.top + 1 && rect.bottom <= clip.bottom - 1;
-        }).map((row) => (row.lastElementChild as HTMLElement).style.display);
-      });
-      expect(highlights.length).toBeGreaterThan(3);
-      expect(highlights.every((display) => display === "block")).toBe(true);
+      await expect(page.locator(".wsg-selection-highlight")).toBeVisible();
+      await expect(page.locator(".wsg-selection-frame")).toHaveCount(0);
       const png = PNG.sync.read(await screen.screenshot({ path: testInfo.outputPath("selection-seam.png") }));
       const pixel = (x: number, y: number): number[] => [...png.data.subarray((Math.floor(y) * png.width + Math.floor(x)) * 4, (Math.floor(y) * png.width + Math.floor(x)) * 4 + 3)];
       const body = pixel(box.width - 40, line * 5.5);
-      const footer = pixel(box.width - 40, line * 11.5);
+      // An upward drag does not select the footer below its anchor. Compare
+      // another selected row instead of overriding the user's real selection.
+      const referenceRow = direction === "up" ? 8 : 11;
+      const footer = pixel(box.width - 40, line * (referenceRow + 0.5));
       expect(body.every((channel, index) => Math.abs(channel - footer[index]) <= 1)).toBe(true);
-      // Selected dim text must retain the native renderer's brightness too.
-      const foreground = renderer === "webgl" ? [96, 165, 250] : [82, 135, 200];
+      // Moving text and pinned text must retain the same dim glyph appearance.
+      const footerColors = new Map<string, number>();
+      for (let y = Math.ceil(line * referenceRow); y < line * (referenceRow + 1); y++) for (let x = 0; x < 95; x++) {
+        const color = pixel(x, y);
+        if (color[2] > color[0] + 40 && color[2] > color[1] + 20 && color.some((c, i) => c !== footer[i])) {
+          const key = color.join(",");
+          footerColors.set(key, (footerColors.get(key) ?? 0) + 1);
+        }
+      }
+      const foreground = [...footerColors.entries()].sort((a, b) => b[1] - a[1])[0]?.[0].split(",").map(Number);
+      expect(foreground).toBeDefined();
       let matchingGlyphs = 0;
       for (let y = Math.ceil(line * 3); y < line * 9; y++) for (let x = 0; x < 95; x++) {
-        if (pixel(x, y).every((channel, index) => Math.abs(channel - foreground[index]) <= 1)) matchingGlyphs++;
+        if (pixel(x, y).every((channel, index) => Math.abs(channel - foreground![index]) <= 1)) matchingGlyphs++;
       }
       expect(matchingGlyphs).toBeGreaterThan(30);
       await page.mouse.up();
@@ -50,23 +52,23 @@ for (const renderer of ["canvas", "webgl"]) {
 }
 
 test("edge selection paces a bounded burst after learning the scroll distance", async ({ page }) => {
-  await page.goto("/tests/browser/terminal-selection.html?renderer=canvas&delay=500&chunkDelay=0&synchronized=1&maxOffset=10000&holdAfter=1");
+  await page.goto("/tests/browser/terminal-selection.html?renderer=dom&delay=500&chunkDelay=0&synchronized=1&maxOffset=10000&holdAfter=1");
   await expect(page.locator("#terminal")).toHaveAttribute("data-ready", "true");
   const box = (await page.locator(".xterm-screen").boundingBox())!;
   await page.mouse.move(box.x + 1, box.y + box.height / 12 * 2.5);
   await page.mouse.down();
   await page.mouse.move(box.x + 40, box.y + box.height - 2, { steps: 4 });
   await expect(page.locator("#wheels")).toHaveText("1");
-  await expect(page.locator("#wheels")).toHaveText("4");
+  await expect(page.locator("#wheels")).toHaveText("3");
   await page.waitForTimeout(180);
-  expect(await page.locator("#wheels").textContent()).toBe("4");
+  expect(await page.locator("#wheels").textContent()).toBe("3");
   await page.mouse.up();
   await page.evaluate(() => window.releaseTerminalRepliesForTest());
-  await expect(page.locator("#selection")).toContainText("Output 037");
+  await expect(page.locator("#selection")).toContainText("Output 035");
 });
 
 test("a burst waits for both separately rendered wheel replies and copies every line", async ({ page }) => {
-  await page.goto("/tests/browser/terminal-selection.html?renderer=canvas&delay=400&chunkDelay=0&synchronized=1&separateReports=1&reportGap=250&maxOffset=10000&holdAfter=2");
+  await page.goto("/tests/browser/terminal-selection.html?renderer=dom&delay=400&chunkDelay=0&synchronized=1&separateReports=1&reportGap=250&maxOffset=10000&holdAfter=2");
   await expect(page.locator("#terminal")).toHaveAttribute("data-ready", "true");
   const box = (await page.locator(".xterm-screen").boundingBox())!;
   await page.mouse.move(box.x + 1, box.y + box.height / 12 * 2.5);
@@ -74,33 +76,33 @@ test("a burst waits for both separately rendered wheel replies and copies every 
   await page.mouse.move(box.x + 40, box.y + box.height - 2, { steps: 4 });
   await expect(page.locator("#terminal")).toHaveAttribute("data-offset", "24");
   await page.waitForTimeout(80);
-  expect(await page.locator("#wheels").textContent()).toBe("4");
+  expect(await page.locator("#wheels").textContent()).toBe("3");
   await page.mouse.up();
   await page.evaluate(() => window.releaseTerminalRepliesForTest());
-  await expect(page.locator("#terminal")).toHaveAttribute("data-offset", "28");
-  await expect(page.locator("#selection")).toContainText("Output 037");
+  await expect(page.locator("#terminal")).toHaveAttribute("data-offset", "26");
+  await expect(page.locator("#selection")).toContainText("Output 035");
   const numbers = [...(await page.locator("#selection").textContent())!.matchAll(/Output (\d+)/g)].map((match) => Number(match[1]));
-  expect(numbers).toEqual(Array.from({ length: 17 }, (_, index) => index + 21));
+  expect(numbers).toEqual(Array.from({ length: 15 }, (_, index) => index + 21));
 });
 
-test("a tall viewport permits faster paced scrolling while preserving overlap", async ({ page }) => {
-  await page.goto("/tests/browser/terminal-selection.html?renderer=canvas&rows=30&delay=500&chunkDelay=0&synchronized=1&maxOffset=10000&holdAfter=1");
+test("a tall viewport keeps each paced burst small while preserving overlap", async ({ page }) => {
+  await page.goto("/tests/browser/terminal-selection.html?renderer=dom&rows=30&delay=500&chunkDelay=0&synchronized=1&maxOffset=10000&holdAfter=1");
   await expect(page.locator("#terminal")).toHaveAttribute("data-ready", "true");
   const box = (await page.locator(".xterm-screen").boundingBox())!;
   await page.locator("#terminal").evaluate((element, box) => { element.style.height = `${box.height}px`; }, box);
   await page.mouse.move(box.x + 1, box.y + box.height / 30 * 2.5);
   await page.mouse.down();
   await page.mouse.move(box.x + 40, box.y + box.height + 45, { steps: 4 });
-  await expect(page.locator("#wheels")).toHaveText("9");
+  await expect(page.locator("#wheels")).toHaveText("3");
   await page.waitForTimeout(100);
-  expect(await page.locator("#wheels").textContent()).toBe("9");
+  expect(await page.locator("#wheels").textContent()).toBe("3");
   await page.mouse.up();
   await page.evaluate(() => window.releaseTerminalRepliesForTest());
-  await expect(page.locator("#selection")).toContainText("Output 065");
+  await expect(page.locator("#selection")).toContainText("Output 053");
 });
 
 test("a large wheel step stays within the viewport's safe overlap", async ({ page }) => {
-  await page.goto("/tests/browser/terminal-selection.html?renderer=canvas&wheelStep=4&delay=500&chunkDelay=0&synchronized=1&maxOffset=10000&holdAfter=1");
+  await page.goto("/tests/browser/terminal-selection.html?renderer=dom&wheelStep=4&delay=500&chunkDelay=0&synchronized=1&maxOffset=10000&holdAfter=1");
   await expect(page.locator("#terminal")).toHaveAttribute("data-ready", "true");
   const box = (await page.locator(".xterm-screen").boundingBox())!;
   await page.mouse.move(box.x + 1, box.y + box.height / 12 * 2.5);

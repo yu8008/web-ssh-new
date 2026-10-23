@@ -35,7 +35,7 @@ A dedicated mobile layout provides touch-friendly interactions for terminal work
 - Browser terminal with real-time WebSocket streaming
 - AI CLI output handling: ordered transport and rendering batches, stable reading position during output, and reset followed by recent-history replay on reconnect
 - Terminal selection and copy: drag to an edge to extend selection; `Ctrl+C` copies selected text and sends an interrupt without a selection; `Ctrl+Shift+C` / `Cmd+C` also copy. Settings control this browser's scrollback limit, defaulting to 10,000 lines.
-- Long drag selections scroll through pixel positions using a temporary text layer that reuses rows near the viewport and preserves terminal colors and character cells. Copying still uses the original terminal text; temporary paint rows are released after the gesture or window blur.
+- The terminal uses xterm 6 synchronized rendering with hardware WebGL and a DOM fallback. Wheel distance is reduced to 0.85× while retaining fractional trackpad movement. Cross-screen selection keeps its highlight visible and advances in small steps, aligned with complete terminal frames. Reading existing history preserves the viewport while new output continues to reach other devices.
 - Connection asset management with encrypted credentials
 - Session lifecycle management with reconnect and notes
 - Grouped session view: sessions can be grouped by connection/machine, with list/grouped view switching, persisted display preference, and machine status preview in group headers

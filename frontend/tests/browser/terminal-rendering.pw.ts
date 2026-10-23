@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-for (const renderer of ["canvas", "webgl"]) {
+for (const renderer of ["dom", "webgl"]) {
   test(`${renderer} rendering can be disposed repeatedly without errors`, async ({ page }) => {
     const errors: string[] = [];
     page.on("pageerror", error => errors.push(error.stack ?? error.message));
@@ -19,7 +19,7 @@ for (const renderer of ["canvas", "webgl"]) {
   });
 }
 
-test("unavailable WebGL falls back to Canvas and keeps selection usable", async ({ page }) => {
+test("unavailable WebGL falls back to DOM and keeps selection usable", async ({ page }) => {
   await page.addInitScript(() => {
     const original = HTMLCanvasElement.prototype.getContext;
     HTMLCanvasElement.prototype.getContext = function (type: string, ...args: unknown[]) {
@@ -28,7 +28,7 @@ test("unavailable WebGL falls back to Canvas and keeps selection usable", async 
     } as typeof original;
   });
   await page.goto("/tests/browser/terminal-selection.html?renderer=webgl");
-  await expect(page.locator(".xterm")).toHaveAttribute("data-terminal-renderer", "canvas", { timeout: 1000 });
+  await expect(page.locator(".xterm")).toHaveAttribute("data-terminal-renderer", "dom", { timeout: 1000 });
   await expect(page.locator("#terminal")).toHaveAttribute("data-ready", "true");
   const screen = (await page.locator(".xterm-screen").boundingBox())!;
   await page.mouse.move(screen.x + 1, screen.y + screen.height / 12 * 2.5);
@@ -38,7 +38,7 @@ test("unavailable WebGL falls back to Canvas and keeps selection usable", async 
   await expect(page.locator("#selection")).toContainText("Output 021 中文 😀");
 });
 
-test("a lost GPU context immediately restores Canvas without replacing terminal text", async ({ page }) => {
+test("a lost GPU context immediately restores DOM without replacing terminal text", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", error => errors.push(error.message));
   await page.goto("/tests/browser/terminal-selection.html?renderer=webgl");
@@ -51,7 +51,7 @@ test("a lost GPU context immediately restores Canvas without replacing terminal 
     }
     throw new Error("No WebGL canvas");
   });
-  await expect(page.locator(".xterm")).toHaveAttribute("data-terminal-renderer", "canvas", { timeout: 1000 });
+  await expect(page.locator(".xterm")).toHaveAttribute("data-terminal-renderer", "dom", { timeout: 1000 });
   const screen = (await page.locator(".xterm-screen").boundingBox())!;
   await page.mouse.move(screen.x + 1, screen.y + screen.height / 12 * 2.5);
   await page.mouse.down();

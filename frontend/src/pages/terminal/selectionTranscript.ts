@@ -1,4 +1,4 @@
-import type { IBufferCell, IBufferLine, Terminal } from "xterm";
+import type { IBufferCell, IBufferLine, Terminal } from "@xterm/xterm";
 
 export type SelectionPoint = { row: number; col: number };
 export type SelectionRange = { start: SelectionPoint; end: SelectionPoint };
@@ -143,9 +143,15 @@ export class SelectionTranscript {
     this.capturedChars = this.rows.reduce((size, row) => size + row.text.length + 1, 0);
   }
 
-  move(point: SelectionPoint): boolean {
-    if (this.end.row === this.frame[point.row] && this.end.col === point.col) return false;
-    this.end = { row: this.frame[point.row], col: point.col };
+  get frameRows(): readonly SelectionRow[] { return this.frame; }
+
+  move(point: SelectionPoint, frame: readonly SelectionRow[] = this.frame): boolean {
+    // A resize can release the pointer after terminal dimensions have changed,
+    // while the displayed snapshot still has its previous number of rows.
+    const row = frame[Math.max(0, Math.min(frame.length - 1, point.row))];
+    const col = Math.max(0, Math.min(row.offsets.length - 1, point.col));
+    if (this.end.row === row && this.end.col === col) return false;
+    this.end = { row, col };
     this.cachedText = undefined;
     this.cachedHasSelection = undefined;
     return true;
@@ -254,8 +260,8 @@ export class SelectionTranscript {
     return this.cachedText;
   }
 
-  /** Full range relative to the moving viewport, including rows retained by
-   * the animation after the native selection anchor has left the screen. */
+  /** Full range relative to the moving viewport, including captured rows
+   * after the original selection anchor has left the screen. */
   getScrollRange(): SelectionRange {
     const reference = this.scrollRegion?.top ?? 0;
     const offset = this.positions.get(this.frame[reference])! - reference;
@@ -263,12 +269,13 @@ export class SelectionTranscript {
     return { start: { row: start.row - offset, col: start.col }, end: { row: end.row - offset, col: end.col } };
   }
 
-  /** Visible part of the frozen selection, using xterm's public select API. */
-  getVisibleRange(): { start: SelectionPoint; end: SelectionPoint } | null {
+  /** The parser can be ahead of the renderer. Use the displayed frame's rows
+   * to keep a pointer gesture aligned until a complete new frame is painted. */
+  getVisibleRange(frame: readonly SelectionRow[] = this.frame): { start: SelectionPoint; end: SelectionPoint } | null {
     const { start, end } = this.range();
     let first = -1;
     let last = -1;
-    this.frame.forEach((row, index) => {
+    frame.forEach((row, index) => {
       const position = this.positions.get(row)!;
       if (position >= start.row && position <= end.row) {
         if (first < 0) first = index;
@@ -282,8 +289,8 @@ export class SelectionTranscript {
         end: { row: last, col: Math.max(this.anchor.col, this.end.col) },
       };
     }
-    const startCol = this.positions.get(this.frame[first]) === start.row ? start.col : 0;
-    const endCol = this.positions.get(this.frame[last]) === end.row ? end.col : this.frame[last].offsets.length - 1;
+    const startCol = this.positions.get(frame[first]) === start.row ? start.col : 0;
+    const endCol = this.positions.get(frame[last]) === end.row ? end.col : frame[last].offsets.length - 1;
     return { start: { row: first, col: startCol }, end: { row: last, col: endCol } };
   }
 }

@@ -1,6 +1,6 @@
 import React from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import "xterm/css/xterm.css";
+import "@xterm/xterm/css/xterm.css";
 import { useIsMobile } from "../lib/hooks/useIsMobile";
 import { TerminalDesktop } from "./terminal/TerminalDesktop";
 import { TerminalMobile } from "./terminal/TerminalMobile";

@@ -6,5 +6,5 @@ export function terminalDragScroll(y: number, top: number, bottom: number, rows:
   const edge = Math.min((bottom - top) / 3, edgeLimit, Math.max(24, rowHeight * 2));
   const direction = y < top + edge ? -1 : y > bottom - edge ? 1 : 0;
   const depth = direction < 0 ? top + edge - y : direction > 0 ? y - bottom + edge : 0;
-  return { direction, speed: direction ? Math.min(480, 40 + depth / rowHeight * 90) : 0 };
+  return { direction, speed: direction ? Math.min(240, 32 + depth / rowHeight * 64) : 0 };
 }

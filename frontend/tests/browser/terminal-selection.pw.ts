@@ -191,19 +191,18 @@ test("window blur and disposal stop an active edge selection", async ({ page }) 
 
 test("ordinary shell selection retains native scrollback auto-scroll", async ({ page }) => {
   const box = await open(page, "?mode=shell");
-  const viewport = page.locator(".xterm-viewport");
-  const initialTop = await viewport.evaluate((element) => element.scrollTop);
+  const initialTop = await page.evaluate(() => window.terminalStateForTest().viewportY);
   await page.mouse.move(box.x + 1, box.y + box.line * 2.5);
   await page.mouse.down();
   await page.mouse.move(box.x + 60, box.y + box.height + 20, { steps: 10 });
-  await expect.poll(() => viewport.evaluate((element) => element.scrollTop)).toBeGreaterThan(initialTop);
+  await expect.poll(() => page.evaluate(() => window.terminalStateForTest().viewportY)).toBeGreaterThan(initialTop);
   await page.waitForTimeout(200);
   await page.mouse.up();
   await expect(page.locator("#selection")).toContainText("Shell row");
   expect(await page.locator("#wheels").textContent()).toBe("0");
 });
 
-test("TUI wheel bursts send immediately then batch without dropping or reordering reports", async ({ page }) => {
+test("TUI wheel bursts send immediately and discard only unsent old-direction intent", async ({ page }) => {
   await open(page, "?delay=10&chunkDelay=0");
   await page.locator(".xterm-screen").evaluate((screen) => {
     const box = screen.getBoundingClientRect();
@@ -214,10 +213,10 @@ test("TUI wheel bursts send immediately then batch without dropping or reorderin
       }));
     }
   });
-  await expect(page.locator("#wheels")).toHaveText("5");
+  await expect(page.locator("#wheels")).toHaveText("2");
   const packets: string[] = JSON.parse((await page.locator("#packets").textContent())!);
-  expect(packets).toHaveLength(2);
-  expect([...packets.join("").matchAll(/\x1b\[<(64|65);/g)].map((match) => match[1])).toEqual(["65", "65", "65", "64", "64"]);
+  expect(packets.length).toBeLessThanOrEqual(3);
+  expect([...packets.join("").matchAll(/\x1b\[<(64|65);/g)].map((match) => match[1])).toEqual(["65", "64"]);
 });
 
 test("fast remote repaints advance promptly without repeatedly reading the full selection", async ({ page }) => {
@@ -260,7 +259,11 @@ test("pointer movement inside the same selected cell does not redraw the selecti
   await page.mouse.down();
   await page.mouse.move(point.x, point.y, { steps: 4 });
   await expect(page.locator("#selection")).toHaveAttribute("data-selected", "true");
-  const draws = await page.locator("#selection").getAttribute("data-draws");
+  await page.locator(".wsg-selection-highlight").evaluate(layer => {
+    layer.setAttribute("data-mutations", "0");
+    let mutations = 0;
+    new MutationObserver(() => layer.setAttribute("data-mutations", String(++mutations))).observe(layer, { subtree: true, attributes: true, attributeFilter: ["style", "class"] });
+  });
   await page.evaluate(async (point) => {
     const screen = document.querySelector(".xterm-screen")!;
     for (let i = 0; i < 12; i++) {
@@ -268,46 +271,41 @@ test("pointer movement inside the same selected cell does not redraw the selecti
       await new Promise(requestAnimationFrame);
     }
   }, point);
-  expect(await page.locator("#selection").getAttribute("data-draws")).toBe(draws);
+  expect(await page.locator(".wsg-selection-highlight").getAttribute("data-mutations")).toBe("0");
   await page.mouse.up();
 });
 
-test("shell wheel scrolling uses intermediate animation frames", async ({ page }) => {
-  await open(page, "?mode=shell");
-  const positions = await page.locator(".xterm-screen").evaluate(async (screen) => {
-    const viewport = document.querySelector<HTMLElement>(".xterm-viewport")!;
-    const values = [viewport.scrollTop];
+test("shell scrolling reaches its target immediately without inertia", async ({ page }) => {
+  await open(page, "?mode=shell&renderer=dom");
+  const before = await page.evaluate(() => window.terminalStateForTest().viewportY);
+  await page.locator(".xterm-screen").evaluate(screen => {
     const box = screen.getBoundingClientRect();
     screen.dispatchEvent(new WheelEvent("wheel", {
       bubbles: true, cancelable: true, deltaMode: 1, deltaY: 8,
       clientX: box.left + 20, clientY: box.top + 20,
     }));
-    const start = performance.now();
-    while (performance.now() - start < 160) {
-      await new Promise(requestAnimationFrame);
-      values.push(viewport.scrollTop);
-    }
-    return values;
   });
-  const unique = [...new Set(positions)];
-  expect(unique.length).toBeGreaterThan(3);
-  expect(positions.at(-1)).toBeGreaterThan(positions[0]);
-  await expect(page.locator(".xterm-screen canvas").first()).toBeVisible();
+  expect(await page.evaluate(() => window.terminalStateForTest().viewportY)).toBe(before + 7);
+  await page.waitForTimeout(150);
+  expect(await page.evaluate(() => window.terminalStateForTest().viewportY)).toBe(before + 7);
 });
 
 for (const direction of ["up", "down"]) {
-  test(`smooth shell scrolling hands off to remote ${direction} at its target boundary`, async ({ page }) => {
+  test(`a shell gesture remains local until the next gesture at the ${direction} boundary`, async ({ page }) => {
     await open(page, `?mode=shell&enhanced=1&scrollLine=${direction === "up" ? 1 : 87}`);
-    await page.locator(".xterm-screen").evaluate((screen, direction) => {
+    const wheel = () => page.locator(".xterm-screen").evaluate((screen, direction) => {
       const box = screen.getBoundingClientRect();
-      for (let i = 0; i < 3; i += 1) {
-        screen.dispatchEvent(new WheelEvent("wheel", {
-          bubbles: true, cancelable: true, deltaMode: 1, deltaY: direction === "up" ? -4 : 4,
-          clientX: box.left + 20, clientY: box.top + 20,
-        }));
-      }
+      screen.dispatchEvent(new WheelEvent("wheel", {
+        bubbles: true, cancelable: true, deltaMode: 1, deltaY: direction === "up" ? -4 : 4,
+        clientX: box.left + 20, clientY: box.top + 20,
+      }));
     }, direction);
+    await wheel();
+    await wheel();
+    expect(await page.locator("#packets").textContent()).toBe("");
+    await page.waitForTimeout(150);
+    await wheel();
     const packets: string[] = JSON.parse((await page.locator("#packets").textContent())!);
-    expect(packets).toEqual(Array(2).fill(direction === "up" ? "\x1b[5~" : "\x1b[6~"));
+    expect(packets).toEqual([direction === "up" ? "\x1b[5~" : "\x1b[6~"]);
   });
 }

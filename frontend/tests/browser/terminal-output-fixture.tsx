@@ -1,6 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import "xterm/css/xterm.css";
+import "@xterm/xterm/css/xterm.css";
 import "../../src/index.css";
 import { useTerminalSocket } from "../../src/pages/terminal/useTerminalSocket";
 import { TerminalLoading } from "../../src/pages/terminal/TerminalLoading";
