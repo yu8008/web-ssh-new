@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WebSSH Gateway · Brand Studio</title>
+  <style>
+    @font-face { font-family: Space; src: url('../../frontend/public/fonts/space-grotesk.woff2') format('woff2'); font-display: swap; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f5f5f3; color: #202020; font: 14px/1.7 system-ui, sans-serif; }
+    main { max-width: 1200px; margin: auto; padding: 48px 32px 64px; }
+    header { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #d4d4d4; padding-bottom: 18px; gap: 20px; }
+    .eyebrow { font-size: 12px; font-weight: 600; letter-spacing: .14em; }
+    header a, .download a { color: #315bc7; text-underline-offset: 4px; }
+    h1 { font: 500 clamp(40px, 7vw, 80px)/1.1 Space, sans-serif; letter-spacing: -.055em; margin: 40px 0 14px; }
+    .intro { max-width: 700px; color: #505050; margin-bottom: 32px; }
+    .presentations { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: #cfcfcf; border: 1px solid #cfcfcf; border-radius: 18px; overflow: hidden; }
+    .presentation { min-height: 270px; display: grid; place-content: center; position: relative; padding: 28px; }
+    .presentation > span { position: absolute; bottom: 20px; left: 24px; font-size: 12px; letter-spacing: .06em; }
+    .dark { background: #171717; color: #409dff; }
+    .light { background: #fff; color: #315bc7; }
+    .blue { background: #315bc7; color: #fff; }
+    .paper { background: #eaeae5; color: #202020; }
+    .logo { display: flex; align-items: center; gap: 22px; }
+    .symbol { display: block; width: 108px; height: 108px; background: currentColor; mask: var(--symbol) center/contain no-repeat; -webkit-mask: var(--symbol) center/contain no-repeat; }
+    .wordmark { font: 600 40px/1.1 Space, sans-serif; letter-spacing: -.05em; }
+    .wordmark small { display: block; font: 600 12px/1.5 system-ui, sans-serif; letter-spacing: .25em; margin-top: 10px; }
+    .dark .wordmark { color: #fff; }
+    .light .wordmark { color: #171717; }
+    .paper .symbol, .blue .symbol { width: 150px; height: 150px; }
+    .caption { display: flex; justify-content: space-between; gap: 24px; padding: 20px 0; align-items: start; }
+    .caption p { margin: 0; max-width: 700px; }
+    .download { display: flex; gap: 16px; white-space: nowrap; }
+    h2 { font-size: 20px; font-weight: 500; margin: 48px 0 12px; }
+    .sizes { display: flex; flex-wrap: wrap; align-items: center; gap: 28px; padding: 24px; border: 1px solid #d4d4d4; border-radius: 12px; }
+    .sample { display: grid; gap: 12px; justify-items: center; font-size: 12px; color: #505050; }
+    .tab { display: flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 10px; font-size: 13px; background: #fff; }
+    .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+    .logo-card { font: inherit; color: inherit; text-align: left; background: #fff; border: 1px solid #d4d4d4; border-radius: 14px; padding: 24px; cursor: pointer; transition: transform .25s, border-color .25s; }
+    .logo-card:hover { transform: translateY(-4px); border-color: #315bc7; }
+    .logo-card[aria-pressed="true"] { border-color: #315bc7; box-shadow: inset 0 0 0 1px #315bc7; }
+    .logo-card .symbol { width: 94px; height: 94px; color: #315bc7; margin: 16px auto 32px; }
+    .logo-card b { display: block; font-size: 15px; }
+    .logo-card p { color: #555; font-size: 13px; margin-bottom: 0; }
+    footer { margin-top: 40px; padding-top: 24px; border-top: 1px solid #d4d4d4; color: #555; font-size: 12px; }
+    :focus-visible { outline: 2px solid #315bc7; outline-offset: 5px; }
+    @media (prefers-reduced-motion: reduce) { .logo-card { transition: none; } .logo-card:hover { transform: none; } }
+    @media (max-width: 700px) { main { padding: 24px 20px; } .presentations, .grid { grid-template-columns: 1fr; } .caption { flex-direction: column; } .logo { gap: 10px; } .wordmark { font-size: 32px; } .symbol { width: 84px; height: 84px; } }
+  </style>
+</head>
+<body>
+<main style="--symbol:url('../../frontend/public/brand/webssh-gateway.svg')">
+  <header><span class="eyebrow">WEBSSH GATEWAY / BRAND STUDIO</span><a href="README.md">设计说明</a></header>
+  <h1>One gateway.<br>Every possibility.</h1>
+  <p class="intro">开放的 G，连接远端世界。终端命令符融入网关轮廓，用两条连续、清晰的线，表达进入、执行与持久在线。</p>
+  <section class="presentations" aria-label="品牌应用预览">
+    <div class="presentation dark"><div class="logo"><i class="symbol" aria-hidden="true"></i><div class="wordmark">WebSSH<small>GATEWAY</small></div></div><span>01 / CHARCOAL</span></div>
+    <div class="presentation light"><div class="logo"><i class="symbol" aria-hidden="true"></i><div class="wordmark">WebSSH<small>GATEWAY</small></div></div><span>02 / WHITE</span></div>
+    <div class="presentation blue"><i class="symbol" aria-hidden="true"></i><span>03 / COBALT</span></div>
+    <div class="presentation paper"><i class="symbol" aria-hidden="true"></i><span>04 / MONOCHROME</span></div>
+  </section>
+  <div class="caption"><p id="rationale" aria-live="polite"><b>01 / Open Gate · 当前采用</b><br>开放的 G 形网关与命令提示符结合，兼顾品牌含义、细线精度和小尺寸辨识。</p><div class="download"><a id="download" download="webssh-gateway.svg" href="../../frontend/public/brand/webssh-gateway.svg">下载 SVG</a><a href="webssh-gateway-1024.png" download>主标志 PNG</a></div></div>
+  <h2>小尺寸，仍然清晰。</h2>
+  <p>以下为当前采用素材的实际显示尺寸。标签栏版本单独加粗并调整间距。</p>
+  <div class="sizes">
+    <div class="sample"><img src="../../frontend/public/favicon.svg" width="16" height="16" alt="16 像素图标"><span>16 px</span></div>
+    <div class="sample"><img src="../../frontend/public/favicon.svg" width="24" height="24" alt="24 像素图标"><span>24 px</span></div>
+    <div class="sample"><img src="../../frontend/public/favicon.svg" width="32" height="32" alt="32 像素图标"><span>32 px</span></div>
+    <div class="sample"><img src="../../frontend/public/brand/webssh-gateway.svg" width="42" height="42" alt="主页面标志"><span>42 px</span></div>
+    <div class="tab"><img src="../../frontend/public/favicon.svg" width="16" height="16" alt="">WebSSH Gateway</div>
+  </div>
+  <h2>六个方向，一致的产品内核。</h2>
+  <p>点击切换上方预览。网页产品采用 Open Gate，其余方向保留供后续品牌延展。</p>
+  <section class="grid" aria-label="Logo 方案比较">
+    <button class="logo-card" data-source="../../frontend/public/brand/webssh-gateway.svg" style="--symbol:url('../../frontend/public/brand/webssh-gateway.svg')" aria-pressed="true"><i class="symbol" aria-hidden="true"></i><b>01 / Open Gate · 开放网关</b><p>字母与线条几何结合。G 的开口代表网关，内部命令符点明终端属性。当前采用。</p></button>
+    <button class="logo-card" data-source="concepts/02-fold.svg" style="--symbol:url('concepts/02-fold.svg')" aria-pressed="false"><i class="symbol" aria-hidden="true"></i><b>02 / Fold · 双向通道</b><p>纯几何折叠形成双重箭头，强调进入与执行。更厚重，适合大块品牌应用。</p></button>
+    <button class="logo-card" data-source="concepts/03-pulse.svg" style="--symbol:url('concepts/03-pulse.svg')" aria-pressed="false"><i class="symbol" aria-hidden="true"></i><b>03 / Pulse · 数字脉冲</b><p>点阵重构命令提示符和光标，体现数据离散传输。适合动效延展，小尺寸需要简化。</p></button>
+    <button class="logo-card" data-source="concepts/04-stream.svg" style="--symbol:url('concepts/04-stream.svg')" aria-pressed="false"><i class="symbol" aria-hidden="true"></i><b>04 / Stream · 持久数据流</b><p>六条连续曲线构成双向数据通路，表达持续同步。细节丰富，适合大尺寸展示。</p></button>
+    <button class="logo-card" data-source="concepts/05-orbit.svg" style="--symbol:url('concepts/05-orbit.svg')" aria-pressed="false"><i class="symbol" aria-hidden="true"></i><b>05 / Orbit · 同步轨道</b><p>断开的环与单一节点结合，表现跨设备连接。形态轻盈，终端含义相对间接。</p></button>
+    <button class="logo-card" data-source="concepts/06-relay.svg" style="--symbol:url('concepts/06-relay.svg')" aria-pressed="false"><i class="symbol" aria-hidden="true"></i><b>06 / Relay · 跨端连接</b><p>两端节点由稳定通道连接，中心保留终端符号，突出本地与远端协作。</p></button>
+  </section>
+  <footer>WebSSH Gateway · 原创 SVG 标志与本地矢量展示。设计流程参考 <a href="https://github.com/op7418/logo-generator-skill">logo-generator</a>，无外部字体、脚本或图片请求。</footer>
+</main>
+<script>
+  const main = document.querySelector('main');
+  const cards = [...document.querySelectorAll('.logo-card')];
+  for (const card of cards) card.addEventListener('click', () => {
+    for (const other of cards) other.setAttribute('aria-pressed', String(other === card));
+    main.style.setProperty('--symbol', `url('${card.dataset.source}')`);
+    const rationale = document.querySelector('#rationale');
+    rationale.replaceChildren(card.querySelector('b').cloneNode(true), document.createElement('br'), document.createTextNode(card.querySelector('p').textContent));
+    const link = document.querySelector('#download');
+    link.href = card.dataset.source;
+    link.download = card.dataset.source.split('/').pop();
+  });
+</script>
+</body>
+</html>

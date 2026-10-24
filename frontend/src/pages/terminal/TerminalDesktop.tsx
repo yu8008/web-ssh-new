@@ -185,15 +185,15 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
 
   return (
     <div className="terminal-shell flex h-screen flex-col overflow-hidden bg-canvas text-ink transition-colors duration-300 supports-[height:100dvh]:h-dvh">
-      <header className="terminal-toolbar flex h-14 shrink-0 items-center gap-3 border-b border-line bg-chrome px-3 sm:px-4">
+      <header className="terminal-toolbar terminal-toolbar--desktop flex h-14 shrink-0 items-center gap-3 border-b border-line bg-chrome px-3 sm:px-4">
         <Button variant="ghost" size="icon" onClick={onBack} aria-label={state.t("返回会话管理", "Back")} title={state.t("返回会话管理", "Back")}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="terminal-session-identity flex min-w-0 items-center gap-2">
           <span className="truncate text-sm font-medium">{state.sessionInfo?.name || state.t("会话", "Session")}</span>
           <span
             className={cx(
-              "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-2xs font-medium",
+              "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-semibold",
               state.connectionState === "open"
                 ? "border-ok/30 bg-ok/10 text-ok"
                 : state.connectionState === "connecting"
@@ -207,18 +207,18 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
               : state.connectionLabel}
           </span>
           {state.sessionInfo?.enhanced_enabled ? (
-            <span className="terminal-persistent-tag hidden rounded border border-brand/25 bg-brand/[0.08] px-1.5 py-px text-[10px] font-medium text-brand sm:inline">
+            <span className="terminal-persistent-tag hidden shrink-0 whitespace-nowrap rounded border border-brand/25 bg-brand/[0.08] px-1.5 py-px text-xs font-semibold text-brand sm:inline">
               {state.t("持久", "Persistent")}
             </span>
           ) : null}
         </div>
-        <div className="hidden min-w-0 items-center gap-2 text-2xs text-muted md:flex">
-          <span className="font-mono">{state.sessionInfo ? new Date(state.sessionInfo.started_at).toLocaleString() : ""}</span>
+        <div className="terminal-session-meta hidden min-w-0 items-center gap-2 text-xs text-ink-soft md:flex">
+          <span>{state.sessionInfo ? new Date(state.sessionInfo.started_at).toLocaleString() : ""}</span>
           <span aria-hidden="true">·</span>
           <span>{state.networkProfileLabel}</span>
           <TerminalLatencyStatus {...state} />
         </div>
-        <div className="ml-auto flex items-center gap-1">
+        <div className="terminal-toolbar-actions ml-auto flex shrink-0 items-center gap-1">
           <NotificationButton />
           {state.targetLatencyMs !== null ? (
             <div
@@ -395,11 +395,11 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
           className="terminal-inspector hidden min-h-0 flex-shrink-0 flex-col overflow-hidden border-l border-line bg-chrome p-3 md:flex"
         >
           <div className="inspector-heading"><Activity size={14} strokeWidth={1.4} />{state.t("资源监测", "INSPECTOR")}<span>SERVER / LIVE</span></div>
-          <div className="mb-2 flex shrink-0 items-center justify-between gap-2 rounded-lg border border-line bg-surface px-3 py-2">
-            <span className="text-2xs font-medium text-muted">{state.t("服务器时间", "Server time")}</span>
-            <span className="flex items-baseline gap-1.5 font-mono text-xs tabular-nums text-ink">
+          <div className="mb-2 flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-lg border border-line bg-surface px-3 py-2">
+            <span className="text-xs font-medium text-muted">{state.t("服务器时间", "Server time")}</span>
+            <span className="flex items-baseline gap-1.5 font-mono text-sm tabular-nums text-ink">
               {clock ? formatServerTime(serverMs, parseUtcOffset(clock.offset)) : "--:--:--"}
-              <span className="font-sans text-2xs text-muted">
+              <span className="font-sans text-xs text-muted">
                 {clock ? clampZoneLabel(clock) : state.t("同步中", "syncing")}
               </span>
             </span>

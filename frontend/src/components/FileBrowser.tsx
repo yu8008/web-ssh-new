@@ -926,20 +926,19 @@ export function FileBrowser({ sessionId, isDark, currentDir, scopeToCurrentDir =
       ? calculatePercent(downloadStats.loadedBytes, downloadStats.totalBytes)
       : null;
   const rowPaddingClass = isCompact ? "py-2" : "py-1";
-  const rowTextClass = isCompact ? "text-sm" : "text-xs";
   const tableColSpan = isCompact ? 2 : 5;
 
   return (
     <div className={`file-workspace space-y-2 h-full flex flex-col ${isCompact ? "text-sm" : ""}`}>
       <div className="flex shrink-0 items-center gap-2 pr-5">
-        <h3 className="text-sm font-semibold text-ink"><Folder size={15} className="mr-2 inline-block text-brand" aria-hidden="true" />{t("文件浏览", "File Browser")}</h3>
+        <h3 className="text-base font-semibold text-ink"><Folder size={15} className="mr-2 inline-block text-brand" aria-hidden="true" />{t("文件浏览", "File Browser")}</h3>
         <button type="button" onClick={handleRefresh} disabled={refreshing || uploading || downloading || chmodLoading}
           className="ml-auto rounded p-1.5 text-muted transition hover:bg-elevated hover:text-brand disabled:opacity-50"
           aria-label={t("刷新", "Refresh")} title={t("刷新", "Refresh")}>
           <RefreshCw size={15} className={refreshing ? "animate-spin" : ""} aria-hidden="true" />
         </button>
       </div>
-      <div className="flex shrink-0 items-center gap-2 text-2xs">
+      <div className="flex shrink-0 items-center gap-2 text-xs">
         <span className="inline-flex shrink-0 items-center gap-1.5 text-brand"><LocateFixed size={13} />{t("跟随终端", "Follow terminal")}</span>
         <span className="min-w-0 truncate text-muted" title={currentDir}>{currentDir || t("等待项目目录", "Waiting for project directory")}</span>
       </div>
@@ -947,7 +946,7 @@ export function FileBrowser({ sessionId, isDark, currentDir, scopeToCurrentDir =
         readOnly={scopeToCurrentDir || !currentDir || directoryUnavailable}
         onChange={event => setPathInput(event.target.value)} onKeyDown={handlePathSubmit}
         placeholder={currentDir ? t("输入路径，按回车跳转", "Input path and press Enter") : t("等待终端目录", "Waiting for terminal directory")}
-        className="w-full shrink-0 rounded border border-line bg-elevated/60 px-2.5 py-2 font-mono text-xs text-ink focus:border-brand focus:outline-none read-only:cursor-default" />
+        className="w-full shrink-0 rounded border border-line bg-elevated/60 px-2.5 py-2 font-mono text-sm text-ink focus:border-brand focus:outline-none read-only:cursor-default" />
       <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileInputChange} />
 
       <div
@@ -976,7 +975,7 @@ export function FileBrowser({ sessionId, isDark, currentDir, scopeToCurrentDir =
               </div>
               {uploadStats.totalBytes > 0 && (
                 <div className="mb-3">
-                  <div className="flex justify-between text-xs mb-1">
+                  <div className="flex justify-between text-sm mb-1">
                     <span className={isDark ? "text-muted" : "text-ink-soft"}>
                       {uploadPhaseText}
                     </span>
@@ -984,7 +983,7 @@ export function FileBrowser({ sessionId, isDark, currentDir, scopeToCurrentDir =
                       {Math.round(uploadPercent)}%
                     </span>
                   </div>
-                  <div className="flex justify-between text-[11px] mb-1">
+                  <div className="flex justify-between text-xs mb-1">
                     <span className={isDark ? "text-muted" : "text-muted"}>
                       {formatFileSize(uploadStats.uploadedBytes)} / {formatFileSize(uploadStats.totalBytes)}
                     </span>
@@ -1002,7 +1001,7 @@ export function FileBrowser({ sessionId, isDark, currentDir, scopeToCurrentDir =
               )}
               <div className={`max-h-24 overflow-y-auto rounded border mb-2 ${isDark ? "border-line bg-elevated" : "border-line bg-elevated"}`}>
                 {uploadProgress.slice(-3).map((msg, i) => (
-                  <div key={i} className={`px-2 py-0.5 text-[11px] ${isDark ? "text-muted" : "text-ink-soft"} border-b ${isDark ? "border-line" : "border-line"} last:border-b-0`}>
+                  <div key={i} className={`px-2 py-0.5 text-xs ${isDark ? "text-muted" : "text-ink-soft"} border-b ${isDark ? "border-line" : "border-line"} last:border-b-0`}>
                     {msg}
                   </div>
                 ))}
@@ -1023,11 +1022,11 @@ export function FileBrowser({ sessionId, isDark, currentDir, scopeToCurrentDir =
               <div className={`text-center mb-2 text-sm font-medium ${isDark ? "text-ink" : "text-ink-soft"}`}>
                 {downloadStats.phase === "compressing" ? t("正在服务端压缩...", "Compressing on server...") : t("正在下载...", "Downloading...")}
               </div>
-              <div className={`text-center mb-3 text-xs ${isDark ? "text-muted" : "text-ink-soft"}`}>
+              <div className={`text-center mb-3 text-sm ${isDark ? "text-muted" : "text-ink-soft"}`}>
                 {downloadStats.current} / {downloadStats.total} · {downloadStats.targetName}
               </div>
               <div className="mb-3">
-                <div className="flex justify-between text-xs mb-1">
+                <div className="flex justify-between text-sm mb-1">
                   <span className={isDark ? "text-muted" : "text-ink-soft"}>
                     {downloadStats.phase === "compressing" ? t("压缩进度", "Compression Progress") : t("传输进度", "Transfer Progress")}
                   </span>
@@ -1035,7 +1034,7 @@ export function FileBrowser({ sessionId, isDark, currentDir, scopeToCurrentDir =
                     {downloadPercent === null ? t("计算中...", "Calculating...") : `${Math.round(downloadPercent)}%`}
                   </span>
                 </div>
-                <div className="flex justify-between text-[11px] mb-1">
+                <div className="flex justify-between text-xs mb-1">
                   <span className={isDark ? "text-muted" : "text-muted"}>
                     {formatFileSize(downloadStats.loadedBytes)} / {downloadStats.totalBytes > 0 ? formatFileSize(downloadStats.totalBytes) : t("未知大小", "Unknown size")}
                   </span>
@@ -1056,7 +1055,7 @@ export function FileBrowser({ sessionId, isDark, currentDir, scopeToCurrentDir =
         )}
 
         {!uploading && lastUploadFailures.length > 0 && (
-          <div className={`absolute top-2 right-2 z-20 px-3 py-2 rounded border text-xs ${isDark ? "bg-elevated border-line text-ink" : "bg-surface border-line text-ink-soft"}`}>
+          <div className={`absolute top-2 right-2 z-20 px-3 py-2 rounded border text-sm ${isDark ? "bg-elevated border-line text-ink" : "bg-surface border-line text-ink-soft"}`}>
             <div className="mb-2">{t(`上次上传失败 ${lastUploadFailures.length} 个文件`, `${lastUploadFailures.length} files failed in last upload`)}</div>
             <button
               onClick={handleRetryFailedUploads}
@@ -1089,23 +1088,23 @@ export function FileBrowser({ sessionId, isDark, currentDir, scopeToCurrentDir =
           }}
         >
           {!currentDir || directoryUnavailable ? (
-            <div role="status" className="flex h-full items-center justify-center p-5 text-center text-xs leading-relaxed text-muted">
+            <div role="status" className="flex h-full items-center justify-center p-5 text-center text-sm leading-relaxed text-muted">
               {directoryUnavailable ? t("暂时无法同步终端目录，请刷新重试。", "Terminal directory is unavailable. Refresh to retry.") : t("正在同步终端目录…", "Syncing terminal directory…")}
             </div>
           ) : scopeRoot && selectedPath && !isPathWithinDirectory(selectedPath, scopeRoot) ? (
-            <div role="status" className="p-5 text-xs text-muted">{dialog || uploading || downloading || chmodLoading
+            <div role="status" className="p-5 text-sm text-muted">{dialog || uploading || downloading || chmodLoading
               ? t("当前文件操作完成后同步新项目目录。", "The new project will open after this file operation finishes.")
               : t("正在同步终端目录…", "Syncing terminal directory…")}</div>
           ) : filesLoading ? (
-            <div className={`flex items-center justify-center h-full text-xs ${isDark ? "text-muted" : "text-muted"}`}>
+            <div className={`flex items-center justify-center h-full text-sm ${isDark ? "text-muted" : "text-muted"}`}>
               <Loader2 size={14} className="mr-2 inline-block animate-spin" aria-hidden="true" /> {t("加载中...", "Loading...")}
             </div>
           ) : error ? (
-            <div className={`flex items-center justify-center h-full text-xs ${isDark ? "text-rose-400" : "text-rose-500"}`}>
+            <div className={`flex items-center justify-center h-full text-sm ${isDark ? "text-rose-400" : "text-rose-500"}`}>
               {error}
             </div>
           ) : (
-            <table className={`w-full ${rowTextClass}`}>
+            <table className="w-full text-sm">
               <thead className={`sticky top-0 ${isDark ? "bg-elevated" : "bg-elevated"}`}>
                 <tr className={isDark ? "text-muted" : "text-muted"}>
                   <th className={`text-left ${rowPaddingClass} px-2 font-medium`}>{t("名称", "Name")}</th>
@@ -1288,7 +1287,7 @@ export function FileBrowser({ sessionId, isDark, currentDir, scopeToCurrentDir =
               {dialog.type === "mkdir" ? t("新建文件夹", "New Folder") : dialog.type === "touch" ? t("新建文件", "New File") : dialog.type === "rename" ? t("重命名", "Rename") : t("修改权限", "Change Permissions")}
             </h3>
             {dialog.type === "chmod" && dialog.files && dialog.files.length > 0 && (
-              <div className={`text-xs mb-2 ${isDark ? "text-muted" : "text-muted"}`}>
+              <div className={`text-sm mb-2 ${isDark ? "text-muted" : "text-muted"}`}>
                 {dialog.files.length === 1 ? dialog.files[0].name : t(`已选择 ${dialog.files.length} 个项目`, `${dialog.files.length} item(s) selected`)}
               </div>
             )}
@@ -1304,8 +1303,8 @@ export function FileBrowser({ sessionId, isDark, currentDir, scopeToCurrentDir =
               />
               {dialog.type === "chmod" && (
                 <div className="absolute right-2 top-1/2 -translate-y-1/2 group">
-                  <span className={`cursor-help text-xs ${isDark ? "text-muted" : "text-muted"}`}>?</span>
-                  <div className={`hidden group-hover:block absolute right-0 top-6 w-64 p-3 rounded shadow-lg border text-xs z-10 ${isDark ? "bg-elevated border-line text-ink-soft" : "bg-surface border-line-strong text-ink-soft"}`}>
+                  <span className={`cursor-help text-sm ${isDark ? "text-muted" : "text-muted"}`}>?</span>
+                  <div className={`hidden group-hover:block absolute right-0 top-6 w-64 p-3 rounded shadow-lg border text-sm z-10 ${isDark ? "bg-elevated border-line text-ink-soft" : "bg-surface border-line-strong text-ink-soft"}`}>
                     <div className="space-y-1">
                       <div><strong>755</strong> - {t("所有者可读写执行，其他人可读执行", "Owner can read/write/execute; others can read/execute")}</div>
                       <div><strong>644</strong> - {t("所有者可读写，其他人只读", "Owner can read/write; others read only")}</div>

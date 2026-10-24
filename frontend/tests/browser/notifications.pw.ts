@@ -14,8 +14,13 @@ async function harness(context: BrowserContext, snapshot: TerminalNotice[] = [])
     localStorage.setItem("app_language", "zh-CN");
     window.notificationSounds = [];
     const start = OscillatorNode.prototype.start;
+    const strikes = new Set<number>();
     OscillatorNode.prototype.start = function(when?: number) {
-      window.notificationSounds.push({ frequency: this.frequency.value, at: performance.now() });
+      // Harmonics share an onset: count audible strikes, not synthesis voices.
+      if (!strikes.has(when ?? 0)) {
+        strikes.add(when ?? 0);
+        window.notificationSounds.push({ frequency: this.frequency.value, at: performance.now() });
+      }
       return start.call(this, when);
     };
   });
@@ -85,7 +90,7 @@ for (const mobile of [false, true]) test(`${mobile ? "mobile" : "desktop"}: real
   await page.locator(".xterm-helper-textarea").focus();
   const inputsBefore = [...mock.terminalInputs];
   mock.send(notice("finished"));
-  await expect.poll(() => starts(page)).toBe(baseline + 1);
+  await expect.poll(() => starts(page)).toBe(baseline + 2);
   const trigger = page.getByRole("button", { name: "任务提醒与声音", exact: true });
   await expect(trigger.locator(".notification-unread-dot")).toBeVisible();
   await expect(trigger.locator(".notification-unread-dot")).toHaveCSS("border-radius", "9999px");
@@ -93,10 +98,10 @@ for (const mobile of [false, true]) test(`${mobile ? "mobile" : "desktop"}: real
   expect(await trigger.locator("span:not(.sr-only)").allTextContents()).not.toContain("1");
   await expect(page.locator(".xterm-helper-textarea")).toBeFocused();
   mock.send(notice("needs-answer", "question"));
-  await expect.poll(() => starts(page)).toBe(baseline + 3);
+  await expect.poll(() => starts(page)).toBe(baseline + 5);
   mock.send(notice("needs-answer", "question")); mock.snapshot();
   await page.waitForTimeout(450);
-  expect(await starts(page)).toBe(baseline + 3);
+  expect(await starts(page)).toBe(baseline + 5);
   expect(mock.terminalInputs).toEqual(inputsBefore);
   await page.getByRole("button", { name: "任务提醒与声音", exact: true }).click();
   await page.getByRole("slider", { name: "提示音音量" }).fill("20");
@@ -109,7 +114,7 @@ for (const mobile of [false, true]) test(`${mobile ? "mobile" : "desktop"}: real
   mock.send(notice("muted-approval", "approval"));
   await expect(page.getByText("等待操作批准", { exact: true })).toBeVisible();
   await page.waitForTimeout(450);
-  expect(await starts(page)).toBe(baseline + 3);
+  expect(await starts(page)).toBe(baseline + 5);
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("webssh-notification-sound-v1")!).volume)).toBe(.2);
 });
 
@@ -134,11 +139,11 @@ test("two tabs share an atomic sound claim and a burst favors attention", async 
   await two.goto("/terminal/notify"); await activate(two);
   const initial = await starts(one) + await starts(two);
   mock.send(notice("batch-complete")); mock.send(notice("batch-question", "question"));
-  await expect.poll(async () => await starts(one) + await starts(two)).toBe(initial + 2);
+  await expect.poll(async () => await starts(one) + await starts(two)).toBe(initial + 3);
   await one.waitForTimeout(500);
-  expect(await starts(one) + await starts(two)).toBe(initial + 2);
+  expect(await starts(one) + await starts(two)).toBe(initial + 3);
   const final = [...await one.evaluate(() => window.notificationSounds), ...await two.evaluate(() => window.notificationSounds)];
-  expect(final.filter(item => item.frequency === 880)).toHaveLength(1);
+  expect(final.filter(item => item.frequency === 1046.50)).toHaveLength(1);
 });
 
 test("notifications survive changing sessions and marking one read updates both tabs", async ({ context }) => {
@@ -178,7 +183,7 @@ test("background-only sound works while another tab is active and starts promptl
   await expect.poll(() => page.evaluate(() => document.hasFocus())).toBe(false);
   const before = await page.evaluate(() => performance.now());
   mock.send(notice("background-answer", "question"));
-  await expect.poll(() => starts(page)).toBe(baseline + 2);
+  await expect.poll(() => starts(page)).toBe(baseline + 3);
   const latency = await page.evaluate(before => window.notificationSounds.at(-1)!.at - before, before);
   expect(latency).toBeLessThan(500);
   await info.attach("browser-event-to-audio-ms", { body: JSON.stringify({ milliseconds: latency, scope: "Local mocked notification socket to real Web Audio start" }), contentType: "application/json" });
@@ -232,41 +237,91 @@ test("saved volume survives the update and recommended volume is an explicit cho
   expect(await starts(page)).toBe(0);
 });
 
-test("rendered notification audio has stronger sustained energy, bounded peaks and distinct durations", async ({ page, context }) => {
+test("rendered chimes have crisp attacks, audible body, bounded peaks and distinct rhythms", async ({ page, context }) => {
   await harness(context);
   await page.goto("/terminal/notify");
   const measured = await page.evaluate(async () => {
-    // Run the production synthesizer through the browser's actual audio engine.
+    // Render the actual synthesizer; verify the waveform, including its tails.
     const modulePath = "/src/notifications/notificationAudio.ts";
     const { NotificationAudio } = await import(/* @vite-ignore */ modulePath);
     const original = window.AudioContext;
     const results = [];
     try {
-      for (const kind of ["complete", "question"]) {
+      for (const kind of ["complete", "question", "bell"]) for (const volume of [.6, 1]) {
         const offline = new OfflineAudioContext(1, 48000, 48000);
         const facade = { state: "running", currentTime: 0, destination: offline.destination,
           createOscillator: () => offline.createOscillator(), createGain: () => offline.createGain(),
           close: async () => {}, onstatechange: null };
         window.AudioContext = function() { return facade; } as unknown as typeof AudioContext;
         const player = new NotificationAudio();
-        await player.enable(); player.play(kind, .6);
+        await player.enable(); player.play(kind, volume);
         const samples = (await offline.startRendering()).getChannelData(0);
-        let peak = 0; let last = 0; let energy = 0;
+        let peak = 0; let last = 0; let energy = 0; let attack = 0;
         for (let index = 0; index < samples.length; index++) {
           const value = samples[index]; peak = Math.max(peak, Math.abs(value));
-          if (Math.abs(value) > .0002) last = index / 48000;
+          // Include the intentionally quiet release when measuring total length.
+          if (Math.abs(value) > .000001) last = index / 48000;
+          if (index < 720) attack = Math.max(attack, Math.abs(value));
           if (index >= 960 && index < 4800) energy += value * value;
         }
-        results.push({ kind, peak, end: last, rms: Math.sqrt(energy / 3840) });
+        // Compare the short impact to the decay within the first struck note.
+        const rms = (from: number, to: number) => Math.sqrt(samples.slice(from * 48000, to * 48000)
+          .reduce((total, value) => total + value * value, 0) / ((to - from) * 48000));
+        results.push({ kind, volume, peak, end: last, rms: Math.sqrt(energy / 3840), attack,
+          decayRatio: rms(.085, .105) / rms(.015, .035) });
         player.dispose();
       }
     } finally { window.AudioContext = original; }
     return results;
   });
   for (const result of measured) {
-    expect(result.peak).toBeGreaterThan(.23); expect(result.peak).toBeLessThan(.25);
-    expect(result.rms).toBeGreaterThan(.16);
+    expect(result.peak).toBeGreaterThan(.30 * result.volume);
+    expect(result.peak).toBeLessThan(.65 * result.volume); // Headroom even at maximum volume.
+    expect(result.rms).toBeGreaterThan(.13 * result.volume);
+    expect(result.attack).toBeGreaterThan(.28 * result.volume); // A clear onset within 15 ms.
+    expect(result.decayRatio).toBeGreaterThan(.25);
+    expect(result.decayRatio).toBeLessThan(.65); // No long, flat electronic sustain.
+    const duration = result.kind === "complete" ? [.54, .62] : result.kind === "question" ? [.76, .84] : [.27, .34];
+    expect(result.end).toBeGreaterThan(duration[0]); expect(result.end).toBeLessThan(duration[1]);
   }
-  expect(measured[0].end).toBeGreaterThan(.45); expect(measured[0].end).toBeLessThan(.51);
-  expect(measured[1].end).toBeGreaterThan(.70); expect(measured[1].end).toBeLessThan(.76);
+});
+
+test("muting a chime cancels future notes and rapid replacement never stacks full sounds", async ({ page, context }) => {
+  await harness(context);
+  await page.goto("/terminal/notify");
+  const result = await page.evaluate(async () => {
+    const modulePath = "/src/notifications/notificationAudio.ts";
+    const { NotificationAudio } = await import(/* @vite-ignore */ modulePath);
+    const original = window.AudioContext;
+    const output = [];
+    try {
+      for (const replace of [false, true]) {
+        const offline = new OfflineAudioContext(1, 48000, 48000);
+        const facade = { state: "running", get currentTime() { return offline.currentTime; }, destination: offline.destination,
+          createOscillator: () => offline.createOscillator(), createGain: () => offline.createGain(),
+          close: async () => {}, onstatechange: null };
+        window.AudioContext = function() { return facade; } as unknown as typeof AudioContext;
+        const player = new NotificationAudio();
+        await player.enable(); player.play("question", 1);
+        const pause = offline.suspend(.08);
+        const render = offline.startRendering();
+        await pause;
+        player.stop();
+        if (replace) for (let i = 0; i < 8; i++) player.play("complete", 1);
+        await offline.resume();
+        const samples = (await render).getChannelData(0);
+        let peak = 0; let tail = 0;
+        for (let i = 0; i < samples.length; i++) {
+          peak = Math.max(peak, Math.abs(samples[i]));
+          if (i > (replace ? .73 : .10) * 48000) tail = Math.max(tail, Math.abs(samples[i]));
+        }
+        output.push({ peak, tail }); player.dispose();
+      }
+    } finally { window.AudioContext = original; }
+    return output;
+  });
+  for (const sound of result) {
+    expect(sound.peak).toBeLessThan(.65);
+    expect(sound.tail).toBeLessThan(.00001);
+  }
 });

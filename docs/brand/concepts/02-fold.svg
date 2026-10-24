@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" color="#315bc7">
+  <title>Fold — 双向通道</title>
+  <g fill="currentColor">
+    <path d="M16 23a3 3 0 0 1 5-2l34 26a4 4 0 0 1 0 6L21 79a3 3 0 0 1-5-2V65l20-15-20-15Z"/>
+    <path d="M49 23a3 3 0 0 1 5-2l30 26a4 4 0 0 1 0 6L54 79a3 3 0 0 1-5-2V65l18-15-18-15Z"/>
+  </g>
+</svg>

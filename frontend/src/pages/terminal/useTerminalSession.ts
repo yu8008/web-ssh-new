@@ -135,10 +135,10 @@ export function useTerminalSession(sessionId?: string) {
       : t("已断开", "Disconnected");
   const connectionTone =
     socketState.connectionState === "open"
-      ? "text-emerald-400"
+      ? "text-ok"
       : socketState.connectionState === "connecting"
-      ? "text-amber-400"
-      : "text-rose-400";
+      ? "text-warn"
+      : "text-danger";
   const networkProfileLabel =
     sessionInfoState.sessionNetworkProfile === "good"
       ? t("网络良好", "Network Good")
@@ -147,10 +147,10 @@ export function useTerminalSession(sessionId?: string) {
       : t("弱网模式", "Poor Network Mode");
   const networkProfileTone =
     sessionInfoState.sessionNetworkProfile === "good"
-      ? "text-emerald-400"
+      ? "text-ok"
       : sessionInfoState.sessionNetworkProfile === "degraded"
-      ? "text-amber-400"
-      : "text-rose-400";
+      ? "text-warn"
+      : "text-danger";
 
   return {
     t,

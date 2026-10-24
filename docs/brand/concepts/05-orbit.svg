@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" color="#315bc7">
+  <title>Orbit — 同步轨道</title>
+  <g stroke="currentColor" stroke-width="4" stroke-linecap="round">
+    <path d="M78 30a34 34 0 1 0 6 20"/>
+    <path d="M65 50H46m9-9 10 9-10 9"/>
+  </g>
+  <circle cx="82" cy="26" r="5" fill="currentColor"/>
+</svg>

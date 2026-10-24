@@ -36,10 +36,10 @@ export function TerminalLatencyStatus({ terminalLatencyMs, browserLatencyMs, tar
   ];
   return <>
     <button ref={button} type="button" onClick={() => setOpen(true)} aria-label={t("延迟诊断", "Latency details")} aria-haspopup="dialog"
-      className="rounded px-1 py-0.5 font-mono text-muted hover:bg-elevated hover:text-ink" title={t("点击查看浏览器到网关、SSH 及处理排队耗时", "View browser/gateway, SSH and processing delays")}>
+      className="rounded px-1 py-0.5 font-medium tabular-nums text-ink-soft hover:bg-elevated hover:text-ink" title={t("点击查看浏览器到网关、SSH 及处理排队耗时", "View browser/gateway, SSH and processing delays")}>
       {terminalLatencyMs !== null ? `${t("网关", "Gateway")} ${terminalLatencyMs}ms` : browserLatencyMs !== null ? `${t("网页", "Web")} ${browserLatencyMs}ms` : t("延迟", "Latency")}
     </button>
-    {targetLatencyMs !== null ? <span className="font-mono text-muted" title={t("网关服务器到 SSH 目标的命令往返时间", "Command round trip from the gateway server to the SSH target")}>SSH {targetLatencyMs}ms</span> : null}
+    {targetLatencyMs !== null ? <span className="font-medium tabular-nums text-ink-soft" title={t("网关服务器到 SSH 目标的命令往返时间", "Command round trip from the gateway server to the SSH target")}>SSH {targetLatencyMs}ms</span> : null}
     {open ? <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/40 p-4" onMouseDown={event => { if (event.target === event.currentTarget) close(); }}>
       <div role="dialog" aria-modal="true" aria-label={t("延迟诊断", "Latency details")} className="max-h-[90dvh] w-full max-w-lg overflow-auto rounded-xl border border-line bg-surface p-4 text-sm text-ink shadow-panel"
         onKeyDown={event => { if (event.key === "Tab") { event.preventDefault(); event.currentTarget.querySelector<HTMLButtonElement>("button")?.focus(); } }}>

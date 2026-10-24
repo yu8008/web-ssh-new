@@ -188,12 +188,12 @@ export function SessionsWorkbench({ state }: SessionsWorkbenchProps) {
           <IconAction label={state.t("搜索", "Search")} className="md:hidden" onClick={() => { setMobileSearchOpen(value => !value); requestAnimationFrame(() => searchRef.current?.focus()); }}><Search size={16} /></IconAction>
           <NotificationButton />
           {!online ? (
-            <span className="hidden items-center gap-1.5 rounded-full border border-warn/40 bg-warn/10 px-2.5 py-1 text-2xs font-medium text-warn sm:flex">
+            <span className="hidden items-center gap-1.5 rounded-full border border-warn/40 bg-warn/10 px-2.5 py-1 text-xs font-medium text-warn sm:flex">
               <WifiOff className="h-3 w-3" />
               {state.t("网络已断开", "Offline")}
             </span>
           ) : null}
-          <span className={cx("hidden items-center gap-1.5 px-2 text-2xs sm:flex", "text-muted")}>
+          <span className={cx("hidden items-center gap-1.5 px-2 text-xs sm:flex", "text-muted")}>
             <span className={cx("h-1.5 w-1.5 rounded-full", state.networkProfileTone)} />
             {state.networkProfileLabel}
           </span>
@@ -201,7 +201,7 @@ export function SessionsWorkbench({ state }: SessionsWorkbenchProps) {
             {state.isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </IconAction>
           <IconAction label={state.t("语言", "Language")} onClick={state.toggleLanguage} className="hidden sm:grid">
-            <span className="text-2xs font-semibold">{state.language === "en-US" ? "中" : "EN"}</span>
+            <span className="text-xs font-semibold">{state.language === "en-US" ? "中" : "EN"}</span>
           </IconAction>
           <IconAction label={state.t("系统设置", "Settings")} onClick={() => { window.location.href = "/settings"; }}>
             <Settings className="h-4 w-4" />
@@ -275,7 +275,7 @@ export function SessionsWorkbench({ state }: SessionsWorkbenchProps) {
               size="sm"
               variant="ghost"
               onClick={() => state.setShowCreateForm(true)}
-              className="h-7 gap-1 px-2 text-2xs"
+              className="h-7 gap-1 px-2 text-xs"
             >
               <Plus className="h-3.5 w-3.5" />
               {state.t("新建", "New")}
@@ -294,14 +294,14 @@ export function SessionsWorkbench({ state }: SessionsWorkbenchProps) {
               <button
                 type="button"
                 onClick={() => setActiveConnectionId(null)}
-                className="mb-2 flex w-full items-center justify-between rounded-md border border-brand/30 bg-brand/8 px-2.5 py-1.5 text-2xs text-brand"
+                className="mb-2 flex w-full items-center justify-between rounded-md border border-brand/30 bg-brand/8 px-2.5 py-1.5 text-xs text-brand"
               >
                 <span className="truncate">{activeConnection?.name}</span>
                 <X className="h-3 w-3" />
               </button>
             ) : null}
             {visibleConnections.length === 0 ? (
-              <div className="px-2 py-6 text-center text-2xs text-muted">
+              <div className="px-2 py-6 text-center text-xs text-muted">
                 {state.connections.length === 0
                   ? state.t("还没有连接", "No connections yet")
                   : state.t("没有匹配的连接", "No matching connections")}
@@ -321,7 +321,7 @@ export function SessionsWorkbench({ state }: SessionsWorkbenchProps) {
               </ul>
             )}
           </nav>
-          <div className="border-t border-line px-3 py-2 text-2xs text-muted">
+          <div className="border-t border-line px-3 py-2 text-xs text-muted">
             {online ? state.t("已连接服务端", "Connected to gateway") : state.t("离线，操作已暂停", "Offline")}
           </div>
         </aside>
@@ -337,7 +337,7 @@ export function SessionsWorkbench({ state }: SessionsWorkbenchProps) {
             </Button>
             <div className="min-w-0">
               <h2>{state.t("会话列表", "Your sessions")}</h2>
-              <p className="text-2xs text-muted">
+              <p className="text-xs text-muted">
                 {state.t(activeCount + " 个在线 · " + idleCount + " 个离线", activeCount + " active · " + idleCount + " idle")}
                 {activeConnection ? " · " + activeConnection.name : ""}
               </p>
@@ -355,7 +355,7 @@ export function SessionsWorkbench({ state }: SessionsWorkbenchProps) {
                     aria-pressed={state.filter === option.value}
                     onClick={() => state.setFilter(option.value)}
                     className={cx(
-                      "h-7 rounded px-2.5 text-2xs font-medium transition",
+                      "h-7 rounded px-2.5 text-xs font-medium transition",
                       state.filter === option.value ? "bg-elevated text-ink shadow-sm" : "text-muted hover:text-ink"
                     )}
                   >
@@ -373,7 +373,7 @@ export function SessionsWorkbench({ state }: SessionsWorkbenchProps) {
           {state.loadError ? (
             <div className="mx-4 mt-3 flex items-center gap-3 rounded-md border border-danger/30 bg-danger/8 px-3 py-2 text-xs text-danger sm:mx-5">
               <span className="min-w-0 flex-1 truncate">{state.loadError}</span>
-              <Button size="sm" variant="ghost" className="h-7 text-2xs" onClick={() => state.reload()}>
+              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => state.reload()}>
                 <RefreshCw className="h-3.5 w-3.5" />
                 {state.t("重试", "Retry")}
               </Button>
@@ -505,14 +505,14 @@ function ConnectionItem({
           <StatusDot tone={verifying ? "warn" : failed ? "danger" : verified ? "ok" : "muted"} pulse={verifying} />
           <span className="min-w-0 flex-1">
             <span className="block truncate text-xs font-medium">{connection.name}</span>
-            <span className="block truncate font-mono text-2xs text-muted">
+            <span className="block truncate font-mono text-xs text-muted">
               {connection.username}@{connection.host}
             </span>
           </span>
         </button>
         <span className="flex items-center gap-1">
           {activeSessions > 0 ? (
-            <span className="rounded-full bg-ok/12 px-1.5 py-0.5 text-[10px] font-semibold text-ok" title={state.t("在线会话", "Active sessions")}>
+            <span className="rounded-full bg-ok/12 px-1.5 py-0.5 text-xs font-semibold text-ok" title={state.t("在线会话", "Active sessions")}>
               {activeSessions}
             </span>
           ) : null}
@@ -661,12 +661,12 @@ function SessionRow({
               </>
             )}
             {session.enhanced_enabled ? (
-              <span className="session-badge shrink-0 whitespace-nowrap rounded border border-brand/25 bg-brand/8 px-1.5 py-px text-[10px] font-medium text-brand">
+              <span className="session-badge shrink-0 whitespace-nowrap rounded border border-brand/25 bg-brand/8 px-1.5 py-px text-xs font-medium text-brand">
                 {state.t("持久", "Persistent")}
               </span>
             ) : null}
             {retrying ? (
-              <span className="session-badge shrink-0 whitespace-nowrap rounded border border-warn/30 bg-warn/10 px-1.5 py-px text-[10px] font-medium text-warn">
+              <span className="session-badge shrink-0 whitespace-nowrap rounded border border-warn/30 bg-warn/10 px-1.5 py-px text-xs font-medium text-warn">
                 {state.t("重试中", "Retrying")}
               </span>
             ) : null}
@@ -768,7 +768,7 @@ function SessionRow({
 
       {noteOpen ? (
         <div className="border-t border-line/70 bg-surface px-4 py-3 sm:px-5">
-          <label className="mb-1 block text-2xs text-muted" htmlFor={"note-" + session.id}>
+          <label className="mb-1 block text-xs text-muted" htmlFor={"note-" + session.id}>
             {state.t("这个会话的备注，最多 1000 字", "Session note, up to 1000 characters")}
           </label>
           <textarea

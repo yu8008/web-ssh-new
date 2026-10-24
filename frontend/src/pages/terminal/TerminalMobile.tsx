@@ -117,15 +117,15 @@ export function TerminalMobile({ state, onBack }: TerminalMobileProps) {
             <div className={`text-base font-semibold truncate ${state.isDark ? "text-ink" : "text-ink"}`}>
               {state.sessionInfo?.name || state.t("会话", "Session")}
             </div>
-            <div className={`text-xs truncate ${state.isDark ? "text-muted" : "text-muted"}`}>
+            <div className={`text-sm truncate ${state.isDark ? "text-muted" : "text-muted"}`}>
               {state.sessionInfo ? new Date(state.sessionInfo.started_at).toLocaleString() : ""}
             </div>
           </div>
-          <Button variant="secondary" lightMode={!state.isDark} onClick={onBack} className="min-h-11 px-3 py-2 text-xs whitespace-nowrap">
+          <Button variant="secondary" lightMode={!state.isDark} onClick={onBack} className="min-h-11 px-3 py-2 text-sm whitespace-nowrap">
             {state.t("返回", "Back")}
           </Button>
         </div>
-        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
           <span className={`${state.connectionTone}`}>
             {state.reconnectCountdown !== null ? state.t(`重连中 (${state.reconnectCountdown}s)`, `Reconnecting (${state.reconnectCountdown}s)`) : state.connectionLabel}
           </span>
@@ -140,7 +140,7 @@ export function TerminalMobile({ state, onBack }: TerminalMobileProps) {
               variant={action.variant}
               lightMode={!state.isDark}
               onClick={action.onClick}
-              className="min-h-11 px-3 py-2 text-xs whitespace-nowrap"
+              className="min-h-11 px-3 py-2 text-sm whitespace-nowrap"
             >
               {action.label}
             </Button>
@@ -150,7 +150,7 @@ export function TerminalMobile({ state, onBack }: TerminalMobileProps) {
               variant="ghost"
               lightMode={!state.isDark}
               onClick={state.handleCancelReconnect}
-              className="min-h-11 px-3 py-2 text-xs whitespace-nowrap"
+              className="min-h-11 px-3 py-2 text-sm whitespace-nowrap"
             >
               {state.t("取消重连", "Cancel reconnect")}
             </Button>
@@ -160,14 +160,14 @@ export function TerminalMobile({ state, onBack }: TerminalMobileProps) {
               variant="secondary"
               lightMode={!state.isDark}
               onClick={state.handleReconnect}
-              className="min-h-11 px-3 py-2 text-xs whitespace-nowrap"
+              className="min-h-11 px-3 py-2 text-sm whitespace-nowrap"
             >
               {state.t("重连", "Reconnect")}
             </Button>
           ) : null}
         </div>
         {state.sessionInfo?.note ? (
-          <div className={`mt-2 text-xs ${state.isDark ? "text-muted" : "text-muted"}`}>
+          <div className={`mt-2 text-sm ${state.isDark ? "text-muted" : "text-muted"}`}>
             {state.sessionInfo.note}
           </div>
         ) : null}
@@ -187,7 +187,7 @@ export function TerminalMobile({ state, onBack }: TerminalMobileProps) {
                 <button
                   type="button"
                   onClick={() => void state.handleCopySelection()}
-                  className={`flex h-11 items-center justify-center gap-1 rounded-full border px-3 text-xs font-medium ${
+                  className={`flex h-11 items-center justify-center gap-1 rounded-full border px-3 text-sm font-medium ${
                     state.isDark
                       ? "border-brand/60 bg-brand text-white"
                       : "border-brand bg-brand text-white"

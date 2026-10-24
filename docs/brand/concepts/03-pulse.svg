@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" color="#315bc7">
+  <title>Pulse — 数字脉冲</title>
+  <g fill="currentColor">
+    <circle cx="26" cy="20" r="5"/><circle cx="42" cy="35" r="5"/>
+    <circle cx="58" cy="50" r="5"/><circle cx="42" cy="65" r="5"/>
+    <circle cx="26" cy="80" r="5"/>
+    <rect x="66" y="75" width="18" height="10" rx="5"/>
+  </g>
+</svg>

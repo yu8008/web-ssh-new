@@ -166,7 +166,7 @@ export function SystemMonitor({ sessionId, isDark, networkProfile, compact }: Sy
   const renderSectionHeader = (key: keyof typeof collapsedSections, title: string) => {
     if (!isCompact) {
       return (
-        <h3 className={`text-sm font-semibold mb-3 ${isDark ? "text-ink" : "text-ink-soft"}`}>
+        <h3 className={`text-base font-semibold mb-3 ${isDark ? "text-ink" : "text-ink-soft"}`}>
           {title}
         </h3>
       );
@@ -175,12 +175,12 @@ export function SystemMonitor({ sessionId, isDark, networkProfile, compact }: Sy
       <button
         type="button"
         onClick={() => toggleSection(key)}
-        className={`w-full flex items-center justify-between text-sm font-semibold mb-2 ${
+        className={`w-full flex items-center justify-between text-base font-semibold mb-2 ${
           isDark ? "text-ink" : "text-ink-soft"
         }`}
       >
         <span>{title}</span>
-        <span className={`text-xs ${isDark ? "text-muted" : "text-muted"}`}>
+        <span className={`text-sm ${isDark ? "text-muted" : "text-muted"}`}>
           {collapsedSections[key] ? t("展开", "Expand") : t("收起", "Collapse")}
         </span>
       </button>
@@ -196,7 +196,7 @@ export function SystemMonitor({ sessionId, isDark, networkProfile, compact }: Sy
 
     return (
       <>
-        <span aria-hidden="true" className={sortField !== field ? "opacity-30" : ""}>
+        <span aria-hidden="true" className={sortField !== field ? "opacity-70" : ""}>
           {sortField !== field ? <ArrowUpDown size={11} /> : sortOrder === "desc" ? <ArrowDown size={11} /> : <ArrowUp size={11} />}
         </span>
         <span className="sr-only">{label}</span>
@@ -206,7 +206,7 @@ export function SystemMonitor({ sessionId, isDark, networkProfile, compact }: Sy
 
   if (loading) {
     return (
-        <div className={`text-xs ${isDark ? "text-muted" : "text-muted"}`}>
+        <div className={`text-sm ${isDark ? "text-muted" : "text-muted"}`}>
         {t("加载中...", "Loading...")}
       </div>
     );
@@ -214,7 +214,7 @@ export function SystemMonitor({ sessionId, isDark, networkProfile, compact }: Sy
 
   if (error) {
     return (
-      <div className={`text-xs ${isDark ? "text-rose-400" : "text-rose-500"}`}>
+      <div className={`text-sm ${isDark ? "text-rose-400" : "text-rose-500"}`}>
         {error}
       </div>
     );
@@ -231,11 +231,11 @@ export function SystemMonitor({ sessionId, isDark, networkProfile, compact }: Sy
           <>
             {/* CPU */}
             <div className="mb-3">
-              <div className="flex justify-between items-center mb-1">
-                <span className={`text-xs ${isDark ? "text-muted" : "text-muted"}`}>
+              <div className="flex flex-wrap justify-between items-baseline gap-x-3 gap-y-1 mb-1">
+                <span className={`text-sm ${isDark ? "text-muted" : "text-muted"}`}>
                   {t(`CPU (${stats.cpu.count} 核)`, `CPU (${stats.cpu.count} Cores)`)}
                 </span>
-                <span className={`text-xs font-medium ${isDark ? "text-ink-soft" : "text-ink-soft"}`}>
+                <span className={`text-sm font-medium ${isDark ? "text-ink-soft" : "text-ink-soft"}`}>
                   {stats.cpu.percent.toFixed(1)}%
                 </span>
               </div>
@@ -249,11 +249,11 @@ export function SystemMonitor({ sessionId, isDark, networkProfile, compact }: Sy
 
             {/* 内存 */}
             <div className="mb-3">
-              <div className="flex justify-between items-center mb-1">
-                <span className={`text-xs ${isDark ? "text-muted" : "text-muted"}`}>
+              <div className="flex flex-wrap justify-between items-baseline gap-x-3 gap-y-1 mb-1">
+                <span className={`text-sm ${isDark ? "text-muted" : "text-muted"}`}>
                   {t("内存", "Memory")}
                 </span>
-                <span className={`text-xs font-medium ${isDark ? "text-ink-soft" : "text-ink-soft"}`}>
+                <span className={`text-sm font-medium ${isDark ? "text-ink-soft" : "text-ink-soft"}`}>
                   {stats.memory.percent.toFixed(1)}% ({formatBytes(stats.memory.used)} / {formatBytes(stats.memory.total)})
                 </span>
               </div>
@@ -267,11 +267,11 @@ export function SystemMonitor({ sessionId, isDark, networkProfile, compact }: Sy
 
             {/* 交换区 */}
             <div className="mb-3">
-              <div className="flex justify-between items-center mb-1">
-                <span className={`text-xs ${isDark ? "text-muted" : "text-muted"}`}>
+              <div className="flex flex-wrap justify-between items-baseline gap-x-3 gap-y-1 mb-1">
+                <span className={`text-sm ${isDark ? "text-muted" : "text-muted"}`}>
                   {t("交换区", "Swap")}
                 </span>
-                <span className={`text-xs font-medium ${isDark ? "text-ink-soft" : "text-ink-soft"}`}>
+                <span className={`text-sm font-medium ${isDark ? "text-ink-soft" : "text-ink-soft"}`}>
                   {stats.swap.total > 0
                     ? `${stats.swap.percent.toFixed(1)}% (${formatBytes(stats.swap.used)} / ${formatBytes(stats.swap.total)})`
                     : t("未启用", "Disabled")
@@ -291,14 +291,14 @@ export function SystemMonitor({ sessionId, isDark, networkProfile, compact }: Sy
             {/* 网络速度 */}
             <div className={`pt-3 mt-3 ${isDark ? "border-t border-line" : "border-t border-line"}`}>
               <div className="flex justify-between items-center">
-                <span className={`text-xs ${isDark ? "text-muted" : "text-muted"}`}>
+                <span className={`text-sm ${isDark ? "text-muted" : "text-muted"}`}>
                   {t("网络", "Network")}
                 </span>
                 <div className="flex items-center gap-3">
-                  <span className={`text-xs font-medium ${isDark ? "text-purple-400" : "text-purple-600"}`}>
+                  <span className={`text-sm font-medium ${isDark ? "text-purple-400" : "text-purple-600"}`}>
                     <ArrowUp size={11} className="mr-1 inline-block" aria-hidden="true" />{network ? formatSpeed(network.upload_speed) : "-"}
                   </span>
-                  <span className={`text-xs font-medium ${isDark ? "text-cyan-400" : "text-cyan-600"}`}>
+                  <span className={`text-sm font-medium ${isDark ? "text-cyan-400" : "text-cyan-700"}`}>
                     <ArrowDown size={11} className="mr-1 inline-block" aria-hidden="true" />{network ? formatSpeed(network.download_speed) : "-"}
                   </span>
                 </div>
@@ -315,11 +315,11 @@ export function SystemMonitor({ sessionId, isDark, networkProfile, compact }: Sy
         {!isCompact || !collapsedSections.processes ? (
           <>
             {/* 表头 */}
-            <div className={`flex text-xs mb-2 ${isDark ? "text-muted" : "text-muted"}`}>
+            <div className={`flex text-sm mb-2 ${isDark ? "text-muted" : "text-muted"}`}>
               <div className="flex-1">{t("进程名", "Process")}</div>
               <button
                 type="button"
-                className="w-16 bg-transparent p-0 text-right hover:text-brand focus:outline-none focus-visible:rounded focus-visible:ring-2 focus-visible:ring-brand"
+                className="inline-flex w-16 shrink-0 items-center justify-end gap-1 bg-transparent p-0 text-right hover:text-brand focus:outline-none focus-visible:rounded focus-visible:ring-2 focus-visible:ring-brand"
                 onClick={() => handleSort("cpu")}
                 aria-label={t("按 CPU 使用率排序", "Sort by CPU usage")}
                 aria-pressed={sortField === "cpu"}
@@ -328,7 +328,7 @@ export function SystemMonitor({ sessionId, isDark, networkProfile, compact }: Sy
               </button>
               <button
                 type="button"
-                className="w-20 bg-transparent p-0 text-right hover:text-brand focus:outline-none focus-visible:rounded focus-visible:ring-2 focus-visible:ring-brand"
+                className="inline-flex w-20 shrink-0 items-center justify-end gap-1 bg-transparent p-0 text-right hover:text-brand focus:outline-none focus-visible:rounded focus-visible:ring-2 focus-visible:ring-brand"
                 onClick={() => handleSort("memory")}
                 aria-label={t("按内存使用量排序", "Sort by memory usage")}
                 aria-pressed={sortField === "memory"}
@@ -342,7 +342,7 @@ export function SystemMonitor({ sessionId, isDark, networkProfile, compact }: Sy
               {sortedProcesses.map((proc) => (
                 <div
                   key={proc.pid}
-                  className={`flex text-xs py-1 rounded px-1 ${isDark ? "hover:bg-elevated" : "hover:bg-elevated"} group relative`}
+                  className={`flex text-sm py-1 rounded px-1 ${isDark ? "hover:bg-elevated" : "hover:bg-elevated"} group relative`}
                   title={proc.command}
                 >
                   <div className={`flex-1 truncate ${isDark ? "text-ink-soft" : "text-ink-soft"}`}>
@@ -357,7 +357,7 @@ export function SystemMonitor({ sessionId, isDark, networkProfile, compact }: Sy
                 </div>
               ))}
               {sortedProcesses.length === 0 && (
-                <div className={`text-xs ${isDark ? "text-muted" : "text-muted"}`}>
+                <div className={`text-sm ${isDark ? "text-muted" : "text-muted"}`}>
                   {t("暂无数据", "No data")}
                 </div>
               )}
@@ -373,11 +373,11 @@ export function SystemMonitor({ sessionId, isDark, networkProfile, compact }: Sy
           <div className="space-y-2">
             {disks.map((disk) => (
               <div key={disk.mount}>
-                <div className="flex justify-between items-center mb-1">
-                  <span className={`text-xs ${isDark ? "text-muted" : "text-muted"}`}>
+                <div className="flex flex-wrap justify-between items-baseline gap-x-3 gap-y-1 mb-1">
+                  <span className={`text-sm ${isDark ? "text-muted" : "text-muted"}`}>
                     {disk.mount}
                   </span>
-                  <span className={`text-xs font-medium ${isDark ? "text-ink-soft" : "text-ink-soft"}`}>
+                  <span className={`text-sm font-medium ${isDark ? "text-ink-soft" : "text-ink-soft"}`}>
                     {disk.percent.toFixed(1)}% ({formatBytes(disk.used)} / {formatBytes(disk.total)})
                   </span>
                 </div>

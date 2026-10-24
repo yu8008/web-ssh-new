@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" color="#315bc7">
+  <title>Relay — 跨端连接</title>
+  <g stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M27 70V40a13 13 0 0 1 13-13h30M73 30v30a13 13 0 0 1-13 13H30"/>
+    <path d="m40 43 9 7-9 7m18 0h5"/>
+  </g>
+  <g fill="currentColor"><circle cx="27" cy="73" r="6"/><circle cx="73" cy="27" r="6"/></g>
+</svg>

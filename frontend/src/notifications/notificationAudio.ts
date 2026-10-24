@@ -1,9 +1,29 @@
 import type { NoticeKind } from "./notificationCore";
 
+type ChimeNote = { delay: number; frequency: number; strength: number };
+// A rising fifth resolves completion; three lighter strikes ask for attention.
+const COMPLETION: ChimeNote[] = [
+  { delay: 0, frequency: 1174.66, strength: .9 },
+  { delay: .14, frequency: 1760, strength: 1 },
+];
+const ATTENTION: ChimeNote[] = [
+  { delay: 0, frequency: 1046.50, strength: .85 },
+  { delay: .16, frequency: 1318.51, strength: .8 },
+  { delay: .36, frequency: 1760, strength: 1 },
+];
+const BELL: ChimeNote[] = [{ delay: 0, frequency: 880, strength: 1 }];
+// The upper harmonics fade first, leaving a clean, rounded glass-like tail.
+const PARTIALS = [
+  { ratio: 1, weight: .78, decay: 1 },
+  { ratio: 2, weight: .17, decay: .45 },
+  { ratio: 3, weight: .05, decay: .28 },
+];
+
 /** One context per page; initialized/resumed only after an explicit gesture. */
 export class NotificationAudio {
   private context: AudioContext | null = null;
-  private nodes = new Set<OscillatorNode>();
+  private nodes = new Map<OscillatorNode, number>();
+  private output: GainNode | null = null;
   constructor(private changed?: (ready: boolean) => void) {}
   get ready() { return this.context?.state === "running"; }
   async enable(): Promise<boolean> {
@@ -17,30 +37,50 @@ export class NotificationAudio {
     } catch { this.changed?.(false); return false; }
   }
   stop() {
-    for (const node of this.nodes) { try { node.stop(); } catch { /* Already ended. */ } }
+    const now = this.context?.currentTime ?? 0;
+    if (this.output) {
+      // Fade the whole chime, including scheduled notes, without a cutoff click.
+      this.output.gain.setValueAtTime(this.output.gain.value, now);
+      this.output.gain.linearRampToValueAtTime(0, now + .008);
+      this.output = null;
+    }
+    for (const [node, start] of this.nodes) {
+      try { node.stop(start > now ? now : now + .008); } catch { /* Already ended. */ }
+    }
     this.nodes.clear();
   }
   play(kind: NoticeKind, volume: number): boolean {
     const context = this.context;
-    if (!context || !this.ready || volume <= 0) return false;
+    if (!context || !this.ready || !Number.isFinite(volume) || volume <= 0) return false;
     // One notification at a time also bounds peaks during rapid bursts/previews.
     this.stop();
     const attention = kind === "question" || kind === "approval" || kind === "attention";
-    const notes = attention ? [[0, 660], [0.43, 880]] : [[0, kind === "bell" ? 540 : 740]];
-    const duration = attention ? 0.32 : 0.50;
-    const peak = Math.min(1, Math.max(0, volume)) * 0.40;
-    for (const [delay, frequency] of notes) {
+    const notes = attention ? ATTENTION : kind === "bell" ? BELL : COMPLETION;
+    const output = context.createGain();
+    output.gain.value = Math.min(1, volume) * .48;
+    output.connect(context.destination);
+    this.output = output;
+    const onset = context.currentTime + .005;
+    let remaining = notes.length * PARTIALS.length;
+    for (const note of notes) for (const partial of PARTIALS) {
       const oscillator = context.createOscillator();
       const gain = context.createGain();
-      const start = context.currentTime + delay;
-      oscillator.type = "sine"; oscillator.frequency.value = frequency;
+      const start = onset + note.delay;
+      const duration = (kind === "bell" ? .32 : .46) * partial.decay;
+      const peak = note.strength * partial.weight;
+      oscillator.type = "sine"; oscillator.frequency.value = note.frequency * partial.ratio;
+      gain.gain.value = 0;
       gain.gain.setValueAtTime(0, start);
-      gain.gain.linearRampToValueAtTime(peak, start + 0.015);
-      gain.gain.setValueAtTime(peak, start + (attention ? 0.11 : 0.18));
-      gain.gain.exponentialRampToValueAtTime(0.0001, start + duration - 0.015);
-      oscillator.connect(gain); gain.connect(context.destination);
-      this.nodes.add(oscillator);
-      oscillator.onended = () => { this.nodes.delete(oscillator); oscillator.disconnect(); gain.disconnect(); };
+      gain.gain.linearRampToValueAtTime(peak, start + .004);
+      gain.gain.exponentialRampToValueAtTime(peak * .4, start + .12 * partial.decay);
+      gain.gain.exponentialRampToValueAtTime(.0001, start + duration - .012);
+      gain.gain.linearRampToValueAtTime(0, start + duration);
+      oscillator.connect(gain); gain.connect(output);
+      this.nodes.set(oscillator, start);
+      oscillator.onended = () => {
+        this.nodes.delete(oscillator); oscillator.disconnect(); gain.disconnect();
+        if (--remaining === 0) { output.disconnect(); if (this.output === output) this.output = null; }
+      };
       oscillator.start(start); oscillator.stop(start + duration);
     }
     return true;

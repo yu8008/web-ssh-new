@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" color="#315bc7">
+  <title>Stream — 持久数据流</title>
+  <g stroke="currentColor" stroke-width="3.5" stroke-linecap="round">
+    <path d="M20 20h18c23 0 11 40 42 40"/>
+    <path d="M20 32h18c23 0 11 36 42 36"/>
+    <path d="M20 44h18c23 0 11 32 42 32"/>
+    <path d="M20 56h18c23 0 11-32 42-32"/>
+    <path d="M20 68h18c23 0 11-36 42-36"/>
+    <path d="M20 80h18c23 0 11-40 42-40"/>
+  </g>
+</svg>

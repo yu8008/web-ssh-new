@@ -102,6 +102,8 @@ for (const mobile of [false, true]) {
     await expect(panel.locator(".git-change-summary")).toContainText("+12");
     await expect(panel.locator(".git-change-summary")).toContainText("−4");
     await expect(panel).toContainText("另有 1 个未跟踪文件");
+    await expect(panel.locator(".git-change-summary span").first()).toHaveCSS("font-size", "12px");
+    await expect(panel.locator("li").first()).toHaveCSS("font-size", "13px");
     await panel.locator("summary").click(); await expect(panel.getByText("origin/main", { exact: true })).toBeVisible();
     await page.screenshot({ path: info.outputPath("project-git-dark.png") });
     if (!mobile) await page.getByRole("button", { name: "关闭 Git 面板", exact: true }).click();

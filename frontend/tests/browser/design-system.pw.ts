@@ -105,7 +105,7 @@ for (const mobile of [false, true]) for (const theme of ["dark", "light"]) {
       const contrast = (a: number[], b: number[]) => (Math.max(luminance(a), luminance(b)) + .05) / (Math.min(luminance(a), luminance(b)) + .05);
       for (const surface of ["--canvas", "--chrome", "--surface", "--elevated"]) {
         for (const text of ["--ink", "--ink-soft", "--muted", "--brand"]) {
-          expect(contrast(colors[surface], colors[text]), `${text} on ${surface}`).toBeGreaterThanOrEqual(4.5);
+          expect(contrast(colors[surface], colors[text]), `${text} on ${surface}`).toBeGreaterThanOrEqual(text === "--brand" ? 4.5 : 7);
         }
       }
       expect(contrast(colors["--brand"], colors["--brand-ink"])).toBeGreaterThanOrEqual(4.5);
@@ -115,6 +115,16 @@ for (const mobile of [false, true]) for (const theme of ["dark", "light"]) {
         for (const selector of [".terminal-shell", ".terminal-frame", ".xterm-scrollable-element"]) {
           await expect(page.locator(selector)).toHaveCSS("background-color", background);
         }
+      }
+      if (path === "/sessions" || path === "/terminal/design") {
+        const selectors = path === "/sessions"
+          ? ".sessions-header .brand-edition, .product-nav a, .workspace-intro .eyebrow, .workspace-stat > span, .workspace-toolbar p"
+          : ".terminal-toolbar span, .terminal-session-meta, .inspector-heading, .inspector-heading span, .system-monitor h3, .system-monitor .text-sm";
+        const tooSmall = await page.locator(selectors).evaluateAll(elements => elements
+          .filter(el => el.getBoundingClientRect().width > 0 && el.textContent?.trim())
+          .filter(el => parseFloat(getComputedStyle(el).fontSize) < 12)
+          .map(el => ({ text: el.textContent, size: getComputedStyle(el).fontSize })));
+        expect(tooSmall).toEqual([]);
       }
       await page.evaluate(() => document.fonts.ready);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
@@ -144,6 +154,8 @@ for (const mobile of [false, true]) for (const theme of ["dark", "light"]) {
         await page.getByRole("button", { name: "文件", exact: true }).click();
         await expect(page.getByText("README.md", { exact: true })).toBeVisible();
         await expect(page.locator(".file-workspace .lucide-folder").first()).toBeVisible();
+        await expect(page.locator(".file-workspace table th").first()).toHaveCSS("font-size", "12px");
+        await expect(page.locator(".file-workspace table td").first()).toHaveCSS("font-size", "13px");
         await page.screenshot({ path: info.outputPath("files.png") });
         if (mobile) await page.getByRole("button", { name: "终端", exact: true }).click();
         else await page.getByRole("button", { name: "关闭文件面板", exact: true }).click();
@@ -317,5 +329,20 @@ test("English typography and actions fit mobile, tablet and desktop layouts", as
     expect(copy.x + copy.width).toBeLessThanOrEqual(stats.x);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
     await page.screenshot({ path: info.outputPath(`workspace-en-${width}.png`) });
+  }
+  for (const width of [360, 768, 1024, 1440]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto("/terminal/design");
+    await expect(page.locator(".xterm")).toBeVisible();
+    const toolbar = page.locator(".terminal-toolbar");
+    expect(await toolbar.evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+    if (width >= 768) {
+      await expect(page.locator(".terminal-session-meta")).toBeVisible();
+      await expect(page.locator(".terminal-persistent-tag")).toHaveCSS("font-size", "12px");
+      const meta = (await page.locator(".terminal-session-meta").boundingBox())!;
+      const bounds = (await toolbar.boundingBox())!;
+      expect(meta.y + meta.height).toBeLessThanOrEqual(bounds.y + bounds.height);
+    }
+    await page.screenshot({ path: info.outputPath(`terminal-en-${width}.png`) });
   }
 });
