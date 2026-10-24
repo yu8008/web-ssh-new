@@ -26,6 +26,7 @@ async function harness(context: BrowserContext, snapshot: TerminalNotice[] = [])
   });
   const sockets = new Set<WebSocketRoute>();
   const items = new Map(snapshot.map(item => [item.id, item]));
+  let beforeRead: ((ids: string[]) => Promise<boolean>) | undefined;
   let setupAction = "";
   let runtime: CliRuntime = { state: "observing", app: "codex", capabilities: {}, candidates: [] };
   const session = { id: "notify", name: "Repository task", connection_id: 1, status: "active", host: "test-host", username: "tester", started_at: new Date().toISOString(), last_activity: new Date().toISOString(), enhanced_enabled: true };
@@ -39,6 +40,17 @@ async function harness(context: BrowserContext, snapshot: TerminalNotice[] = [])
       const body = route.request().postDataJSON(); setupAction = body.action;
       if (setupAction === "bind") runtime = { ...runtime, state: "attached", binding: body.binding, capabilities: { complete: "ready" } };
       return route.fulfill({ json: { installed: setupAction !== "uninstall", codex_version: "0.163.0", claude_version: "2.1.306", configuration: { codex: "configured", claude: "configured" }, runtime, notes: [] } });
+    }
+    if (path === "/notifications/read-all") {
+      const ids = new Set<string>(route.request().postDataJSON().ids);
+      if (beforeRead && !await beforeRead([...ids])) return route.fulfill({ status: 503, json: { detail: "Offline" } });
+      const receipts = [...items.values()].filter(item => ids.has(item.id)).map(item => {
+        const read_at = item.read_at ?? new Date().toISOString();
+        items.set(item.id, { ...item, read_at });
+        return { id: item.id, read_at };
+      });
+      for (const socket of sockets) socket.send(JSON.stringify({ type: "read_many", receipts }));
+      return route.fulfill({ json: receipts });
     }
     if (path.endsWith("/read") && path.startsWith("/notifications/")) {
       const id = path.split("/")[2]; const event = { ...items.get(id)!, read_at: new Date().toISOString() }; items.set(id, event);
@@ -63,6 +75,7 @@ async function harness(context: BrowserContext, snapshot: TerminalNotice[] = [])
   });
   return {
     sockets, terminalInputs,
+    beforeRead: (handler?: (ids: string[]) => Promise<boolean>) => { beforeRead = handler; },
     send: (event: TerminalNotice) => { items.set(event.id, event); for (const socket of sockets) socket.send(JSON.stringify({ type: "notification", event })); },
     snapshot: () => { for (const socket of sockets) socket.send(JSON.stringify({ type: "snapshot", events: [...items.values()] })); },
     action: () => setupAction,
@@ -162,6 +175,71 @@ test("notifications survive changing sessions and marking one read updates both 
   await expect(one.locator(".notification-unread-dot")).toHaveCount(0);
   await expect(two.locator(".notification-unread-dot")).toHaveCount(0);
   expect(await starts(one) + await starts(two)).toBe(0);
+});
+
+test("mark all read includes hidden records, syncs tabs, and keeps history without navigating or sounding", async ({ context }) => {
+  const mock = await harness(context, Array.from({ length: 60 }, (_, index) => notice(`unread-${index}`)));
+  const one = await context.newPage(); const two = await context.newPage();
+  await one.goto("/terminal/notify"); await two.goto("/terminal/other");
+  await activate(one);
+  await expect.poll(() => mock.sockets.size).toBe(2);
+  for (const page of [one, two]) {
+    await page.getByRole("button", { name: "任务提醒与声音", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "最近提醒 (60 未读)" })).toBeVisible();
+  }
+  const baseline = await starts(one) + await starts(two);
+  const inputs = [...mock.terminalInputs];
+  await one.getByRole("button", { name: "一键已读", exact: true }).click();
+  for (const page of [one, two]) {
+    await expect(page.getByRole("heading", { name: "最近提醒 (0 未读)" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "一键已读", exact: true })).toBeDisabled();
+    await expect(page.locator(".notification-unread-dot")).toHaveCount(0);
+    await expect(page.getByRole("dialog").getByRole("button").filter({ hasText: "Repository task · codex" })).toHaveCount(50);
+  }
+  await expect(one).toHaveURL(/\/terminal\/notify$/);
+  await expect(two).toHaveURL(/\/terminal\/other$/);
+  mock.snapshot();
+  expect(await starts(one) + await starts(two)).toBe(baseline);
+  await one.reload();
+  await one.getByRole("button", { name: "任务提醒与声音", exact: true }).click();
+  await expect(one.getByRole("heading", { name: "最近提醒 (0 未读)" })).toBeVisible();
+  expect(await starts(one) + await starts(two)).toBe(0);
+  expect(baseline).toBe(2); // Only the explicit enable/preview played before reload.
+  expect(mock.terminalInputs).toEqual(inputs);
+});
+
+test("bulk read can retry after failure and leaves notifications arriving during the request unread", async ({ page, context }) => {
+  const mock = await harness(context, [notice("before-click")]);
+  await page.goto("/terminal/notify");
+  await page.getByRole("button", { name: "任务提醒与声音", exact: true }).click();
+  const button = page.getByRole("button", { name: "一键已读", exact: true });
+  mock.beforeRead(async () => false);
+  await button.click();
+  await expect(page.getByRole("alert")).toHaveText("未能标记已读，请稍后重试。");
+  await expect(page.getByRole("heading", { name: "最近提醒 (1 未读)" })).toBeVisible();
+  await expect(button).toBeEnabled();
+  let finish!: () => void;
+  const held = new Promise<void>(resolve => { finish = resolve; });
+  mock.beforeRead(async ids => {
+    expect(ids).toEqual(["before-click"]);
+    mock.send(notice("during-request"));
+    await held;
+    return true;
+  });
+  await button.click();
+  await expect(button).toBeDisabled();
+  await expect(page.getByRole("heading", { name: "最近提醒 (2 未读)" })).toBeVisible();
+  finish();
+  await expect(page.getByRole("heading", { name: "最近提醒 (1 未读)" })).toBeVisible();
+  await expect(button).toBeEnabled();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page.getByRole("dialog").getByLabel("未读", { exact: true })).toHaveCount(1);
+  mock.beforeRead();
+  await button.click();
+  await expect(page.getByRole("heading", { name: "最近提醒 (0 未读)" })).toBeVisible();
+  await page.getByRole("button", { name: "关闭声音设置", exact: true }).click();
+  await expect(page.getByText("本轮回复结束", { exact: true })).toHaveCount(0);
+  expect(await starts(page)).toBe(0);
 });
 
 test("background-only sound works while another tab is active and starts promptly", async ({ page, context }, info) => {

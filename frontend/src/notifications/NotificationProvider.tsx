@@ -1,12 +1,12 @@
 import React from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Bell, Circle, Volume2, VolumeX, X } from "lucide-react";
+import { Bell, CheckCheck, Circle, Volume2, VolumeX, X } from "lucide-react";
 import { AppContext, useApp } from "../context/AppContextCore";
 import { Button } from "../components/Button";
-import { configureCliNotifications, openNotificationSocket, readTerminalNotification } from "../lib/api";
+import { configureCliNotifications, openNotificationSocket, readTerminalNotification, readTerminalNotifications } from "../lib/api";
 import { NotificationContext } from "./notificationContext";
 import { DEFAULT_SOUND, SOUND_KEY, mergeNotices, parseNotice, parsePreferences, shouldSound, soundPriority } from "./notificationCore";
-import type { NoticeKind, SoundPreferences, TerminalNotice } from "./notificationCore";
+import type { NoticeKind, NotificationReadReceipt, SoundPreferences, TerminalNotice } from "./notificationCore";
 import { NotificationAudio } from "./notificationAudio";
 import { claimNotificationSound } from "./notificationSpeaker";
 import { parseRuntime, type CliRuntime } from "./notificationRuntime";
@@ -26,6 +26,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const [connected, setConnected] = React.useState(false);
   const [opened, setOpened] = React.useState(false);
   const [toast, setToast] = React.useState<TerminalNotice | null>(null);
+  const [reading, setReading] = React.useState(false);
+  const [readError, setReadError] = React.useState(false);
+  const readRequest = React.useRef(0);
   const [setup, setSetup] = React.useState(""); const [busy, setBusy] = React.useState(false);
   const [runtime, setRuntime] = React.useState<CliRuntime | null>(null);
   const [configured, setConfigured] = React.useState(false);
@@ -79,8 +82,15 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     return () => { window.removeEventListener("storage", storage); window.removeEventListener("click", resume); window.removeEventListener("keydown", resume); };
   }, [getAudio]);
 
+  const applyReads = React.useCallback((receipts: NotificationReadReceipt[]) => {
+    const reads = new Map(receipts.map(item => [item.id, item.read_at]));
+    setEvents(previous => previous.map(item => reads.has(item.id) ? { ...item, read_at: reads.get(item.id)! } : item));
+    setToast(previous => previous && reads.has(previous.id) ? null : previous);
+  }, []);
+
   React.useEffect(() => {
     seen.current.clear(); setEvents([]); setToast(null); setConnected(false);
+    ++readRequest.current; setReading(false); setReadError(false);
     if (!userId || !token) return;
     const soundIds = pendingIds.current;
     let cancelled = false; let socket: WebSocket | null = null; let retry: number | undefined; let attempt = 0;
@@ -126,8 +136,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
             const status = parseRuntime(data.runtime);
             if (status) setRuntime(status);
           } else if (data.type === "read" && typeof data.id === "string" && typeof data.read_at === "string") {
-            setEvents(previous => previous.map(item => item.id === data.id ? { ...item, read_at: data.read_at } : item));
-            setToast(previous => previous?.id === data.id ? null : previous);
+            applyReads([{ id: data.id, read_at: data.read_at }]);
+          } else if (data.type === "read_many" && Array.isArray(data.receipts)) {
+            applyReads(data.receipts.filter((item: unknown): item is NotificationReadReceipt => !!item && typeof item === "object" && "id" in item && typeof item.id === "string" && "read_at" in item && typeof item.read_at === "string"));
           }
         } catch { /* Ignore malformed notifications without touching terminal IO. */ }
       };
@@ -147,7 +158,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       cancelled = true; socket?.close(); window.clearTimeout(retry); window.clearInterval(heartbeat); window.clearTimeout(pendingTimer.current);
       pendingTimer.current = undefined; pending.current = null; soundIds.clear();
     };
-  }, [userId, token]);
+  }, [userId, token, applyReads]);
 
   React.useEffect(() => { if (!toast) return; const timer = window.setTimeout(() => setToast(null), 8000); return () => window.clearTimeout(timer); }, [toast]);
   React.useEffect(() => () => audio.current?.dispose(), []);
@@ -163,6 +174,17 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const visit = (event: TerminalNotice) => {
     void readTerminalNotification(event.id).then(updated => setEvents(previous => mergeNotices(previous, [updated]))).catch(() => setSetup(t("未能标记已读，请稍后重试", "Could not mark as read; please retry")));
     setToast(null); setOpened(false); navigate(`/terminal/${encodeURIComponent(event.session_id)}`);
+  };
+  const unread = events.filter(event => !event.read_at);
+  const readAll = async () => {
+    if (reading || !unread.length) return;
+    const request = ++readRequest.current;
+    setReading(true); setReadError(false);
+    try {
+      const receipts = await readTerminalNotifications(unread.map(event => event.id));
+      if (request === readRequest.current) applyReads(receipts);
+    } catch { if (request === readRequest.current) setReadError(true); }
+    finally { if (request === readRequest.current) setReading(false); }
   };
   const configure = React.useCallback(async (action: "status" | "install" | "uninstall" | "bind", binding?: string) => {
     if (!sessionId) return;
@@ -207,11 +229,15 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           <div className="flex flex-wrap items-center gap-2"><Button onClick={() => void enable()}><Volume2 size={16} />{ready ? t("试听并开启声音", "Preview and enable sound") : t("开启声音并试听", "Enable sound and preview")}</Button><span className="text-xs text-ink-soft">{preferences.enabled ? ready ? t("声音已就绪", "Sound ready") : t("点击按钮启用本页声音", "Click to activate sound on this page") : t("声音已关闭", "Sound off")} · {connected ? t("通知已连接", "Notifications connected") : t("通知未连接", "Notifications disconnected")}</span></div>
           {audioError && <p role="status" className="text-sm text-warn">{t("浏览器尚未允许播放声音，请检查网站的声音权限后重试。", "The browser has not allowed sound. Check this site's sound permission and retry.")}</p>}
           <div className="grid gap-2 text-sm">
-            {([
-              ["enabled", t("播放提示音", "Play notification sounds")], ["complete", t("本轮结束提示音", "Turn finished sound")],
-              ["attention", t("提问与批准提示音", "Question and approval sound")], ["bell", t("通用终端响铃", "Generic terminal bell")],
-              ["backgroundOnly", t("仅离开当前网页时响铃", "Only sound when away from this page")],
-            ] as const).map(([key, text]) => <label key={key} className="flex items-center gap-2"><input type="checkbox" checked={preferences[key]} onChange={event => update({ [key]: event.target.checked })} />{text}</label>)}
+            <div className="grid grid-cols-3 gap-x-2 gap-y-2">
+              {([
+                ["enabled", t("播放提示音", "Play sounds"), t("播放提示音", "Play notification sounds")],
+                ["complete", t("本轮结束", "Turn finished"), t("本轮结束提示音", "Turn finished sound")],
+                ["attention", t("提问与批准", "Questions / approvals"), t("提问与批准提示音", "Question and approval sound")],
+                ["bell", t("终端响铃", "Terminal bell"), t("通用终端响铃", "Generic terminal bell")],
+                ["backgroundOnly", t("仅离开当前网页时响铃", "Only sound when away from this page"), t("仅离开当前网页时响铃", "Only sound when away from this page")],
+              ] as const).map(([key, text, description]) => <label key={key} title={description} className={`flex min-w-0 cursor-pointer items-start gap-1.5 py-1 ${key === "backgroundOnly" ? "col-span-2" : ""}`}><input className="mt-0.5 h-4 w-4 shrink-0 accent-brand" type="checkbox" aria-label={description} checked={preferences[key]} onChange={event => update({ [key]: event.target.checked })} /><span>{text}</span></label>)}
+            </div>
             <label className="flex items-center gap-3">{t("音量", "Volume")} <input aria-label={t("提示音音量", "Notification volume")} className="flex-1" type="range" min="0" max="100" value={Math.round(preferences.volume * 100)} onChange={event => update({ volume: Number(event.target.value) / 100 })} /><span>{Math.round(preferences.volume * 100)}%</span></label>
             <div className="flex flex-wrap gap-2"><Button size="sm" variant="secondary" onClick={() => void preview(false)}>{t("试听完成音", "Preview completion")}</Button><Button size="sm" variant="secondary" onClick={() => void preview(true)}>{t("试听提问音", "Preview attention")}</Button><Button size="sm" variant="ghost" onClick={() => update({ volume: DEFAULT_SOUND.volume })}>{t("使用推荐音量 60%", "Use recommended volume: 60%")}</Button></div>
           </div>
@@ -219,7 +245,12 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           {setup && <p role="status" className="break-words text-xs text-ink-soft">{setup}</p>}
           {sessionId && runtime && <NotificationRuntimeStatus runtime={runtime} configured={configured} busy={busy} bind={id => void configure("bind", id)} t={t} />}
           <p className="text-xs text-ink-soft">{t("网页保持打开时接收提醒；浏览器休眠、设备锁屏或网页关闭后不保证即时播放。旧通知和重连回放不会补响。", "Keep the page open for alerts. Sleeping browsers, locked devices and closed pages may not play sounds promptly. Old notifications and reconnect history stay silent.")}</p>
-          <div className="border-t border-line pt-3"><h3 className="mb-2 text-sm font-medium">{t("最近提醒", "Recent notifications")} ({events.filter(event => !event.read_at).length} {t("未读", "unread")})</h3>
+          <div className="border-t border-line pt-3">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-sm font-medium" aria-live="polite">{t("最近提醒", "Recent notifications")} ({unread.length} {t("未读", "unread")})</h3>
+              <Button size="sm" variant="secondary" loading={reading} disabled={!unread.length} onClick={() => void readAll()}><CheckCheck size={14} aria-hidden="true" />{t("一键已读", "Mark all read")}</Button>
+            </div>
+            {readError && <p role="alert" className="mb-2 text-sm text-warn">{t("未能标记已读，请稍后重试。", "Could not mark notifications as read. Please retry.")}</p>}
             {!events.length && <p className="text-sm text-ink-soft">{t("暂无提醒", "No notifications yet")}</p>}
             <div className="space-y-1">{events.slice(0, 50).map(event => <button key={event.id} type="button" onClick={() => visit(event)} className="block w-full rounded p-2 text-left text-sm hover:bg-elevated"><span className="block truncate">{!event.read_at && <Circle size={6} fill="currentColor" className="mr-2 inline-block text-brand" aria-label={t("未读", "Unread")} />}{event.session_name} · {event.app}</span><span className="text-ink-soft">{label(event)} · {new Date(event.created_at).toLocaleTimeString()}</span></button>)}</div>
           </div>

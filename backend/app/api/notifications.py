@@ -4,9 +4,11 @@ import asyncio
 import logging
 from contextlib import suppress
 from datetime import timedelta
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
-from sqlalchemy import select
+from pydantic import BaseModel, Field
+from sqlalchemy import select, update
 
 from app.api.dependencies import get_current_user, get_current_user_from_ws, get_db, get_state
 from app.core.db import utc_now
@@ -30,6 +32,23 @@ def inbox(db, user_id: int):
 @router.get("")
 async def list_notifications(user=Depends(get_current_user), db=Depends(get_db)):
     return inbox(db, user.id)
+
+
+class ReadNotifications(BaseModel):
+    ids: list[Annotated[str, Field(min_length=1, max_length=64)]] = Field(max_length=200)
+
+
+@router.patch("/read-all")
+async def read_notifications(payload: ReadNotifications, user=Depends(get_current_user), db=Depends(get_db), state=Depends(get_state)):
+    # A click acknowledges the client's current inbox, never a later arrival.
+    scope = (TerminalNotification.user_id == user.id, TerminalNotification.id.in_(payload.ids))
+    db.execute(update(TerminalNotification).where(*scope, TerminalNotification.read_at.is_(None)).values(read_at=utc_now()))
+    db.commit()
+    records = db.execute(select(TerminalNotification.id, TerminalNotification.read_at).where(*scope))
+    receipts = [{"id": record.id, "read_at": record.read_at.isoformat()} for record in records]
+    if receipts and state.notifications:
+        state.notifications.broadcast(user.id, {"type": "read_many", "receipts": receipts})
+    return receipts
 
 
 @router.patch("/{notification_id}/read")

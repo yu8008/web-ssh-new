@@ -103,6 +103,7 @@ Enhanced sessions configure tmux state forwarding. If a custom output pipe alrea
 ### Records and Scope
 
 - Notifications remain available when you switch sessions or visit the session management page. Select a notification to open its source session.
+- **Mark all read** in Recent notifications acknowledges the current unread inbox across devices while keeping its history. Notifications arriving during the request remain unread.
 - The Gateway stores notifications and read state for synchronization between devices signed into the same account. Audio settings remain local to each device; browser tabs coordinate playback to avoid duplicate sounds for the same event.
 - The inbox retains up to 200 notifications per account for seven days. Refreshing, reconnecting, and loading old records do not replay accumulated sounds.
 - This retention applies only to notification records. Recent terminal output and browser scrollback keep their existing limits; seven-day terminal-output archiving has not been added.

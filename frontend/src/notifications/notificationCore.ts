@@ -3,6 +3,7 @@ export type TerminalNotice = {
   id: string; session_id: string; session_name: string; kind: NoticeKind;
   app: "codex" | "claude" | "terminal"; created_at: string; read_at: string | null;
 };
+export type NotificationReadReceipt = { id: string; read_at: string };
 export type SoundPreferences = {
   enabled: boolean; complete: boolean; attention: boolean; bell: boolean;
   volume: number; backgroundOnly: boolean;

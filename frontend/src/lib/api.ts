@@ -156,6 +156,14 @@ export async function readTerminalNotification(id: string): Promise<import("../n
   return response.json();
 }
 
+export async function readTerminalNotifications(ids: string[]): Promise<import("../notifications/notificationCore").NotificationReadReceipt[]> {
+  const response = await fetch(`${HTTP_BASE}/notifications/read-all`, {
+    method: "PATCH", headers: { "Content-Type": "application/json", ...getAuthHeader() }, body: JSON.stringify({ ids }),
+  });
+  if (!response.ok) throw new Error(await safeError(response, "Could not mark notifications as read"));
+  return response.json();
+}
+
 export type CliNotificationSetup = { installed: boolean; relay_active?: boolean; codex_version: string | null; claude_version: string | null; notes: string[]; configuration?: Record<string, string>; runtime?: import("../notifications/notificationRuntime").CliRuntime };
 export async function configureCliNotifications(sessionId: string, action: "status" | "install" | "uninstall" | "bind", binding?: string): Promise<CliNotificationSetup> {
   const response = await fetch(`${HTTP_BASE}/notifications/setup/${encodeURIComponent(sessionId)}`, {

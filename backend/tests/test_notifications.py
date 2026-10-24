@@ -155,6 +155,44 @@ def test_inbox_and_read_are_user_scoped(database):
         assert client.patch(f"/notifications/{item['id']}/read").status_code == 404
 
 
+def test_bulk_read_is_scoped_idempotent_and_preserves_new_arrivals(database):
+    service = NotificationService(database)
+    first = service._store(1, "one", {"kind": "complete", "app": "codex"})
+    second = service._store(1, "one", {"kind": "question", "app": "claude"})
+    later = service._store(1, "one", {"kind": "complete", "app": "codex"})
+    other = service._store(2, "two", {"kind": "complete", "app": "codex"})
+    app = FastAPI(); app.include_router(api.router)
+    app.dependency_overrides[get_state] = lambda: SimpleNamespace(notifications=service)
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=1)
+    def db_override():
+        with database.session() as db: yield db
+    app.dependency_overrides[get_db] = db_override
+    queue = service.subscribe(1, object()); other_queue = service.subscribe(2, object())
+    with TestClient(app) as client:
+        already_read = client.patch(f"/notifications/{first['id']}/read").json()["read_at"]
+        queue.get_nowait()
+        payload = {"ids": [first["id"], second["id"], second["id"], other["id"], "missing"]}
+        response = client.patch("/notifications/read-all", json=payload)
+        assert response.status_code == 200
+        receipts = response.json()
+        reads = {item["id"]: item["read_at"] for item in receipts}
+        assert set(reads) == {first["id"], second["id"]}
+        assert reads[first["id"]] == already_read and reads[second["id"]]
+        assert queue.get_nowait() == {"type": "read_many", "receipts": receipts}
+        assert other_queue.empty()
+        assert client.patch("/notifications/read-all", json=payload).json() == receipts
+        queue.get_nowait()
+        assert client.patch("/notifications/read-all", json={"ids": []}).json() == []
+        assert queue.empty()
+        for ids in [["x"] * 201, ["x" * 65], [""], [1]]:
+            assert client.patch("/notifications/read-all", json={"ids": ids}).status_code == 422
+        remaining = {item["id"]: item for item in client.get("/notifications").json()}
+        assert remaining[later["id"]]["read_at"] is None
+        assert len(remaining) == 3
+        app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=2)
+        assert client.get("/notifications").json()[0]["read_at"] is None
+
+
 def test_websocket_auth_snapshot_live_delivery_and_cross_device_read(database):
     from starlette.websockets import WebSocketDisconnect
     service = NotificationService(database)
@@ -185,6 +223,8 @@ def test_websocket_auth_snapshot_live_delivery_and_cross_device_read(database):
                 assert client.patch(f"/notifications/{first['event']['id']}/read").status_code == 200
                 assert one.receive_json()["type"] == "read"
                 assert two.receive_json()["type"] == "read"
+                receipts = client.patch("/notifications/read-all", json={"ids": [existing["id"]]}).json()
+                assert one.receive_json() == two.receive_json() == {"type": "read_many", "receipts": receipts}
         with client.websocket_connect("/notifications/ws", subprotocols=["webssh.notifications.v1", "bearer.2"]) as other:
             assert other.receive_json() == {"type": "snapshot", "events": []}
         with pytest.raises(WebSocketDisconnect):
