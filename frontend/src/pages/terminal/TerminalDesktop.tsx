@@ -271,7 +271,8 @@ export function TerminalDesktop({ state, onBack }: TerminalDesktopProps) {
               className="terminal-frame h-full w-full overflow-hidden rounded-lg border border-line"
               style={{ backgroundColor: (state.isDark ? darkTerminalTheme : lightTerminalTheme).background }}
             >
-              <div className={cx("h-full w-full p-3", !state.isDark && "xterm-light", state.sessionInfo?.enhanced_enabled && "xterm-tmux-enhanced")}>
+              {/* Balance the left inset with xterm's built-in right scrollbar gutter. */}
+              <div className={cx("h-full w-full py-3 pl-4", !state.isDark && "xterm-light", state.sessionInfo?.enhanced_enabled && "xterm-tmux-enhanced")}>
                 <div
                   ref={state.terminalRef}
                   className="h-full w-full"
