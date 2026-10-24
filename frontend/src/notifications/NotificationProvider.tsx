@@ -175,7 +175,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     void readTerminalNotification(event.id).then(updated => setEvents(previous => mergeNotices(previous, [updated]))).catch(() => setSetup(t("未能标记已读，请稍后重试", "Could not mark as read; please retry")));
     setToast(null); setOpened(false); navigate(`/terminal/${encodeURIComponent(event.session_id)}`);
   };
-  const unread = events.filter(event => !event.read_at);
+  // Keep delivery global, but scope the terminal inbox and its read actions by
+  // session ID. Titles may be renamed or shared by different repositories.
+  const recentEvents = sessionId ? events.filter(event => encodeURIComponent(event.session_id) === sessionId) : events;
+  const unread = recentEvents.filter(event => !event.read_at);
+  const unreadCount = unread.length;
   const readAll = async () => {
     if (reading || !unread.length) return;
     const request = ++readRequest.current;
@@ -206,11 +210,12 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   }, [sessionId, t]);
   React.useEffect(() => {
     ++setupRequest.current; setSetup(""); setRuntime(null); setConfigured(false); setBusy(false);
+    setReadError(false);
   }, [sessionId]);
   React.useEffect(() => {
     if (opened && sessionId) void configure("status");
   }, [opened, sessionId, configure]);
-  const value = React.useMemo(() => ({ events, preferences, ready, connected, open, update, enable, preview }), [events, preferences, ready, connected, open, update, enable, preview]);
+  const value = React.useMemo(() => ({ events, unreadCount, preferences, ready, connected, open, update, enable, preview }), [events, unreadCount, preferences, ready, connected, open, update, enable, preview]);
   return <NotificationContext.Provider value={value}>
     {children}
     {user && toast && !opened && <div role="status" className="fixed bottom-16 right-4 z-[60] flex max-w-[calc(100vw-2rem)] items-center gap-2 rounded-lg border border-line bg-surface p-3 text-sm text-ink shadow-lg">
@@ -250,9 +255,10 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
               <h3 className="text-sm font-medium" aria-live="polite">{t("最近提醒", "Recent notifications")} ({unread.length} {t("未读", "unread")})</h3>
               <Button size="sm" variant="secondary" loading={reading} disabled={!unread.length} onClick={() => void readAll()}><CheckCheck size={14} aria-hidden="true" />{t("一键已读", "Mark all read")}</Button>
             </div>
+            <p className="mb-2 text-xs text-ink-soft">{sessionId ? t("仅显示当前会话的提醒", "Notifications from this session only") : t("显示全部会话的提醒", "Notifications from all sessions")}</p>
             {readError && <p role="alert" className="mb-2 text-sm text-warn">{t("未能标记已读，请稍后重试。", "Could not mark notifications as read. Please retry.")}</p>}
-            {!events.length && <p className="text-sm text-ink-soft">{t("暂无提醒", "No notifications yet")}</p>}
-            <div className="space-y-1">{events.slice(0, 50).map(event => <button key={event.id} type="button" onClick={() => visit(event)} className="block w-full rounded p-2 text-left text-sm hover:bg-elevated"><span className="block truncate">{!event.read_at && <Circle size={6} fill="currentColor" className="mr-2 inline-block text-brand" aria-label={t("未读", "Unread")} />}{event.session_name} · {event.app}</span><span className="text-ink-soft">{label(event)} · {new Date(event.created_at).toLocaleTimeString()}</span></button>)}</div>
+            {!recentEvents.length && <p className="text-sm text-ink-soft">{sessionId ? t("当前会话暂无提醒", "No notifications for this session yet") : t("暂无提醒", "No notifications yet")}</p>}
+            <div className="space-y-1">{recentEvents.slice(0, 50).map(event => <button key={event.id} type="button" onClick={() => visit(event)} className="block w-full rounded p-2 text-left text-sm hover:bg-elevated"><span className="block truncate">{!event.read_at && <Circle size={6} fill="currentColor" className="mr-2 inline-block text-brand" aria-label={t("未读", "Unread")} />}{event.session_name} · {event.app}</span><span className="text-ink-soft">{label(event)} · {new Date(event.created_at).toLocaleTimeString()}</span></button>)}</div>
           </div>
         </div>
       </div>
@@ -264,7 +270,7 @@ export function NotificationButton() {
   const context = React.useContext(NotificationContext);
   const language = React.useContext(AppContext)?.language;
   if (!context) return null;
-  const count = context.events.filter(event => !event.read_at).length;
+  const count = context.unreadCount;
   return <Button variant="ghost" size="sm" onClick={context.open} aria-label={language === "en-US" ? "Task notifications and sound" : "任务提醒与声音"} title={language === "en-US" ? "Task notifications and sound" : "任务提醒与声音"}>
     <span aria-hidden="true" className="pointer-events-none relative inline-flex">
       {context.preferences.enabled ? context.ready ? <Bell size={16} /> : <Volume2 size={16} /> : <VolumeX size={16} />}

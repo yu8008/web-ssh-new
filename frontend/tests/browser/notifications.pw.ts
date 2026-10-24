@@ -159,15 +159,16 @@ test("two tabs share an atomic sound claim and a burst favors attention", async 
   expect(final.filter(item => item.frequency === 1046.50)).toHaveLength(1);
 });
 
-test("notifications survive changing sessions and marking one read updates both tabs", async ({ context }) => {
+test("the main page lists all sessions and reading a notice synchronizes its terminal", async ({ context }) => {
   const mock = await harness(context);
   const one = await context.newPage(); const two = await context.newPage();
-  await one.goto("/terminal/notify"); await two.goto("/terminal/other");
+  await one.goto("/terminal/notify"); await two.goto("/sessions");
   await expect.poll(() => mock.sockets.size).toBe(2);
   mock.send(notice("cross-session", "attention"));
   await expect(two.locator(".notification-unread-dot")).toBeVisible();
   await expect(one.locator(".notification-unread-dot")).toBeVisible();
   await two.getByRole("button", { name: "任务提醒与声音", exact: true }).click();
+  await expect(two.getByText("显示全部会话的提醒", { exact: true })).toBeVisible();
   await two.getByRole("dialog").getByRole("button").filter({ hasText: "需要你处理" }).click();
   await expect(two).toHaveURL(/\/terminal\/notify$/);
   await one.getByRole("button", { name: "任务提醒与声音", exact: true }).click();
@@ -180,7 +181,7 @@ test("notifications survive changing sessions and marking one read updates both 
 test("mark all read includes hidden records, syncs tabs, and keeps history without navigating or sounding", async ({ context }) => {
   const mock = await harness(context, Array.from({ length: 60 }, (_, index) => notice(`unread-${index}`)));
   const one = await context.newPage(); const two = await context.newPage();
-  await one.goto("/terminal/notify"); await two.goto("/terminal/other");
+  await one.goto("/terminal/notify"); await two.goto("/terminal/notify");
   await activate(one);
   await expect.poll(() => mock.sockets.size).toBe(2);
   for (const page of [one, two]) {
@@ -197,7 +198,7 @@ test("mark all read includes hidden records, syncs tabs, and keeps history witho
     await expect(page.getByRole("dialog").getByRole("button").filter({ hasText: "Repository task · codex" })).toHaveCount(50);
   }
   await expect(one).toHaveURL(/\/terminal\/notify$/);
-  await expect(two).toHaveURL(/\/terminal\/other$/);
+  await expect(two).toHaveURL(/\/terminal\/notify$/);
   mock.snapshot();
   expect(await starts(one) + await starts(two)).toBe(baseline);
   await one.reload();
@@ -206,6 +207,65 @@ test("mark all read includes hidden records, syncs tabs, and keeps history witho
   expect(await starts(one) + await starts(two)).toBe(0);
   expect(baseline).toBe(2); // Only the explicit enable/preview played before reload.
   expect(mock.terminalInputs).toEqual(inputs);
+});
+
+for (const mobile of [false, true]) test(`${mobile ? "mobile" : "desktop"}: repository session inboxes and bulk read stay isolated`, async ({ context }, info) => {
+  const own = { ...notice("webssh-old"), session_name: "webssh 仓库", created_at: new Date(Date.now() - 60000).toISOString() };
+  const others = Array.from({ length: 60 }, (_, index) => ({ ...notice(`canvas-${index}`, "question", "other"), session_name: "无限画布仓库" }));
+  const sameTitle = { ...notice("different-session-same-title", "approval", "other"), session_name: own.session_name };
+  const mock = await harness(context, [own, ...others, sameTitle]);
+  const one = await context.newPage(); const two = await context.newPage();
+  for (const page of [one, two]) await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 });
+  await one.goto("/terminal/notify"); await two.goto("/terminal/other");
+  for (const page of [one, two]) await page.getByRole("button", { name: "任务提醒与声音", exact: true }).click();
+  const ownDialog = one.getByRole("dialog"); const otherDialog = two.getByRole("dialog");
+  const ownRows = ownDialog.getByRole("button").filter({ hasText: "· codex" });
+  await expect(ownDialog.getByRole("heading", { name: "最近提醒 (1 未读)" })).toBeVisible();
+  await expect(otherDialog.getByRole("heading", { name: "最近提醒 (61 未读)" })).toBeVisible();
+  await expect(ownRows).toHaveCount(1); // Filter by session before taking the first 50.
+  await expect(ownRows).toContainText("webssh 仓库");
+  await expect(ownDialog.getByText("等待操作批准", { exact: false })).toHaveCount(0);
+  await expect(ownDialog.getByText("无限画布仓库", { exact: false })).toHaveCount(0);
+  mock.beforeRead(async ids => { expect(ids).toEqual([own.id]); return true; });
+  await ownDialog.getByRole("button", { name: "一键已读", exact: true }).click();
+  await expect(ownDialog.getByRole("heading", { name: "最近提醒 (0 未读)" })).toBeVisible();
+  await expect(ownDialog.getByRole("button", { name: "一键已读", exact: true })).toBeDisabled();
+  await expect(one.locator(".notification-unread-dot")).toHaveCount(0);
+  await expect(otherDialog.getByRole("heading", { name: "最近提醒 (61 未读)" })).toBeVisible();
+  await expect(two.locator(".notification-unread-dot")).toBeVisible();
+  await expect(ownRows).toHaveCount(1);
+  mock.send({ ...notice("webssh-renamed", "question"), session_name: "webssh 仓库（重命名）" });
+  await expect(ownRows).toHaveCount(2);
+  await expect(ownDialog.getByRole("heading", { name: "最近提醒 (1 未读)" })).toBeVisible();
+  await expect(otherDialog.getByText("webssh 仓库（重命名）", { exact: false })).toHaveCount(0);
+  await one.screenshot({ path: info.outputPath("repository-notifications.png") });
+  expect(mock.terminalInputs).toEqual([]);
+  expect(await starts(one) + await starts(two)).toBe(0);
+});
+
+test("an unrelated session stays empty while cross-session audio still works and main-page scope resets", async ({ page, context }) => {
+  const mock = await harness(context);
+  await page.goto("/terminal/other"); await activate(page);
+  const baseline = await starts(page);
+  mock.send(notice("another-repository", "question"));
+  await expect.poll(() => starts(page)).toBe(baseline + 3);
+  await expect(page.locator(".notification-unread-dot")).toHaveCount(0);
+  await page.getByRole("button", { name: "任务提醒与声音", exact: true }).click();
+  await expect(page.getByText("当前会话暂无提醒", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "最近提醒 (0 未读)" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "一键已读", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "关闭声音设置", exact: true }).click();
+  await page.getByRole("button", { name: "返回会话管理", exact: true }).click();
+  await expect(page).toHaveURL(/\/sessions$/);
+  await page.getByRole("button", { name: "任务提醒与声音", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "最近提醒 (1 未读)" })).toBeVisible();
+  await expect(page.getByText("显示全部会话的提醒", { exact: true })).toBeVisible();
+  await page.getByRole("dialog").getByRole("button").filter({ hasText: "等待回答问题" }).click();
+  await expect(page).toHaveURL(/\/terminal\/notify$/);
+  await page.getByRole("button", { name: "任务提醒与声音", exact: true }).click();
+  await expect(page.getByText("仅显示当前会话的提醒", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "最近提醒 (0 未读)" })).toBeVisible();
+  expect(await starts(page)).toBe(baseline + 3);
 });
 
 test("bulk read can retry after failure and leaves notifications arriving during the request unread", async ({ page, context }) => {
