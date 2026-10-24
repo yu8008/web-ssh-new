@@ -11,6 +11,12 @@ export function TerminalPage() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const state = useTerminalSession(sessionId);
+  const pageTitle = (state.sessionInfo?.id === sessionId ? state.sessionInfo?.name.trim() : "") || "WebSSH Gateway";
+
+  React.useEffect(() => {
+    document.title = pageTitle;
+    return () => { document.title = "WebSSH Gateway"; };
+  }, [pageTitle]);
 
   const handleBack = React.useCallback(() => {
     navigate("/sessions");
