@@ -7,10 +7,11 @@ import { TerminalLoading } from "../../src/pages/terminal/TerminalLoading";
 import { TerminalLatencyStatus } from "../../src/pages/terminal/TerminalLatencyStatus";
 
 const parameters = new URLSearchParams(location.search);
+const enhanced = parameters.has("enhanced");
 localStorage.setItem("token", "fixture-token");
 const originalFetch = window.fetch.bind(window);
 window.fetch = (input, init) => String(input).endsWith("/sessions/pipeline")
-  ? Promise.resolve(new Response(JSON.stringify({ id: "pipeline", enhanced_enabled: false }), { status: 200 }))
+  ? Promise.resolve(new Response(JSON.stringify({ id: "pipeline", enhanced_enabled: enhanced }), { status: 200 }))
   : originalFetch(input, init);
 
 class FixtureSocket extends EventTarget {

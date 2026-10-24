@@ -249,10 +249,14 @@ for (const mobile of [false, true]) {
     await expect(card.getByLabel("会话标题", { exact: true })).toBeFocused();
     await page.keyboard.press("Escape");
     await expect(page).toHaveURL(/\/sessions$/);
+    const opened = page.waitForEvent("popup");
     await page.locator(".workspace-resume").click();
-    await expect(page).toHaveURL(/\/terminal\/design$/);
-    await expect(page.locator(".xterm")).toBeVisible();
-    await expect(page.locator(".signal-art")).toHaveCount(0);
+    const terminal = await opened;
+    await expect(terminal).toHaveURL(/\/terminal\/design$/);
+    await expect(terminal.locator(".xterm")).toBeVisible();
+    await expect(terminal.locator(".signal-art")).toHaveCount(0);
+    await expect(page).toHaveURL(/\/sessions$/);
+    await terminal.close();
   });
 }
 

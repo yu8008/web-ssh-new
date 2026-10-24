@@ -1,10 +1,9 @@
 import { ArrowUpRight, Circle, Plus, Server, SquareTerminal } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { openTerminalTab } from "../../lib/terminalNavigation";
 import { SignalArtwork } from "../../components/SignalArtwork";
 import type { SessionsState } from "./useSessionsState";
 
 export function WorkspaceIntro({ state, onViewActive }: { state: SessionsState; onViewActive: () => void }) {
-  const navigate = useNavigate();
   const active = state.sessions.filter(item => item.status === "active");
   const recent = active.reduce<typeof active[number] | undefined>((latest, item) =>
     !latest || (item.last_activity || item.started_at) > (latest.last_activity || latest.started_at) ? item : latest, undefined);
@@ -13,7 +12,12 @@ export function WorkspaceIntro({ state, onViewActive }: { state: SessionsState; 
       <p className="eyebrow"><span className="eyebrow-rule" /> 01 / YOUR WORKSPACE</p>
       <h1>{state.t("远端世界，", "Your world,")}<br /><span>{state.t("由你掌控。", "connected.")}</span></h1>
       <p>{state.t("每一次连接，都是工作的延续。", "Every connection. A continuation of your work.")}</p>
-      <button className="workspace-resume" onClick={() => recent ? navigate(`/terminal/${recent.id}`) : state.setShowCreateForm(true)}>
+      <button className="workspace-resume" onClick={() => {
+        if (!recent) { state.setShowCreateForm(true); return; }
+        if (!openTerminalTab(recent.id)) state.push(state.t(
+          "无法打开新标签页，请允许此网站打开弹窗后重试", "Could not open a new tab. Allow popups for this site and try again."
+        ));
+      }}>
         {recent ? <SquareTerminal size={16} /> : <Plus size={16} />}
         <span>{recent ? state.t("继续工作", "Resume work") : (state.connections.length ? state.t("新建连接", "New connection") : state.t("建立第一条连接", "Make your first connection"))}</span>
         {recent && <span className="workspace-resume-name">{recent.name}</span>}

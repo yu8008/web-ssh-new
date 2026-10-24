@@ -1,11 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
-  buildDefaultColorAnnouncement,
   buildExtendedAnsiPalette,
   clampSelectionAnchor,
   createTerminalBufferSnapshot,
   resolveCopyText,
-  toX11RgbColor,
   xtermPaletteColor,
 } from "./terminalUtils";
 
@@ -203,39 +201,6 @@ describe("createTerminalBufferSnapshot", () => {
 
     expect(result.initialScrollRatio).toBe(0);
     expect(Number.isFinite(result.initialScrollRatio)).toBe(true);
-  });
-});
-
-describe("toX11RgbColor", () => {
-  it("把 #rrggbb 转成 X11 rgb 描述并重复通道", () => {
-    expect(toX11RgbColor("#020617")).toBe("rgb:0202/0606/1717");
-    expect(toX11RgbColor("#E2E8F0")).toBe("rgb:e2e2/e8e8/f0f0");
-  });
-
-  it("非法颜色返回 null", () => {
-    expect(toX11RgbColor("red")).toBeNull();
-    expect(toX11RgbColor("#12345")).toBeNull();
-    expect(toX11RgbColor("")).toBeNull();
-  });
-});
-
-describe("buildDefaultColorAnnouncement", () => {
-  it("依次输出 OSC 10/11/12 应答并以 ST 结尾", () => {
-    const payload = buildDefaultColorAnnouncement({
-      foreground: "#e2e8f0",
-      background: "#020617",
-      cursor: "#e2e8f0",
-    });
-    const escape = "\u001b";
-    expect(payload).toBe(
-      escape + "]10;rgb:e2e2/e8e8/f0f0" + escape + "\\" +
-        escape + "]11;rgb:0202/0606/1717" + escape + "\\" +
-        escape + "]12;rgb:e2e2/e8e8/f0f0" + escape + "\\"
-    );
-  });
-
-  it("没有合法颜色时返回空串", () => {
-    expect(buildDefaultColorAnnouncement({ foreground: "", background: "", cursor: "" })).toBe("");
   });
 });
 

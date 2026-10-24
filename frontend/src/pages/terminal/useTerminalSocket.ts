@@ -16,7 +16,6 @@ import { attachTerminalShortcuts } from "./terminalShortcuts";
 import { attachTerminalPaste } from "./terminalPaste";
 import { getTerminalScrollback } from "./terminalPreferences";
 import {
-  buildDefaultColorAnnouncement,
   clampSelectionAnchor,
   darkTerminalTheme,
   lightTerminalTheme,
@@ -143,36 +142,14 @@ export function useTerminalSocket({
     [push, t]
   );
 
-  /**
-   * 把当前主题的默认前景/背景色作为颜色应答送回会话。
-   *
-   * 走 tmux 的增强会话里，TUI（如 Codex）的 OSC 10/11 查询由 tmux 代答，
-   * 而 tmux 缓存的是它启动时从浏览器终端拿到的配色。主题切换后不刷新缓存，
-   * TUI 就会按旧配色（常见是浅色）绘制输入框，在深色终端里出现白色条带。
-   * 这里主动补发一次应答，让 tmux 的缓存与界面保持一致。
-   */
-  const sendThemeAnnouncement = React.useCallback(() => {
-    const socket = socketRef.current;
-    if (!socket || socket.readyState !== WebSocket.OPEN) {
-      return;
-    }
-    if (!enhancedSessionRef.current) {
-      return;
-    }
-    const theme = themeRef.current === "light" ? lightTerminalTheme : darkTerminalTheme;
-    const payload = buildDefaultColorAnnouncement(theme);
-    if (payload) {
-      socket.send(JSON.stringify({ type: "input", data: payload }));
-    }
-  }, [enhancedSessionRef]);
-
   const setTerminalTheme = React.useCallback(
     (isDark: boolean) => {
       themeRef.current = isDark ? "dark" : "light";
+      // Theme changes are local rendering operations. Unsolicited OSC replies
+      // can escape tmux and become shell input, especially cursor-color OSC 12.
       colorsRef.current?.setTheme(isDark);
-      sendThemeAnnouncement();
     },
-    [sendThemeAnnouncement]
+    []
   );
 
   const connectSocket = React.useCallback(
@@ -312,7 +289,6 @@ export function useTerminalSocket({
           latencyProbeRef.current = latencyProbe;
         }
         syncTerminalSize(term, { force: true });
-        sendThemeAnnouncement();
         [300, 1200].forEach((delay) => {
           window.setTimeout(() => {
             if (socketRef.current === socket && socket.readyState === WebSocket.OPEN) {
@@ -401,7 +377,6 @@ export function useTerminalSocket({
       clearReconnectTimer,
       t,
       syncTerminalSize,
-      sendThemeAnnouncement,
       push,
       reportNetworkHint,
       clearNetworkHint,

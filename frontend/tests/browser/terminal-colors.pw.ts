@@ -372,9 +372,10 @@ for (const mobile of [false, true]) {
       }
     }
     expect(connections).toBe(1);
+    expect(inputs).toEqual([]);
     await page.locator(".xterm-helper-textarea").focus();
     await page.keyboard.insertText("Still running 中文");
-    await expect.poll(() => inputs.filter(input => !input.startsWith("\x1b]"))).toEqual(["Still running 中文"]);
+    await expect.poll(() => inputs).toEqual(["Still running 中文"]);
   });
 }
 

@@ -25,13 +25,14 @@ import {
   X,
   Pencil,
 } from "lucide-react";
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 import { Brand } from "../../components/Brand";
 import { WorkspaceIntro } from "./WorkspaceIntro";
 import { NotificationButton } from "../../notifications/NotificationProvider";
 import { Button } from "../../components/Button";
 import { Input } from "../../components/Input";
 import { clearAuthStorage } from "../../lib/api";
+import { openTerminalTab } from "../../lib/terminalNavigation";
 import type { Connection, Session } from "../../lib/api";
 import type { SessionsState } from "./useSessionsState";
 import { ConnectionDialog } from "./ConnectionDialog";
@@ -87,7 +88,6 @@ function durationSince(iso: string, t: (zh: string, en: string) => string): stri
 }
 
 export function SessionsWorkbench({ state }: SessionsWorkbenchProps) {
-  const navigate = useNavigate();
   const online = useOnlineStatus();
   const [connectionFilter, setConnectionFilter] = React.useState("");
   const [mobileSearchOpen, setMobileSearchOpen] = React.useState(false);
@@ -129,7 +129,9 @@ export function SessionsWorkbench({ state }: SessionsWorkbenchProps) {
   const activeConnection = state.connections.find((connection) => connection.id === activeConnectionId) ?? null;
 
   const openSession = (session: Session) => {
-    navigate("/terminal/" + session.id);
+    if (!openTerminalTab(session.id)) state.push(state.t(
+      "无法打开新标签页，请允许此网站打开弹窗后重试", "Could not open a new tab. Allow popups for this site and try again."
+    ));
   };
 
   React.useEffect(() => {
@@ -723,7 +725,7 @@ function SessionRow({
               label={state.t("在新标签页打开", "Open in new tab")}
               onClick={() => {
                 onToggleMenu();
-                window.open("/terminal/" + session.id, "_blank", "noopener");
+                onOpen();
               }}
             />
             <MenuItem

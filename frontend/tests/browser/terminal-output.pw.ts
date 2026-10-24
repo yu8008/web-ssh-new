@@ -6,6 +6,39 @@ async function open(page: import("@playwright/test").Page, suffix = "") {
   await expect(page.locator("#connection")).toHaveText("open");
 }
 
+for (const enhanced of [false, true]) test(`${enhanced ? "enhanced" : "plain"} sessions never announce colors as shell input on open, theme change or reconnect`, async ({ page }) => {
+  await open(page, enhanced ? "?enhanced=1" : "");
+  const inputs = () => page.evaluate(() => window.pipeline.inputs().filter(input => input.type === "input"));
+  expect(await inputs()).toEqual([]);
+  await page.evaluate(() => { window.pipeline.theme(false); window.pipeline.theme(true); });
+  expect(await inputs()).toEqual([]);
+  await page.locator("#reconnect").click();
+  await expect.poll(() => page.evaluate(() => window.pipeline.count())).toBe(2);
+  await expect(page.locator("#connection")).toHaveText("open");
+  expect(await inputs()).toEqual([]);
+});
+
+test("replayed color queries stay silent while live color queries still receive an answer", async ({ page }) => {
+  await open(page, "?enhanced=1");
+  const query = "\x1b]10;?\x07\x1b]11;?\x1b\\\x1b]12;?\x07";
+  await page.evaluate(query => {
+    window.pipeline.frame({ type: "replay_start" });
+    // Split an OSC query across packets.
+    window.pipeline.frame({ type: "output", seq: 1, data: query.slice(0, 13) });
+    window.pipeline.frame({ type: "output", seq: 2, data: query.slice(13) + "Restored shell\r\n$ " });
+    window.pipeline.frame({ type: "replay_end", seq: 2 });
+  }, query);
+  await expect.poll(() => page.evaluate(() => window.pipeline.screen())).toContain("Restored shell");
+  expect(await page.evaluate(() => window.pipeline.inputs().filter(input => input.type === "input"))).toEqual([]);
+  await page.evaluate(query => window.pipeline.frame({ type: "output", seq: 3, data: query }), query);
+  await expect.poll(() => page.evaluate(() => window.pipeline.inputs().filter(input => input.type === "input").map(input => input.data)))
+    .toEqual(["\x1b]10;rgb:ffff/ffff/ffff\x1b\\", "\x1b]11;rgb:1717/1717/1717\x1b\\", "\x1b]12;rgb:ffff/ffff/ffff\x1b\\"]);
+  await page.locator(".xterm-helper-textarea").focus();
+  await page.keyboard.insertText("echo rgb:ffff/ffff/ffff");
+  await expect.poll(() => page.evaluate(() => window.pipeline.inputs().filter(input => input.type === "input").at(-1)?.data))
+    .toBe("echo rgb:ffff/ffff/ffff");
+});
+
 test("terminal pongs measure the existing socket without becoming shell output", async ({ page }) => {
   await open(page, "?pingDelay=75");
   await expect.poll(async () => Number(await page.locator("#latency").textContent())).toBeGreaterThanOrEqual(75);
